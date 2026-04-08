@@ -231,6 +231,10 @@ private struct SearchPlaylistImportRow: View {
     let isImporting: Bool
     let onImport: () -> Void
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         HStack(spacing: 12) {
             AsyncImage(url: playlist.thumbnailURL) { image in
@@ -278,5 +282,6 @@ private struct SearchPlaylistImportRow: View {
             .disabled(isImporting)
         }
         .padding(.vertical, 2)
+        .enableInjection()
     }
 }

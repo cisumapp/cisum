@@ -1,5 +1,5 @@
 {
-  "originHash" : "ee94d098a80f0ce7e2d76eef8c292ba361b3cd1ca48d60aa5b314109d9b84880",
+  "originHash" : "6e0d94fca5cb6c57ad7b486aca7a5c744c5d48d023d6a4a058899198a62dd6d4",
   "pins" : [
     {
       "identity" : "ffmpeg-kit-spm",
@@ -38,30 +38,30 @@
       }
     },
     {
-      "identity" : "lnpopupcontroller",
+      "identity" : "lyricskit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupController.git",
+      "location" : "https://github.com/cisumapp/LyricsKit.git",
       "state" : {
-        "revision" : "6f4bfa89a32cc7254599869b4bca8d2638e74671",
-        "version" : "4.4.1"
+        "branch" : "main",
+        "revision" : "6613374410cafb7728171a91c241bc0b684f4c9d"
       }
     },
     {
-      "identity" : "lnpopupui",
+      "identity" : "spotifysdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupUI.git",
+      "location" : "https://github.com/cisumapp/SpotifySDK.git",
       "state" : {
-        "revision" : "715bf763ae4afcc4c1a9e3d720784713d6c58ac6",
-        "version" : "3.0.2"
+        "branch" : "main",
+        "revision" : "da0ed264c6d5283306efa17e161d2b4ed60af2c1"
       }
     },
     {
-      "identity" : "lnswiftuiutils",
+      "identity" : "tidalkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNSwiftUIUtils.git",
+      "location" : "https://github.com/cisumapp/TidalKit.git",
       "state" : {
-        "revision" : "181a95b992f84d99a14c562c86e8ebef3cbcdca9",
-        "version" : "1.1.5"
+        "branch" : "main",
+        "revision" : "047ae8dd56eca0517c3597f196d6803ef1fda64d"
       }
     },
     {

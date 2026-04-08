@@ -76,6 +76,10 @@ struct PlaylistDetailView: View {
 private struct PlaylistTrackRow: View {
     let item: PlaylistItem
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(item.sortIndex + 1)")
@@ -108,6 +112,7 @@ private struct PlaylistTrackRow: View {
             }
         }
         .padding(.vertical, 2)
+        .enableInjection()
     }
 }
 

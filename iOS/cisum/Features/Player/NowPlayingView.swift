@@ -11,32 +11,15 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(PlayerViewModel.self) var playerViewModel
 
+    var isExpanded: Bool
+    var size: CGSize
     var namespace: Namespace.ID
-    @State private var properties = PlayerProperties.shared
     
 #if DEBUG
     @ObserveInjection var forceRedraw
 #endif
 
     var body: some View {
-        ZStack {
-            if #available(iOS 26.0, *) {
-                PlayerExpandedBackground(isExpanded: true, includesCollapsedBarLayer: false)
-                    .ignoresSafeArea()
-                
-                playerView
-            } else {
-                playerView
-                    .safeAreaPadding(.top)
-                    .safeAreaPadding(.bottom)
-                    .ignoresSafeArea()
-            }
-        }
-        .animation(.smooth(duration: 0.35), value: properties.isPlayerExpanded)
-        .enableInjection()
-    }
-    
-    var playerView: some View {
         VStack(spacing: 12) {
             header
             
@@ -46,30 +29,31 @@ struct NowPlayingView: View {
             
             playerControls
         }
-        .padding(.top, 10)
-        .padding(.vertical, 20)
-        .padding(.horizontal, 15)
+        .padding(.top, Constants.safeAreaInsets.top)
+        .padding(.bottom, Constants.safeAreaInsets.bottom)
+        .enableInjection()
     }
-    
-    @ViewBuilder
+}
+#endif
+
+private extension NowPlayingView {
     var header: some View {
-        VStack {
-            Capsule()
-                .fill(.white)
-                .blendMode(.overlay)
-                .offset(y: -10)
-                .onTapGesture {
-                    withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
-                        /// Closing View
-                        properties.isPlayerExpanded = false
-                        /// Resetting Window to identity with Animation
-                        properties.resetWindowWithAnimation()
-                        
-                        properties.offsetY = 0
-                    }
-                }
-        }
-        .frame(width: 40, height: 5)
+        Capsule()
+            .fill(.white.secondary)
+            .blendMode(.overlay)
+            .opacity(isExpanded ? 1 : 0)
+            .frame(width: 40, height: 5)
+            .offset(y: 10)
+//                .onTapGesture {
+//                    withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
+//                        /// Closing View
+//                        properties.isPlayerExpanded = false
+//                        /// Resetting Window to identity with Animation
+//                        properties.resetWindowWithAnimation()
+//
+//                        properties.offsetY = 0
+//                    }
+//                }
     }
     
     @ViewBuilder
@@ -104,6 +88,14 @@ struct NowPlayingView: View {
                 Text(playerViewModel.currentArtist)
                     .font(.headline)
                     .foregroundColor(.white.opacity(0.8))
+
+                HStack(spacing: 8) {
+                    infoBadge(title: playerViewModel.currentStreamingServiceName, systemImage: "dot.radiowaves.left.and.right")
+                    infoBadge(
+                        title: "\(playerViewModel.currentAudioQualityLabel) • \(playerViewModel.currentAudioCodecLabel)",
+                        systemImage: "waveform"
+                    )
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -136,40 +128,32 @@ struct NowPlayingView: View {
             let safeArea = $0.safeAreaInsets
             
             VStack {
-                VStack {
-#if os(iOS)
-                    cisumMusicProgressScrubber(
-                        currentTime: playerViewModel.currentTime,
-                        duration: playerViewModel.duration,
-                        onSeek: { newTime in
-                            playerViewModel.seek(to: newTime)
-                        }
-                    )
-#endif
-                }
+                MusicProgressScrubber(
+                    currentTime: playerViewModel.currentTime,
+                    duration: playerViewModel.duration,
+                    onSeek: { newTime in
+                        playerViewModel.seek(to: newTime)
+                    }
+                )
                 .frame(height: 30)
                 
                 Spacer(minLength: 0)
                 
                 // Buttons
                 HStack(spacing: size.width * 0.18) {
-                    cisumBackwardButton()
+                    PreviousButton()
                     
-                    cisumPlayButton()
+                    TogglePlayPauseButton()
                         .disabled(playerViewModel.currentVideoId == nil)
                     
-                    cisumForwardButton()
+                    ForwardButton()
                 }
                 .foregroundColor(.white)
                 
                 Spacer(minLength: 0)
                 
-                VStack {
-#if os(iOS)
-                    cisumVolumeSlider()
-#endif
-                }
-                .frame(height: 30)
+                VolumeSlider()
+                    .frame(height: 30)
                 
                 Spacer(minLength: 0)
                 
@@ -214,5 +198,15 @@ struct NowPlayingView: View {
         let s = Int(seconds) % 60
         return String(format: "%d:%02d", m, s)
     }
+
+    @ViewBuilder
+    private func infoBadge(title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .lineLimit(1)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.white.opacity(0.2), in: Capsule())
+            .foregroundStyle(.white)
+    }
 }
-#endif

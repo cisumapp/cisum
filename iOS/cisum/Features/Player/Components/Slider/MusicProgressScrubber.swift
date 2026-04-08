@@ -8,7 +8,7 @@
 #if os(iOS)
 import SwiftUI
 
-struct cisumMusicProgressScrubber: View {
+struct MusicProgressScrubber: View {
     let currentTime: Double
     let duration: Double
     let onSeek: (Double) -> Void
@@ -75,7 +75,7 @@ struct cisumMusicProgressScrubber: View {
     }
 }
 
-private extension cisumMusicProgressScrubber {
+private extension MusicProgressScrubber {
     func label(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12, weight: .semibold))
@@ -120,7 +120,7 @@ private extension cisumMusicProgressScrubber {
     }
 }
 
-extension cisumSliderConfig {
+extension SliderConfig {
     static var playbackProgress: Self {
         Self(
             labelLocation: .bottom,

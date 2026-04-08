@@ -72,7 +72,7 @@ struct HomeView: View {
                 .padding(.bottom, 120)
             }
             .ignoresSafeArea()
-            .contentMargins(.top, 140)
+            .contentMargins(.top, 300)
         }
         .ignoresSafeArea()
         .overlay {
@@ -108,6 +108,10 @@ struct HomeView: View {
 private struct HomeFeedRow: View {
     let item: HomeFeedItem
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -131,6 +135,7 @@ private struct HomeFeedRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.white.opacity(0.08))
         )
+        .enableInjection()
     }
 
     private var title: String {

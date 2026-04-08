@@ -155,7 +155,7 @@ nonisolated private func artistNoiseKeywords() -> [String] {
 }
 
 nonisolated func resolvedMusicRegionCode() -> String {
-    if let code = Locale.current.regionCode?.trimmingCharacters(in: .whitespacesAndNewlines),
+    if let code = Locale.current.region?.identifier.trimmingCharacters(in: .whitespacesAndNewlines),
        code.count == 2 {
         return code.uppercased()
     }
@@ -175,7 +175,7 @@ nonisolated func resolvedInnerTubeLanguageCode() -> String {
         }
     }
 
-    if let legacyCode = Locale.current.languageCode,
+    if let legacyCode = Locale.current.language.languageCode?.identifier,
        !legacyCode.isEmpty {
         return legacyCode.lowercased()
     }

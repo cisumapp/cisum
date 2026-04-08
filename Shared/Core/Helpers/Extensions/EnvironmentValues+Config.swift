@@ -10,9 +10,9 @@
 import SwiftUI
 
 extension EnvironmentValues {
-    var cisumSliderConfig: cisumSliderConfig {
-        get { self[cisumSliderConfigEnvironmentKey.self] }
-        set { self[cisumSliderConfigEnvironmentKey.self] = newValue
+    var sliderConfig: SliderConfig {
+        get { self[SliderConfigEnvironmentKey.self] }
+        set { self[SliderConfigEnvironmentKey.self] = newValue
         }
     }
 }

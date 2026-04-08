@@ -16,7 +16,7 @@ struct StretchySlider<LeadingContent: View, TrailingContent: View>: View {
     private let trailingLabel: TrailingContent?
     private let onEditingChanged: (Bool) -> Void
     
-    @Environment(\.cisumSliderConfig) var config
+    @Environment(\.sliderConfig) var config
     
     @State var progress: CGFloat = .zero
     @State private var dragOffset: CGFloat = .zero
@@ -293,7 +293,7 @@ extension StretchySlider where TrailingContent == EmptyView {
     init(
         value: Binding<Double>,
         in range: ClosedRange<Double>,
-        config _: cisumSliderConfig = .init(),
+        config _: SliderConfig = .init(),
         leadingLabel: (() -> LeadingContent)? = nil,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
@@ -310,7 +310,7 @@ extension StretchySlider where LeadingContent == EmptyView, TrailingContent == E
     init(
         value: Binding<Double>,
         in range: ClosedRange<Double>,
-        config _: cisumSliderConfig = .init(),
+        config _: SliderConfig = .init(),
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
         _value = value

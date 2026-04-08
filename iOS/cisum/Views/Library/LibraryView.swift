@@ -114,6 +114,10 @@ private struct LibraryPlaceholderCard: View {
     let subtitle: String
     let systemImage: String
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
@@ -135,11 +139,16 @@ private struct LibraryPlaceholderCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.ultraThinMaterial)
         )
+        .enableInjection()
     }
 }
 
 private struct PlaylistRow: View {
     let playlist: Playlist
+
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
 
     var body: some View {
         HStack(spacing: 12) {
@@ -175,6 +184,7 @@ private struct PlaylistRow: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(.ultraThinMaterial)
         )
+        .enableInjection()
     }
 }
 

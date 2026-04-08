@@ -8,7 +8,7 @@
 #if os(iOS)
 import SwiftUI
 
-struct cisumSliderConfigEnvironmentKey: EnvironmentKey {
-    static let defaultValue: cisumSliderConfig = .init()
+struct SliderConfigEnvironmentKey: EnvironmentKey {
+    static let defaultValue: SliderConfig = .init()
 }
 #endif

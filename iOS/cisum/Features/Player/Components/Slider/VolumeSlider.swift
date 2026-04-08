@@ -257,6 +257,10 @@ fileprivate struct SystemVolumeModifier: ViewModifier {
     let controller: SystemVolumeController
     let showsSystemVolumeHUD: Bool
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .topLeading) {
@@ -278,6 +282,7 @@ fileprivate struct SystemVolumeModifier: ViewModifier {
             .onChange(of: showsSystemVolumeHUD, initial: true) { value, _ in
                 controller.showsSystemVolumeHUD = value
             }
+        .enableInjection()
     }
 }
 
@@ -310,8 +315,8 @@ fileprivate final class ObservableView: UIView {
     }
 }
 
-// MARK: - cisumVolumeSlider
-struct cisumVolumeSlider: View {
+// MARK: - VolumeSlider
+struct VolumeSlider: View {
     /// Internal single source of truth — no external binding needed
     @State private var volumeController: SystemVolumeController = .shared
     
@@ -383,7 +388,7 @@ struct cisumVolumeSlider: View {
     }
 }
 
-extension cisumSliderConfig {
+extension SliderConfig {
     static var volume: Self {
         Self(
             labelLocation: .side,

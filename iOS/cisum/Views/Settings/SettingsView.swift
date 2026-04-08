@@ -1,9 +1,14 @@
 import SwiftUI
 
+#if canImport(TidalKit)
+import TidalKit
+#endif
+
 struct SettingsView: View {
     @Environment(PrefetchSettings.self) private var settings
     @Environment(NetworkPathMonitor.self) private var networkMonitor
     @State private var playbackControlSettings = PlaybackControlSettings.shared
+    @State private var streamingProviderSettings = StreamingProviderSettings.shared
 
     @State private var snapshot = PlaybackMetricsStore.Snapshot(
         cacheHitRate: 0,
@@ -66,6 +71,39 @@ struct SettingsView: View {
                 LabeledContent("Interface", value: networkMonitor.interface.rawValue)
                 LabeledContent("Expensive", value: networkMonitor.isExpensive ? "Yes" : "No")
                 LabeledContent("Constrained", value: networkMonitor.isConstrained ? "Yes" : "No")
+            }
+
+            Section("Streaming Providers") {
+                TextField("Spotify Client ID", text: Bindable(streamingProviderSettings).spotifyClientID)
+#if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+#endif
+
+                SecureField("Spotify Client Secret", text: Bindable(streamingProviderSettings).spotifyClientSecret)
+#if os(iOS)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+#endif
+
+                Toggle("Prefer Anonymous Spotify Fallback", isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback)
+
+                LabeledContent("Spotify Mode", value: streamingProviderSettings.spotifyModeLabel)
+
+#if canImport(TidalKit)
+                Picker("Tidal Preferred Quality", selection: Bindable(streamingProviderSettings).tidalPreferredQualityRawValue) {
+                    ForEach(MonochromeAudioQuality.descending, id: \.rawValue) { quality in
+                        Text(quality.label)
+                            .tag(quality.rawValue)
+                    }
+                }
+#else
+                LabeledContent("Tidal Preferred Quality", value: streamingProviderSettings.tidalPreferredQualityLabel)
+#endif
+
+                Button("Clear Spotify Credentials", role: .destructive) {
+                    streamingProviderSettings.clearSpotifyCredentials()
+                }
             }
 
 #if os(iOS)

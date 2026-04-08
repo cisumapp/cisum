@@ -8,6 +8,14 @@
 import SwiftUI
 import YouTubeSDK
 
+#if canImport(TidalKit)
+import TidalKit
+#endif
+
+#if canImport(SpotifySDK)
+import SpotifySDK
+#endif
+
 @Observable
 @MainActor
 class SearchViewModel {
@@ -21,19 +29,22 @@ class SearchViewModel {
     private let networkMonitor: NetworkPathMonitor
     private let historyStore: SearchHistoryStore?
     private let searchCacheHintStore: SearchCacheHintStore?
+    private let streamingProviderSettings: StreamingProviderSettings
 
     init(
         youtube: YouTube = .shared,
         settings: PrefetchSettings = .shared,
         networkMonitor: NetworkPathMonitor = .shared,
         historyStore: SearchHistoryStore? = nil,
-        searchCacheHintStore: SearchCacheHintStore? = nil
+        searchCacheHintStore: SearchCacheHintStore? = nil,
+        streamingProviderSettings: StreamingProviderSettings = .shared
     ) {
         self.youtube = youtube
         self.settings = settings
         self.networkMonitor = networkMonitor
         self.historyStore = historyStore
         self.searchCacheHintStore = searchCacheHintStore
+        self.streamingProviderSettings = streamingProviderSettings
     }
 
     // Inputs
@@ -47,6 +58,7 @@ class SearchViewModel {
     // Outputs
     var musicResults: [YouTubeMusicSong] = []
     var videoResults: [YouTubeSearchResult] = []
+    var federatedSections: [FederatedSearchSection] = FederatedSearchSection.defaultSections
     var suggestions: [String] = []
     var state: SearchState = .idle
     
@@ -106,6 +118,7 @@ class SearchViewModel {
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             self.musicResults = []
             self.videoResults = []
+            self.federatedSections = FederatedSearchSection.defaultSections
             self.suggestions = []
             self.state = .idle
             self.lastHintPrefetchedKey = nil
@@ -131,100 +144,348 @@ class SearchViewModel {
     
     private func executeSearch() async {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let scope = searchScope
         if query.isEmpty {
             self.musicResults = []
             self.videoResults = []
+            self.federatedSections = FederatedSearchSection.defaultSections
             self.state = .idle
             return
         }
 
-        if lastCompletedQuery != query || lastCompletedScope != scope {
-            inlinePrefetchDrainTask?.cancel()
-            inlinePrefetchDrainTask = nil
-            inlinePrefetchPendingIDs.removeAll(keepingCapacity: true)
-            inlinePrefetchedVideoIDs.removeAll(keepingCapacity: true)
-        }
-
         if case .success = state,
-           lastCompletedQuery == query,
-           lastCompletedScope == scope {
+           lastCompletedQuery == query {
             return
         }
 
         self.state = .loading
-        
-        do {
 
-            prefetchFromPersistentHintsIfNeeded(for: query)
+        resetFederatedSections(state: .loading)
+        historyStore?.recordSearch(query: query)
 
-            let effectiveQuery = effectiveSearchQuery(for: query, scope: scope)
+        let effectiveVideoQuery = effectiveSearchQuery(for: query, scope: .video)
 
-            switch scope {
-            case .music:
-                // Serve cache if available (stale-while-revalidate)
-                if let cached = searchCache.getMusicResults(for: query) {
-                    self.musicResults = cached.results
-                    self.state = .success
-                    if cached.isStale {
-                        // Refresh in background only when stale.
-                        Task(priority: .utility) {
-                            await self.refreshMusicResultsIfNeeded(for: query, scope: scope)
-                        }
-                    }
-                } else {
-                    let results = try await youtube.music.search(effectiveQuery)
-                    self.musicResults = results
-                    searchCache.setMusicResults(results, for: query)
-                    self.state = .success
-                }
+        async let youtubeMusicTask = fetchYouTubeMusicSectionItems(query: query)
+        async let youtubeTask = fetchYouTubeSectionItems(query: effectiveVideoQuery)
+        async let tidalTask = fetchTidalSectionItems(query: query)
+        async let spotifyTask = fetchSpotifySectionItems(query: query)
 
-                // Prefetch metadata for top results
-                historyStore?.recordSearch(query: query)
-                let ids = Array(self.musicResults.prefix(currentPrefetchCount).compactMap { $0.videoId })
-                prefetchTopResultIDs(ids)
-                searchCacheHintStore?.recordMusicResults(query: query, results: self.musicResults)
+        let youtubeMusicResult = await youtubeMusicTask
+        let youtubeResult = await youtubeTask
+        let tidalResult = await tidalTask
+        let spotifyResult = await spotifyTask
 
-            case .video:
-                // SDK returns a continuation - map to YouTubeSearchResult for UI
-                resetVideoPagination()
-                if let cached = searchCache.getVideoResults(for: query) {
-                    // If cached, show and refresh in background
-                    self.videoResults = cached.results
-                    self.state = .success
-                    if cached.isStale {
-                        Task(priority: .utility) {
-                            await self.refreshVideoResultsIfNeeded(for: query, scope: scope)
-                        }
-                    }
-                } else {
-                    let cont = try await youtube.main.search(effectiveQuery)
-                    updateVideoResults(with: cont, appending: false)
-                    // Cache the mapped video results
-                    let mapped = mapSearchResults(from: cont.items)
-                    searchCache.setVideoResults(mapped, for: query)
-                    self.state = .success
-                }
+        applyFederatedSearchResult(youtubeMusicResult, for: .youtubeMusic)
+        applyFederatedSearchResult(youtubeResult, for: .youtube)
+        applyFederatedSearchResult(tidalResult, for: .tidal)
+        applyFederatedSearchResult(spotifyResult, for: .spotify)
 
-                // Prefetch metadata for top video results
-                historyStore?.recordSearch(query: query)
-                let vidIDs = Array(self.videoResults.compactMap { item -> String? in
-                    if case .video(let v) = item { return v.id }
-                    return nil
-                }.prefix(currentPrefetchCount))
-                prefetchTopResultIDs(vidIDs)
-                searchCacheHintStore?.recordVideoResults(query: query, results: self.videoResults)
+        let hasResults = federatedSections.contains { !$0.items.isEmpty }
+        if hasResults {
+            state = .success
+        } else {
+            state = .error(firstSectionErrorMessage() ?? "No results found for this search.")
+        }
+
+        self.lastCompletedQuery = query
+        self.lastCompletedScope = searchScope
+    }
+
+    func items(for service: FederatedService) -> [FederatedSearchItem] {
+        federatedSections.first(where: { $0.service == service })?.items ?? []
+    }
+
+    func sectionState(for service: FederatedService) -> FederatedSectionState {
+        federatedSections.first(where: { $0.service == service })?.state ?? .idle
+    }
+
+    func resolveExternalStream(for item: FederatedSearchItem) async throws -> ExternalStreamPayload? {
+        switch item.payload {
+        case .youtubeVideo, .youtubeMusic:
+            return nil
+        case .tidal(let track):
+#if canImport(TidalKit)
+            return try await resolveTidalExternalStream(for: track)
+#else
+            throw FederatedSearchError.providerUnavailable("TidalKit is not linked to this target.")
+#endif
+        case .spotify(let track):
+            guard let previewURL = track.previewURL else {
+                throw FederatedSearchError.spotifyPreviewUnavailable
             }
 
-            self.lastCompletedQuery = query
-            self.lastCompletedScope = scope
-            
-        } catch {
-            if !Task.isCancelled {
-                self.state = .error("\(error.localizedDescription)")
-            }
+            return ExternalStreamPayload(
+                mediaID: "spotify-\(track.id)",
+                streamURL: previewURL,
+                title: track.title,
+                artist: track.artistName,
+                artworkURL: track.artworkURL,
+                service: .spotify,
+                qualityLabel: "Spotify Preview",
+                codecLabel: inferCodecLabel(from: previewURL)
+            )
         }
     }
+
+    private func resetFederatedSections(state: FederatedSectionState) {
+        federatedSections = FederatedSearchSection.defaultSections.map { section in
+            var copy = section
+            copy.state = state
+            copy.items = []
+            return copy
+        }
+    }
+
+    private func applyFederatedSearchResult(
+        _ result: Result<[FederatedSearchItem], Error>,
+        for service: FederatedService
+    ) {
+        guard let index = federatedSections.firstIndex(where: { $0.service == service }) else { return }
+
+        switch result {
+        case .success(let items):
+            federatedSections[index].items = Array(items.prefix(5))
+            federatedSections[index].state = .success
+        case .failure(let error):
+            federatedSections[index].items = []
+            federatedSections[index].state = .error(error.localizedDescription)
+        }
+    }
+
+    private func firstSectionErrorMessage() -> String? {
+        for section in federatedSections {
+            if case .error(let message) = section.state {
+                return message
+            }
+        }
+        return nil
+    }
+
+    private func fetchYouTubeMusicSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
+        do {
+            let results = try await youtube.music.search(query)
+            musicResults = results
+            searchCache.setMusicResults(results, for: query)
+            searchCacheHintStore?.recordMusicResults(query: query, results: results)
+
+            let topResults = Array(results.prefix(5))
+            let ids = topResults.map(\.videoId)
+            prefetchTopResultIDs(ids)
+
+            let items = topResults.map { song in
+                FederatedSearchItem(
+                    id: "ytm-\(song.videoId)",
+                    title: normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay),
+                    subtitle: "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(song.album ?? "Single")",
+                    artworkURL: song.thumbnailURL,
+                    durationSeconds: song.duration,
+                    isPlayable: true,
+                    payload: .youtubeMusic(song)
+                )
+            }
+
+            return .success(items)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func fetchYouTubeSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
+        do {
+            let continuation = try await youtube.main.search(query)
+            resetVideoPagination()
+            updateVideoResults(with: continuation, appending: false)
+            searchCache.setVideoResults(videoResults, for: query)
+            searchCacheHintStore?.recordVideoResults(query: query, results: videoResults)
+
+            let topVideos = videoResults.compactMap { item -> YouTubeVideo? in
+                if case .video(let video) = item {
+                    return video
+                }
+                return nil
+            }
+            .prefix(5)
+
+            let ids = topVideos.map(\.id)
+            prefetchTopResultIDs(ids)
+
+            let items = topVideos.map { video in
+                FederatedSearchItem(
+                    id: "yt-\(video.id)",
+                    title: normalizedMusicDisplayTitle(video.title, artist: video.author),
+                    subtitle: normalizedMusicDisplayArtist(video.author, title: video.title),
+                    artworkURL: normalizedThumbnailURL(from: video.thumbnailURL),
+                    durationSeconds: parseVideoDurationSeconds(video.lengthInSeconds),
+                    isPlayable: true,
+                    payload: .youtubeVideo(video)
+                )
+            }
+
+            return .success(Array(items))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func fetchTidalSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
+#if canImport(TidalKit)
+        do {
+            let tracks = try await Monochrome.shared.content.searchTracks(query: query)
+            let topTracks = Array(tracks.prefix(5)).map { track in
+                TidalSearchTrack(
+                    id: track.id,
+                    title: track.title,
+                    artistName: track.artist?.name ?? "Unknown Artist",
+                    albumName: track.album?.title,
+                    artworkURL: tidalArtworkURL(from: track.album?.cover),
+                    durationSeconds: TimeInterval(track.duration),
+                    audioQuality: track.audioQuality
+                )
+            }
+
+            let items = topTracks.map { track in
+                FederatedSearchItem(
+                    id: "tidal-\(track.id)",
+                    title: track.title,
+                    subtitle: "\(track.artistName) • \(track.albumName ?? "Tidal")",
+                    artworkURL: track.artworkURL,
+                    durationSeconds: track.durationSeconds,
+                    isPlayable: true,
+                    payload: .tidal(track)
+                )
+            }
+
+            return .success(items)
+        } catch {
+            return .failure(error)
+        }
+#else
+        return .failure(FederatedSearchError.providerUnavailable("TidalKit is not linked to this target."))
+#endif
+    }
+
+    private func fetchSpotifySectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
+#if canImport(SpotifySDK)
+        do {
+            let spotify = try makeSpotifyClient()
+            let tracksPage = try await spotify.search.tracks(query, limit: 5)
+            let topTracks = Array(tracksPage.items.prefix(5)).map { track in
+                SpotifySearchTrack(
+                    id: track.id,
+                    title: track.name,
+                    artistName: track.artists.first?.name ?? "Unknown Artist",
+                    albumName: track.album?.name,
+                    artworkURL: track.album?.images.first?.url,
+                    durationSeconds: TimeInterval(track.durationMS) / 1000,
+                    previewURL: track.previewURL
+                )
+            }
+
+            let items = topTracks.map { track in
+                FederatedSearchItem(
+                    id: "spotify-\(track.id)",
+                    title: track.title,
+                    subtitle: "\(track.artistName) • \(track.albumName ?? "Spotify")",
+                    artworkURL: track.artworkURL,
+                    durationSeconds: track.durationSeconds,
+                    isPlayable: track.previewURL != nil,
+                    payload: .spotify(track)
+                )
+            }
+
+            return .success(items)
+        } catch {
+            return .failure(error)
+        }
+#else
+        return .failure(FederatedSearchError.providerUnavailable("SpotifySDK is not linked to this target."))
+#endif
+    }
+
+    private func parseVideoDurationSeconds(_ value: String?) -> TimeInterval? {
+        guard let value else { return nil }
+        return Double(value)
+    }
+
+    private func normalizedThumbnailURL(from string: String?) -> URL? {
+        guard var candidate = string?.trimmingCharacters(in: .whitespacesAndNewlines), !candidate.isEmpty else { return nil }
+        if candidate.hasPrefix("//") {
+            candidate = "https:" + candidate
+        } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
+            candidate = "https://" + candidate
+        }
+        return URL(string: candidate)
+    }
+
+    private func inferCodecLabel(from url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
+        if ext == "flac" { return "FLAC" }
+        if ext == "m3u8" { return "HLS" }
+        if ext == "aac" || ext == "m4a" || ext == "mp4" { return "AAC" }
+        if ext == "mp3" { return "MP3" }
+        return "Unknown"
+    }
+
+#if canImport(TidalKit)
+    private func resolveTidalExternalStream(for track: TidalSearchTrack) async throws -> ExternalStreamPayload {
+        let preferredQuality = MonochromeAudioQuality(rawValue: streamingProviderSettings.tidalPreferredQualityRawValue) ?? .hiResLossless
+        for quality in MonochromeAudioQuality.fallbackOrder(preferred: preferredQuality) {
+            guard let urlString = try? await Monochrome.shared.content.fetchStreamURL(trackID: track.id, quality: quality),
+                  let streamURL = URL(string: urlString) else {
+                continue
+            }
+
+            return ExternalStreamPayload(
+                mediaID: "tidal-\(track.id)",
+                streamURL: streamURL,
+                title: track.title,
+                artist: track.artistName,
+                artworkURL: track.artworkURL,
+                service: .tidal,
+                qualityLabel: quality.label,
+                codecLabel: tidalCodecLabel(for: quality)
+            )
+        }
+
+        throw FederatedSearchError.noPlayableStream("Unable to resolve a playable Tidal stream for this track.")
+    }
+
+    private func tidalArtworkURL(from coverID: String?) -> URL? {
+        guard let coverID, !coverID.isEmpty else { return nil }
+        let formatted = coverID.replacingOccurrences(of: "-", with: "/")
+        return URL(string: "https://resources.tidal.com/images/\(formatted)/320x320.jpg")
+    }
+
+    private func tidalCodecLabel(for quality: MonochromeAudioQuality) -> String {
+        switch quality {
+        case .lossless, .hiResLossless:
+            return "FLAC"
+        case .high, .medium, .low:
+            return "AAC"
+        }
+    }
+#endif
+
+#if canImport(SpotifySDK)
+    private func makeSpotifyClient() throws -> SpotifySDK {
+        let clientID = streamingProviderSettings.spotifyClientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clientSecret = streamingProviderSettings.spotifyClientSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !clientID.isEmpty, !clientSecret.isEmpty {
+            return SpotifySDK(
+                official: SpotifyOfficialCredentials(
+                    clientID: clientID,
+                    clientSecret: clientSecret
+                )
+            )
+        }
+
+        if streamingProviderSettings.spotifyPreferAnonymousFallback {
+            return SpotifySDK(publicWebPlayer: .anonymous)
+        }
+
+        throw FederatedSearchError.spotifyCredentialsMissing
+    }
+#endif
 
     public func applySuggestion(_ suggestion: String) {
         let cleaned = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -645,5 +906,103 @@ class SearchViewModel {
         videoContinuationBadResponseCount = 0
         lastPaginationTriggerAt = nil
         lastPaginationTriggerToken = nil
+    }
+}
+
+enum FederatedService: String, CaseIterable, Identifiable {
+    case youtube = "YouTube"
+    case youtubeMusic = "YouTube Music"
+    case tidal = "Tidal"
+    case spotify = "Spotify"
+
+    var id: FederatedService { self }
+}
+
+enum FederatedSectionState: Equatable {
+    case idle
+    case loading
+    case success
+    case error(String)
+}
+
+struct FederatedSearchSection: Identifiable {
+    let service: FederatedService
+    var state: FederatedSectionState
+    var items: [FederatedSearchItem]
+
+    var id: FederatedService { service }
+
+    static var defaultSections: [FederatedSearchSection] {
+        FederatedService.allCases.map {
+            FederatedSearchSection(service: $0, state: .idle, items: [])
+        }
+    }
+}
+
+struct TidalSearchTrack: Identifiable {
+    let id: Int
+    let title: String
+    let artistName: String
+    let albumName: String?
+    let artworkURL: URL?
+    let durationSeconds: TimeInterval
+    let audioQuality: String?
+}
+
+struct SpotifySearchTrack: Identifiable {
+    let id: String
+    let title: String
+    let artistName: String
+    let albumName: String?
+    let artworkURL: URL?
+    let durationSeconds: TimeInterval
+    let previewURL: URL?
+}
+
+enum FederatedSearchPayload {
+    case youtubeVideo(YouTubeVideo)
+    case youtubeMusic(YouTubeMusicSong)
+    case tidal(TidalSearchTrack)
+    case spotify(SpotifySearchTrack)
+}
+
+struct FederatedSearchItem: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let artworkURL: URL?
+    let durationSeconds: TimeInterval?
+    let isPlayable: Bool
+    let payload: FederatedSearchPayload
+}
+
+struct ExternalStreamPayload {
+    let mediaID: String
+    let streamURL: URL
+    let title: String
+    let artist: String
+    let artworkURL: URL?
+    let service: FederatedService
+    let qualityLabel: String
+    let codecLabel: String
+}
+
+enum FederatedSearchError: LocalizedError {
+    case providerUnavailable(String)
+    case spotifyCredentialsMissing
+    case spotifyPreviewUnavailable
+    case noPlayableStream(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .providerUnavailable(let message):
+            return message
+        case .spotifyCredentialsMissing:
+            return "Spotify credentials are missing. Add a Client ID and Client Secret in Settings."
+        case .spotifyPreviewUnavailable:
+            return "Spotify track playback is unavailable for this item (no preview URL)."
+        case .noPlayableStream(let message):
+            return message
+        }
     }
 }

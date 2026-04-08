@@ -44,6 +44,14 @@ final class PlayerViewModel {
         case searchVideo
     }
 
+    enum StreamingService: String {
+        case youtube = "YouTube"
+        case youtubeMusic = "YouTube Music"
+        case tidal = "Tidal"
+        case spotify = "Spotify"
+        case external = "External"
+    }
+
     private enum PlaybackQueueEntry {
         case song(YouTubeMusicSong)
         case video(YouTubeVideo)
@@ -80,6 +88,9 @@ final class PlayerViewModel {
     var currentImageURL: URL?
     var currentAccentColor: Color = .cisumAccent
     var isExplicit: Bool = false
+    var currentStreamingServiceName: String = StreamingService.youtubeMusic.rawValue
+    var currentAudioQualityLabel: String = "Adaptive"
+    var currentAudioCodecLabel: String = "HLS"
 
     // Queue
     var queueSource: PlaybackQueueSource = .detached
@@ -116,6 +127,7 @@ final class PlayerViewModel {
     private var playbackCandidates: [PlaybackCandidate] = []
     private var playbackCandidateIndex: Int = 0
     private var playbackCandidatesMediaID: String?
+    private var pendingPlaybackFormatOverride: (quality: String, codec: String)?
     private var currentAlbumNameHint: String?
     private var playbackQueue: [PlaybackQueueEntry] = []
     private var currentItemStatusObservation: NSKeyValueObservation?
@@ -249,6 +261,10 @@ final class PlayerViewModel {
         currentAlbumNameHint = song.album
         currentImageURL = song.thumbnailURL
         isExplicit = song.isExplicit
+        currentStreamingServiceName = StreamingService.youtubeMusic.rawValue
+        currentAudioQualityLabel = "Resolving..."
+        currentAudioCodecLabel = "Resolving..."
+        pendingPlaybackFormatOverride = nil
         currentVideoId = song.videoId
         playbackError = nil
         currentTime = 0
@@ -317,6 +333,10 @@ final class PlayerViewModel {
         currentAlbumNameHint = nil
         currentImageURL = fallbackURL
         isExplicit = false
+        currentStreamingServiceName = StreamingService.youtube.rawValue
+        currentAudioQualityLabel = "Resolving..."
+        currentAudioCodecLabel = "Resolving..."
+        pendingPlaybackFormatOverride = nil
         currentVideoId = video.id
         playbackError = nil
         currentTime = 0
@@ -366,6 +386,74 @@ final class PlayerViewModel {
                 self.handlePlaybackFailure(error)
             }
         }
+    }
+
+    func loadExternalStream(
+        mediaID: String,
+        streamURL: URL,
+        title: String,
+        artist: String,
+        artworkURL: URL?,
+        service: FederatedService,
+        qualityLabel: String,
+        codecLabel: String
+    ) {
+        clearQueueContext()
+
+        let normalizedMediaID = mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedMediaID.isEmpty else {
+            playbackError = "Invalid media identifier for external stream."
+            return
+        }
+
+        currentLoadTask?.cancel()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        resetArtworkVideoState()
+
+        currentTitle = normalizedMusicDisplayTitle(title, artist: artist)
+        currentArtist = normalizedMusicDisplayArtist(artist, title: title)
+        currentAlbumNameHint = nil
+        currentImageURL = artworkURL
+        isExplicit = false
+        currentStreamingServiceName = service.rawValue
+        currentAudioQualityLabel = qualityLabel
+        currentAudioCodecLabel = codecLabel
+        pendingPlaybackFormatOverride = (qualityLabel, codecLabel)
+        currentVideoId = normalizedMediaID
+        playbackError = nil
+        currentTime = 0
+        duration = 0
+        resetPlaybackCandidates(for: normalizedMediaID)
+        playbackRecoveryAttemptedIDs.remove(normalizedMediaID)
+
+#if os(iOS)
+        artworkLoadTask?.cancel()
+        accentLoadTask?.cancel()
+        applyCachedArtworkIfAvailable(for: normalizedMediaID)
+#endif
+
+        updateNowPlayingMetadata(force: true)
+#if os(iOS)
+        loadNowPlayingArtwork(
+            for: normalizedMediaID,
+            title: currentTitle,
+            artist: currentArtist,
+            fallbackURL: artworkURL
+        )
+#endif
+
+        let candidate = PlaybackCandidate(
+            url: streamURL,
+            streamKind: .audio,
+            mimeType: mimeTypeForCodecLabel(codecLabel),
+            itag: nil,
+            expiresAt: nil,
+            isCompatible: true
+        )
+
+        configurePlaybackCandidates(for: normalizedMediaID, candidates: [candidate])
+        playCurrentPlaybackCandidate()
     }
 
     // MARK: - Controls
@@ -558,17 +646,73 @@ final class PlayerViewModel {
     }
 
     private func makePlayerItem(for url: URL) -> AVPlayerItem {
-        let headers: [String: String] = [
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
-            "Referer": "https://www.youtube.com/",
-            "Origin": "https://www.youtube.com"
-        ]
+        let isYouTubeSource = currentStreamingServiceName == StreamingService.youtube.rawValue
+            || currentStreamingServiceName == StreamingService.youtubeMusic.rawValue
 
-        let asset = AVURLAsset(
-            url: url,
-            options: ["AVURLAssetHTTPHeaderFieldsKey": headers]
-        )
+        let asset: AVURLAsset
+        if isYouTubeSource {
+            let headers: [String: String] = [
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+                "Referer": "https://www.youtube.com/",
+                "Origin": "https://www.youtube.com"
+            ]
+
+            asset = AVURLAsset(
+                url: url,
+                options: ["AVURLAssetHTTPHeaderFieldsKey": headers]
+            )
+        } else {
+            asset = AVURLAsset(url: url)
+        }
+
         return AVPlayerItem(asset: asset)
+    }
+
+    private func mimeTypeForCodecLabel(_ codecLabel: String) -> String? {
+        let normalized = codecLabel.lowercased()
+        if normalized.contains("flac") { return "audio/flac" }
+        if normalized.contains("aac") { return "audio/aac" }
+        if normalized.contains("mp3") { return "audio/mpeg" }
+        if normalized.contains("hls") { return "application/x-mpegURL" }
+        return nil
+    }
+
+    private func updateAudioFormatLabels(for candidate: PlaybackCandidate) {
+        if let pendingPlaybackFormatOverride {
+            currentAudioQualityLabel = pendingPlaybackFormatOverride.quality
+            currentAudioCodecLabel = pendingPlaybackFormatOverride.codec
+            self.pendingPlaybackFormatOverride = nil
+            return
+        }
+
+        let qualityLabel: String
+        switch candidate.streamKind {
+        case .hls:
+            qualityLabel = "Adaptive"
+        case .muxed:
+            qualityLabel = "Muxed"
+        case .audio:
+            qualityLabel = "Direct Audio"
+        }
+
+        let mime = candidate.mimeType?.lowercased() ?? ""
+        let codecLabel: String
+        if mime.contains("flac") {
+            codecLabel = "FLAC"
+        } else if mime.contains("aac") || mime.contains("mp4a") || mime.contains("m4a") {
+            codecLabel = "AAC"
+        } else if mime.contains("mpeg") || mime.contains("mp3") {
+            codecLabel = "MP3"
+        } else if mime.contains("opus") {
+            codecLabel = "Opus"
+        } else if candidate.streamKind == .hls {
+            codecLabel = "HLS"
+        } else {
+            codecLabel = "Unknown"
+        }
+
+        currentAudioQualityLabel = qualityLabel
+        currentAudioCodecLabel = codecLabel
     }
 
     private func configurePlaybackCandidates(for mediaID: String, candidates: [PlaybackCandidate]) {
@@ -592,6 +736,7 @@ final class PlayerViewModel {
         guard playbackCandidateIndex < playbackCandidates.count else {
             if let fallback = playbackCandidates.first {
                 logPlayback("Playback candidate index out of range, retrying first candidate for id=\(playbackCandidatesMediaID ?? "unknown")")
+                updateAudioFormatLabels(for: fallback)
                 playFromBeginning(url: fallback.url)
             }
             return
@@ -601,6 +746,7 @@ final class PlayerViewModel {
         logPlayback(
             "Trying playback candidate #\(playbackCandidateIndex + 1) kind=\(candidate.streamKind.rawValue) for id=\(playbackCandidatesMediaID ?? "unknown")"
         )
+        updateAudioFormatLabels(for: candidate)
         playFromBeginning(url: candidate.url)
     }
 
@@ -616,6 +762,7 @@ final class PlayerViewModel {
         logPlayback(
             "Trying fallback playback candidate #\(playbackCandidateIndex + 1) kind=\(candidate.streamKind.rawValue) for id=\(mediaID) after error=\(errorMessage)"
         )
+        updateAudioFormatLabels(for: candidate)
         playFromBeginning(url: candidate.url)
         return true
     }

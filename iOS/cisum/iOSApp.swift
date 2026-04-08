@@ -34,28 +34,10 @@ struct iOSApp: App {
     var body: some Scene {
         WindowGroup {
             if #available(iOS 26.0, *) {
-                ContentView()
-                    .modelContainer(modelContainer)
-                    .environment(\.youtube, youtube)
-                    .environment(\.router, router)
-                    .environment(prefetchSettings)
-                    .environment(playerViewModel)
-                    .environment(searchViewModel)
-                    .environment(networkMonitor)
-                    .persistentSystemOverlays(.hidden)
-                    .tint(playerViewModel.currentAccentColor)
+                content
             } else {
-                RootView {
-                    ContentView()
-                        .modelContainer(modelContainer)
-                        .environment(\.youtube, youtube)
-                        .environment(\.router, router)
-                        .environment(prefetchSettings)
-                        .environment(playerViewModel)
-                        .environment(searchViewModel)
-                        .environment(networkMonitor)
-                        .persistentSystemOverlays(.hidden)
-                        .tint(playerViewModel.currentAccentColor)
+                RootView(playerViewModel: playerViewModel) {
+                    content
                 }
             }
         }
@@ -72,6 +54,19 @@ struct iOSApp: App {
                 print("Unknown scene phase")
             }
         }
+    }
+    
+    var content: some View {
+        ContentView()
+            .modelContainer(modelContainer)
+            .environment(\.youtube, youtube)
+            .environment(\.router, router)
+            .environment(prefetchSettings)
+            .environment(playerViewModel)
+            .environment(searchViewModel)
+            .environment(networkMonitor)
+            .persistentSystemOverlays(.hidden)
+            .tint(playerViewModel.currentAccentColor)
     }
 }
 

@@ -9,8 +9,8 @@
 import SwiftUI
 
 extension View {
-    func sliderStyle(_ config: cisumSliderConfig) -> some View {
-        environment(\.cisumSliderConfig, config)
+    func sliderStyle(_ config: SliderConfig) -> some View {
+        environment(\.sliderConfig, config)
     }
 }
 #endif

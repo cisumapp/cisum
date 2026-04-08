@@ -1,5 +1,5 @@
 //
-//  cisumBackwardButton.swift
+//  PreviousButton.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 05/05/25.
@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-struct cisumBackwardButton: View {
+struct PreviousButton: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
     @State private var transparency: Double = 0.0
     

@@ -19,14 +19,23 @@ struct ContentView: View {
     @State var scrollPhase: ScrollPhases = .idle
     @State var tabBarVisibility: Visibility = .visible
     
+    @State private var expandMiniPlayer: Bool = false
+    @Namespace private var playerAnimationNamespace
+    
     let hideThresholds: CGFloat = 40
     let showThresholds: CGFloat = -10
     
     @Namespace private var namespace
     
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         iOSTabView(
             selection: $activeTab,
+            expandMiniPlayer: $expandMiniPlayer,
+            playerAnimationNamespace: playerAnimationNamespace,
             searchText: Bindable(searchViewModel).searchText
         ) {
             Tab("Home", systemImage: "house.fill", value: TabItem.home) {
@@ -56,7 +65,10 @@ struct ContentView: View {
             searchViewModel.performDebouncedSearch()
         }
         .tabbarBottomViewAccessory {
-            DynamicPlayerIsland(namespace: namespace)
+            DynamicPlayerIsland(
+                isExpanded: $expandMiniPlayer,
+                namespace: playerAnimationNamespace
+            )
         }
         .tabbarVisibility(tabBarVisibility)
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)
@@ -66,8 +78,11 @@ struct ContentView: View {
         }
         .onChange(of: activeTab) { _, newValue in
             router.selectedTab = newValue
-            tabBarVisibility = .visible
+            if tabBarVisibility != .visible {
+                tabBarVisibility = .visible
+            }
         }
+        .enableInjection()
     }
 }
 
@@ -89,21 +104,30 @@ private extension ContentView {
                     let scrollingDown = oldValue < newValue
                     
                     if self.isScrollingDown != scrollingDown {
-                        storedOffset = newValue - (tabBarVisibility == .hidden ? 20 : 0)
+                        let adjustedOffset = newValue - (tabBarVisibility == .hidden ? 20 : 0)
+                        if storedOffset != adjustedOffset {
+                            storedOffset = adjustedOffset
+                        }
                         self.isScrollingDown = scrollingDown
                     }
                     
                     let diff = newValue - storedOffset
                     if scrollPhase == .interacting {
                         if diff > hideThresholds {
-                            tabBarVisibility = .hidden
+                            if tabBarVisibility != .hidden {
+                                tabBarVisibility = .hidden
+                            }
                         } else if diff < showThresholds {
-                            tabBarVisibility = .visible
+                            if tabBarVisibility != .visible {
+                                tabBarVisibility = .visible
+                            }
                         }
                     }
                 }
                 .onScrollPhaseUpdate { _, newPhase in
-                    scrollPhase = newPhase
+                    if scrollPhase != newPhase {
+                        scrollPhase = newPhase
+                    }
                 }
                 .usingRouter()
         }

@@ -54,7 +54,10 @@ extension View {
                 of: { geo in
                     geo.contentOffset.y + geo.contentInsets.top
                 },
-                action: action
+                action: { oldValue, newValue in
+                    guard oldValue != newValue else { return }
+                    action(oldValue, newValue)
+                }
             )
         } else {
             return self.modifier(

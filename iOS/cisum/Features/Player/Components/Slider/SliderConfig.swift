@@ -8,7 +8,7 @@
 #if os(iOS)
 import SwiftUI
 
-struct cisumSliderConfig {
+struct SliderConfig {
     enum LabelLocation {
         case bottom
         case side
@@ -31,7 +31,7 @@ struct cisumSliderConfig {
     let defaultSensoryFeedback: Bool
 
     init(
-        labelLocation: cisumSliderConfig.LabelLocation = .side,
+        labelLocation: SliderConfig.LabelLocation = .side,
         activeHeight: CGFloat = 17,
         inactiveHeight: CGFloat = 7,
         growth: CGFloat = 9,

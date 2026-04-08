@@ -67,7 +67,7 @@ extension StretchySlider {
     }
 }
 
-extension cisumSliderConfig {
+extension SliderConfig {
     static var miniPlayerProgress: Self {
         Self(
             labelLocation: .overlay,

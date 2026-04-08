@@ -207,6 +207,10 @@ struct VinylDisk<Content: View>: View {
     let size: CGFloat
     let content: () -> Content
     
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         ZStack {
             Circle()
@@ -231,6 +235,7 @@ struct VinylDisk<Content: View>: View {
                 .resizable()
         }
         .frame(width: size, height: size)
+        .enableInjection()
     }
 }
 

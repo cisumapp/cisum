@@ -23,10 +23,12 @@ extension View {
 /// Root View Wrapper
 struct RootView<Content: View>: View {
     private let content: Content
+    private let playerViewModel: PlayerViewModel
     @State private var properties = UniversalOverlayProperties()
     
-    init(@ViewBuilder content: @escaping () -> Content) {
+    init(playerViewModel: PlayerViewModel, @ViewBuilder content: @escaping () -> Content) {
         self.content = content()
+        self.playerViewModel = playerViewModel
     }
 
     #if DEBUG
@@ -57,7 +59,11 @@ struct RootView<Content: View>: View {
         window.isUserInteractionEnabled = true
 
         // Keep a dedicated SwiftUI tree for overlay rendering.
-        let rootViewController = UIHostingController(rootView: UniversalOverlayViews().environment(properties))
+        let rootViewController = UIHostingController(
+            rootView: UniversalOverlayViews()
+                .environment(properties)
+                .environment(playerViewModel)
+        )
         rootViewController.view.backgroundColor = .clear
         rootViewController.view.frame = window.bounds
         rootViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]

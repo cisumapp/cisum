@@ -150,6 +150,10 @@ private struct DiscoverSection: Identifiable {
 private struct DiscoverSectionView: View {
     let section: DiscoverSection
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
@@ -166,12 +170,17 @@ private struct DiscoverSectionView: View {
                 }
             }
         }
+        .enableInjection()
     }
 }
 
 private struct DiscoverChartRow: View {
     let rank: Int
     let item: YouTubeChartItem
+
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
 
     var body: some View {
         HStack(spacing: 12) {
@@ -210,6 +219,7 @@ private struct DiscoverChartRow: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(.ultraThinMaterial)
         )
+        .enableInjection()
     }
 }
 

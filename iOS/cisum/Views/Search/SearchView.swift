@@ -15,8 +15,6 @@ struct SearchView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var showNonPlayableAlert: Bool = false
     @State private var nonPlayableMessage: String = ""
-    
-    @State private var properties = PlayerProperties.shared
 
     #if DEBUG
     @ObserveInjection var forceRedraw
@@ -27,7 +25,6 @@ struct SearchView: View {
             .contentMargins(.top, 140)
             .optionalSearchable(
                 text: Bindable(searchViewModel).searchText,
-                scope: Bindable(searchViewModel).searchScope,
                 suggestions: searchViewModel.suggestions,
                 onSuggestionTap: { suggestion in
                     searchViewModel.applySuggestion(suggestion)
@@ -48,7 +45,7 @@ struct SearchView: View {
                     ContentUnavailableView("Search for something", systemImage: "magnifyingglass")
                     
                 case .loading:
-                    ProgressView("Searching YouTube...")
+                    ProgressView("Searching across services...")
                         .controlSize(.large)
                     
                 case .error(let message):
@@ -77,149 +74,9 @@ struct SearchView: View {
     @ViewBuilder
     private func ResultsList() -> some View {
         List {
-            if searchViewModel.searchScope == .music {
-                ForEach(searchViewModel.musicResults) { song in
-                    Button {
-                        playMusic(song)
-                    } label: {
-                        HStack(spacing: 12) {
-                            AsyncImage(url: song.thumbnailURL) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Color.gray.opacity(0.3)
-                            }
-                            .frame(width: 50, height: 50)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay))
-                                    .font(.headline)
-                                    .lineLimit(1)
-                                
-                                Text("\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(song.album ?? "Single")")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            
-                            Spacer()
-                            
-                            if let duration = song.duration {
-                                Text(formatDuration(duration))
-                                    .font(.caption2)
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .contentShape(.rect)
-                    .onAppear {
-                        searchViewModel.prefetchIfNeeded(id: song.videoId)
-                    }
-                }
-            } else {
-                ForEach(searchViewModel.videoResults) { item in
-                    switch item {
-                    case .video(let video):
-                        Button {
-                            playVideo(video)
-                        } label: {
-                            HStack(spacing: 12) {
-                                AsyncImage(url: normalizedThumbnailURL(from: video.thumbnailURL)) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Color.gray.opacity(0.3)
-                                }
-                                .frame(width: 80, height: 45)
-                                .clipShape(RoundedRectangle(cornerRadius: 4))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(normalizedMusicDisplayTitle(video.title, artist: video.author))
-                                        .font(.subheadline)
-                                        .lineLimit(2)
-
-                                    Text(normalizedMusicDisplayArtist(video.author, title: video.title))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .onAppear {
-                            searchViewModel.loadMoreVideosIfNeeded(for: item)
-                            searchViewModel.prefetchIfNeeded(id: video.id)
-                        }
-                        .id(item.id)
-
-                    case .channel(let channel):
-                        Button {
-                            nonPlayableMessage = "Channels are not playable yet. Open channel: \(normalizedMusicDisplayTitle(channel.title))"
-                            showNonPlayableAlert = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                AsyncImage(url: normalizedThumbnailURL(from: channel.thumbnailURL)) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Color.gray.opacity(0.3)
-                                }
-                                .frame(width: 50, height: 50)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(normalizedMusicDisplayTitle(channel.title))
-                                        .font(.headline)
-                                        .lineLimit(1)
-
-                                    Text(channel.subscriberCount ?? "")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .onAppear {
-                            searchViewModel.loadMoreVideosIfNeeded(for: item)
-                        }
-                        .id(item.id)
-
-                    case .playlist(let playlist):
-                        Button {
-                            nonPlayableMessage = "Playlists are not playable yet. Open playlist: \(normalizedMusicDisplayTitle(playlist.title))"
-                            showNonPlayableAlert = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                AsyncImage(url: normalizedThumbnailURL(from: playlist.thumbnailURL)) { image in
-                                    image.resizable().scaledToFill()
-                                } placeholder: {
-                                    Color.gray.opacity(0.3)
-                                }
-                                .frame(width: 50, height: 50)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(normalizedMusicDisplayTitle(playlist.title))
-                                        .font(.headline)
-                                        .lineLimit(1)
-
-                                    Text(playlist.videoCount ?? "")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .id(item.id)
-                    }
-                }
-
-                if searchViewModel.isVideoPaginationLoading {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("Loading more…")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
-                    .listRowSeparator(.hidden)
+            ForEach(FederatedService.allCases) { service in
+                Section(service.rawValue) {
+                    sectionContent(for: service)
                 }
             }
         }
@@ -258,44 +115,147 @@ struct SearchView: View {
     }
     
     // MARK: - Actions
-    private func playMusic(_ song: YouTubeMusicSong) {
-        searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-        playerViewModel.load(song: song, in: searchViewModel.musicResults, source: .searchMusic)
-        properties.expandPlayer()
-    }
-    
-    private func playVideo(_ video: YouTubeVideo) {
-        searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-        let playableVideoQueue = searchViewModel.videoResults.compactMap { result -> YouTubeVideo? in
-            guard case .video(let item) = result else { return nil }
-            return item
+    private func handleRowSelection(_ item: FederatedSearchItem) {
+        switch item.payload {
+        case .youtubeMusic(let song):
+            searchViewModel.recordSuccessfulPlayFromCurrentQuery()
+            let queue = searchViewModel.items(for: .youtubeMusic).compactMap { entry -> YouTubeMusicSong? in
+                guard case .youtubeMusic(let queueSong) = entry.payload else { return nil }
+                return queueSong
+            }
+            playerViewModel.load(song: song, in: queue, source: .searchMusic)
+            #warning("expandPlayer not implemented globally (dependency injection)")
+//            expandPlayer()
+
+        case .youtubeVideo(let video):
+            searchViewModel.recordSuccessfulPlayFromCurrentQuery()
+            let queue = searchViewModel.items(for: .youtube).compactMap { entry -> YouTubeVideo? in
+                guard case .youtubeVideo(let queueVideo) = entry.payload else { return nil }
+                return queueVideo
+            }
+            playerViewModel.load(video: video, in: queue, source: .searchVideo)
+#warning("expandPlayer not implemented globally (dependency injection)")
+//            expandPlayer()
+
+        case .tidal, .spotify:
+            Task {
+                await playExternalStream(from: item)
+            }
         }
-        playerViewModel.load(video: video, in: playableVideoQueue, source: .searchVideo)
-        properties.expandPlayer()
+    }
+
+    @MainActor
+    private func playExternalStream(from item: FederatedSearchItem) async {
+        do {
+            guard let payload = try await searchViewModel.resolveExternalStream(for: item) else {
+                return
+            }
+
+            searchViewModel.recordSuccessfulPlayFromCurrentQuery()
+            playerViewModel.loadExternalStream(
+                mediaID: payload.mediaID,
+                streamURL: payload.streamURL,
+                title: payload.title,
+                artist: payload.artist,
+                artworkURL: payload.artworkURL,
+                service: payload.service,
+                qualityLabel: payload.qualityLabel,
+                codecLabel: payload.codecLabel
+            )
+#warning("expandPlayer not implemented globally (dependency injection)")
+//            expandPlayer()
+        } catch {
+            nonPlayableMessage = error.localizedDescription
+            showNonPlayableAlert = true
+        }
+    }
+
+    @ViewBuilder
+    private func sectionContent(for service: FederatedService) -> some View {
+        let state = searchViewModel.sectionState(for: service)
+        let items = searchViewModel.items(for: service)
+
+        switch state {
+        case .idle:
+            Text("Start typing to search.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading \(service.rawValue) results...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        case .error(let message):
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .success:
+            if items.isEmpty {
+                Text("No results")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(items) { item in
+                    Button {
+                        handleRowSelection(item)
+                    } label: {
+                        federatedRow(item)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func federatedRow(_ item: FederatedSearchItem) -> some View {
+        HStack(spacing: 12) {
+            AsyncImage(url: item.artworkURL) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Color.gray.opacity(0.3)
+            }
+            .frame(width: 50, height: 50)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Text(item.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                if let duration = item.durationSeconds {
+                    Text(formatDuration(duration))
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+
+                if !item.isPlayable {
+                    Text("Metadata")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+            }
+        }
+        .contentShape(.rect)
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
         let min = Int(seconds) / 60
         let sec = Int(seconds) % 60
         return String(format: "%d:%02d", min, sec)
-    }
-
-    private func normalizedThumbnailURL(from string: String?) -> URL? {
-        guard var candidate = string?.trimmingCharacters(in: .whitespacesAndNewlines), !candidate.isEmpty else { return nil }
-        if candidate.hasPrefix("//") {
-            candidate = "https:" + candidate
-        } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
-            candidate = "https://" + candidate
-        }
-        return URL(string: candidate)
-    }
-
-    private func normalizedThumbnailURL(from url: URL?) -> URL? {
-        guard let url = url else { return nil }
-        if let scheme = url.scheme, !scheme.isEmpty {
-            return url
-        }
-        return normalizedThumbnailURL(from: url.absoluteString)
     }
 }
 
@@ -309,7 +269,6 @@ extension View {
     @ViewBuilder
     func optionalSearchable(
         text: Binding<String>,
-        scope: Binding<SearchViewModel.SearchScope>,
         suggestions: [String],
         onSuggestionTap: @escaping (String) -> Void
     ) -> some View {
@@ -330,10 +289,15 @@ extension View {
                 .searchPresentationToolbarBehavior(.avoidHidingContent)
                 .searchToolbarBehavior(.minimize)
         } else {
-            self.searchScopes(scope) {
-                Text("Music").tag(SearchViewModel.SearchScope.music)
-                Text("YouTube").tag(SearchViewModel.SearchScope.video)
-            }
+            self
+                .searchable(text: text, prompt: Text("Search"))
+                .searchSuggestions {
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button(suggestion) {
+                            onSuggestionTap(suggestion)
+                        }
+                    }
+                }
         }
     }
 }

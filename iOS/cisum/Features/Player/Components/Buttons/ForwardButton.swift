@@ -1,23 +1,20 @@
 //
-//  cisumPlayButton.swift
+//  ForwardButton.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 05/05/25.
 //
 
+
 import SwiftUI
 
-struct cisumPlayButton: View {
+struct ForwardButton: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
     @State private var transparency: Double = 0.0
     
-    #if DEBUG
-    @ObserveInjection var forceRedraw
-    #endif
-
     var body: some View {
         Button {
-            playerViewModel.togglePlayPause()
+            playerViewModel.skipToNext()
             transparency = 0.6
             withAnimation(.easeOut(duration: 0.2)) {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -27,13 +24,14 @@ struct cisumPlayButton: View {
         } label: {
             ZStack {
                 Circle()
-                    .frame(width: 75, height: 75)
+                    .frame(width: 50, height: 50)
                     .opacity(transparency)
-                Image(systemName: playerViewModel.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 50))
+                Image(systemName: "forward.fill")
+                    .font(.title)
+//                    .animation(.interpolatingSpring(stiffness: 170, damping: 15), value: player.isForwarded)
             }
         }
-        .padding(.horizontal, -25)
-        .enableInjection()
+        .disabled(!playerViewModel.canSkipForward)
+        .opacity(playerViewModel.canSkipForward ? 1 : 0.5)
     }
 }
