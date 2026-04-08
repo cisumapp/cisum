@@ -66,8 +66,7 @@ struct Vinyl<Content: View>: View {
                     }
                     .offset(y: 35)
                     
-                    heroVinyl
-                        .rotationEffect(.degrees(rotation(at: timeline.date)))
+                    heroVinyl(timeline: timeline)
                         .overlay {
                             vinylShade
                         }
@@ -109,8 +108,8 @@ struct Vinyl<Content: View>: View {
     }
     
     @ViewBuilder
-    var heroVinyl: some View {
-        VinylDisk(size: 1080) {
+    func heroVinyl(timeline: TimelineViewDefaultContext) -> some View {
+        VinylDisk(size: 1080, timeline: timeline) {
             content()
         }
     }
@@ -163,7 +162,7 @@ struct Vinyl<Content: View>: View {
         return height * ratio
     }
     
-    private func rotation(at date: Date) -> Double {
+    public func rotation(at date: Date) -> Double {
         guard let phaseStartDate else {
             return phaseStartAngle
         }
@@ -203,42 +202,6 @@ struct Vinyl<Content: View>: View {
     }
 }
 
-struct VinylDisk<Content: View>: View {
-    let size: CGFloat
-    let content: () -> Content
-    
-    #if DEBUG
-    @ObserveInjection var forceRedraw
-    #endif
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(.clear)
-                .overlay {
-                    content()
-                }
-                .clipShape(.circle)
-                .padding(1)
-
-            Image(.vinylGrooves)
-                .resizable()
-                .scaledToFill()
-                .opacity(0.5)
-                .padding(5)
-
-            Image(.vinylOverlay)
-                .resizable()
-                .scaledToFill()
-
-            Image(.vinylCenter)
-                .resizable()
-        }
-        .frame(width: size, height: size)
-        .enableInjection()
-    }
-}
-
 #Preview {
     Vinyl {
         Image(.notPlaying)
@@ -253,6 +216,66 @@ struct VinylDisk<Content: View>: View {
     .preferredColorScheme(.dark)
 }
 
+extension Vinyl {
+    @ViewBuilder
+    func VinylDisk(size: CGFloat, timeline: TimelineViewDefaultContext, content: () -> Content) -> some View {
+        ZStack {
+            Group {
+                Circle()
+                    .fill(.clear)
+                    .overlay {
+                        content()
+                    }
+                    .clipShape(.circle)
+                    .padding(1)
+                
+                Image(.vinylGrooves)
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(0.5)
+                    .padding(5)
+                
+                Image(.vinylOverlay)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .rotationEffect(.degrees(rotation(at: timeline.date)))
+            
+            Image(.vinylCenter)
+                .resizable()
+        }
+        .frame(width: size, height: size)
+        .geometryGroup()
+    }
+    
+    @ViewBuilder
+    func VinylDisk(size: CGFloat, content: () -> AnyView) -> some View {
+        ZStack {
+            Circle()
+                .fill(.clear)
+                .overlay {
+                    content()
+                }
+                .clipShape(.circle)
+                .padding(1)
+            
+            Image(.vinylGrooves)
+                .resizable()
+                .scaledToFill()
+                .opacity(0.5)
+                .padding(5)
+            
+            Image(.vinylOverlay)
+                .resizable()
+                .scaledToFill()
+            
+            Image(.vinylCenter)
+                .resizable()
+        }
+        .frame(width: size, height: size)
+        .geometryGroup()
+    }
+}
 
 extension Vinyl {
     init(
