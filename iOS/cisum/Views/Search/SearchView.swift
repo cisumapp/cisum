@@ -13,6 +13,7 @@ struct SearchView: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
 
     @FocusState private var isSearchFocused: Bool
+    @State private var isSearchPresentationActive: Bool = false
     @State private var showNonPlayableAlert: Bool = false
     @State private var nonPlayableMessage: String = ""
 
@@ -22,9 +23,11 @@ struct SearchView: View {
 
     var body: some View {
         searchContent
-            .contentMargins(.top, 140)
+            .safeAreaPadding(.top, 20)
             .optionalSearchable(
                 text: Bindable(searchViewModel).searchText,
+                isFocused: $isSearchFocused,
+                isPresented: $isSearchPresentationActive,
                 suggestions: searchViewModel.suggestions,
                 onSuggestionTap: { suggestion in
                     searchViewModel.applySuggestion(suggestion)
@@ -59,6 +62,7 @@ struct SearchView: View {
         .enableInjection()
         .onSubmit(of: .search) {
             isSearchFocused = false
+            isSearchPresentationActive = false
         }
     }
 
@@ -66,7 +70,7 @@ struct SearchView: View {
         if #available(iOS 26.0, *) {
             return false
         } else {
-            return true
+            return false
         }
     }
     
@@ -80,6 +84,7 @@ struct SearchView: View {
                 }
             }
         }
+        .contentMargins(.bottom, 140)
         .listStyle(.plain)
         .alert(nonPlayableMessage, isPresented: $showNonPlayableAlert) {
             Button("OK", role: .cancel) { }
@@ -134,7 +139,7 @@ struct SearchView: View {
                 return queueVideo
             }
             playerViewModel.load(video: video, in: queue, source: .searchVideo)
-#warning("expandPlayer not implemented globally (dependency injection)")
+            #warning("expandPlayer not implemented globally (dependency injection)")
 //            expandPlayer()
 
         case .tidal, .spotify:
@@ -162,7 +167,7 @@ struct SearchView: View {
                 qualityLabel: payload.qualityLabel,
                 codecLabel: payload.codecLabel
             )
-#warning("expandPlayer not implemented globally (dependency injection)")
+            #warning("expandPlayer not implemented globally (dependency injection)")
 //            expandPlayer()
         } catch {
             nonPlayableMessage = error.localizedDescription
@@ -269,6 +274,8 @@ extension View {
     @ViewBuilder
     func optionalSearchable(
         text: Binding<String>,
+        isFocused: FocusState<Bool>.Binding,
+        isPresented: Binding<Bool>,
         suggestions: [String],
         onSuggestionTap: @escaping (String) -> Void
     ) -> some View {
@@ -276,28 +283,30 @@ extension View {
             self
                 .searchable(
                     text: text,
+                    isPresented: isPresented,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: Text("Search")
                 )
-                .searchSuggestions {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) {
-                            onSuggestionTap(suggestion)
-                        }
-                    }
-                }
+                .searchFocused(isFocused)
+//                .searchSuggestions {
+//                    ForEach(suggestions, id: \.self) { suggestion in
+//                        Button(suggestion) {
+//                            onSuggestionTap(suggestion)
+//                        }
+//                    }
+//                }
                 .searchPresentationToolbarBehavior(.avoidHidingContent)
                 .searchToolbarBehavior(.minimize)
         } else {
             self
-                .searchable(text: text, prompt: Text("Search"))
-                .searchSuggestions {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) {
-                            onSuggestionTap(suggestion)
-                        }
-                    }
-                }
+//                .searchable(text: text, prompt: Text("Search"))
+//                .searchSuggestions {
+//                    ForEach(suggestions, id: \.self) { suggestion in
+//                        Button(suggestion) {
+//                            onSuggestionTap(suggestion)
+//                        }
+//                    }
+//                }
         }
     }
 }

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		77048F3C2F86922700C446B5 /* TidalKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F3B2F86922700C446B5 /* TidalKit */; };
 		77048F3F2F86929A00C446B5 /* SpotifySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F3E2F86929A00C446B5 /* SpotifySDK */; };
+		77048F492F8692D000C446B5 /* LyricsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F4B2F8692D000C446B5 /* LyricsKit */; };
 		772039792F6AAB1200E85D4A /* YouTubeSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 772039782F6AAB1200E85D4A /* YouTubeSDK */; };
 		7720397F2F6AAB2F00E85D4A /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 7720397E2F6AAB2F00E85D4A /* Kingfisher */; };
 		772039852F6AAB5100E85D4A /* InjectionNext in Frameworks */ = {isa = PBXBuildFile; productRef = 772039842F6AAB5100E85D4A /* InjectionNext */; };
@@ -132,6 +133,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				77048F492F8692D000C446B5 /* LyricsKit in Frameworks */,
 				7767ACF02F8578D000C3BEBD /* SpotifySDK in Frameworks */,
 				775786042F7774DF005CB07D /* libavdevice in Frameworks */,
 				77048F3F2F86929A00C446B5 /* SpotifySDK in Frameworks */,
@@ -246,6 +248,7 @@
 				7767ACEF2F8578D000C3BEBD /* SpotifySDK */,
 				77048F3B2F86922700C446B5 /* TidalKit */,
 				77048F3E2F86929A00C446B5 /* SpotifySDK */,
+				77048F4B2F8692D000C446B5 /* LyricsKit */,
 			);
 			productName = iOS;
 			productReference = 772039522F6AAAA700E85D4A /* cisum.app */;
@@ -331,6 +334,7 @@
 				77D7033F2F781F9100358D03 /* XCRemoteSwiftPackageReference "ituneskit" */,
 				77048F3A2F86922700C446B5 /* XCRemoteSwiftPackageReference "TidalKit" */,
 				77048F3D2F86929A00C446B5 /* XCRemoteSwiftPackageReference "SpotifySDK" */,
+				77048F4A2F8692D000C446B5 /* XCRemoteSwiftPackageReference "LyricsKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 772039532F6AAAA700E85D4A /* Products */;
@@ -785,6 +789,14 @@
 				kind = branch;
 			};
 		};
+		77048F4A2F8692D000C446B5 /* XCRemoteSwiftPackageReference "LyricsKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cisumapp/LyricsKit.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		772039772F6AAB1200E85D4A /* XCRemoteSwiftPackageReference "YouTubeSDK" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/atpugvaraa/YouTubeSDK.git";
@@ -837,6 +849,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 77048F3D2F86929A00C446B5 /* XCRemoteSwiftPackageReference "SpotifySDK" */;
 			productName = SpotifySDK;
+		};
+		77048F4B2F8692D000C446B5 /* LyricsKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77048F4A2F8692D000C446B5 /* XCRemoteSwiftPackageReference "LyricsKit" */;
+			productName = LyricsKit;
 		};
 		772039782F6AAB1200E85D4A /* YouTubeSDK */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -13,7 +13,7 @@ struct DynamicPlayerIsland: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
     
     
-    @Binding var isExpanded: Bool
+    @Binding var isPlayerExpanded: Bool
     var namespace: Namespace.ID
     //    @State var forwardAnimationTrigger: PlayerButtonTrigger = .one(bouncing: false)
     
@@ -30,7 +30,7 @@ struct DynamicPlayerIsland: View {
                     .transformEffect(.identity)
                     .onTapGesture {
                         withAnimation(.playerExpandAnimation) {
-                            isExpanded = true
+                            isPlayerExpanded = true
                         }
                     }
 //            } else {
@@ -140,8 +140,9 @@ private extension DynamicPlayerIsland {
     @ViewBuilder
     var artwork: some View {
         ZStack {
-            if !isExpanded {
+            if !isPlayerExpanded {
                 KFImage(playerViewModel.currentImageURL)
+                    .resizable()
                     .frame(width: 40, height: 40)
                     .aspectRatio(contentMode: .fit)
                     .clipShape(.circle)

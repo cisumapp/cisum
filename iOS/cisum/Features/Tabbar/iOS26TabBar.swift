@@ -12,6 +12,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     @Binding var activeTab: SelectionValue
     var showsSearchBar: Bool = false
     @Environment(PlayerViewModel.self) private var playerViewModel
+    @Environment(\.isSearchExpanded) private var searchExpansion
     
     @Binding var searchText: String
     var onSearchTriggered: () -> Void
@@ -23,9 +24,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     @State private var lastDragOffset: CGFloat?
     @State private var lastVisibleSelection: SelectionValue?
     
-    @State private var isSearchExpanded: Bool = false
-    
     @FocusState private var isKeyboardActive: Bool
+
+    private var isSearchExpanded: Bool {
+        get { searchExpansion.wrappedValue }
+        nonmutating set { searchExpansion.wrappedValue = newValue }
+    }
     
     #if DEBUG
     @ObserveInjection var forceRedraw

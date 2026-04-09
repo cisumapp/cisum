@@ -8,8 +8,24 @@
 import SwiftUI
 
 struct ExpandablePlayer: View {
+    @Environment(\.tabBarVisibility) private var tabBarVisibility
+    @Environment(\.isSearchExpanded) private var isSearchExpanded
+    
     @Binding var show: Bool
-    @Binding var isExpanded: Bool
+    @Binding var isPlayerExpanded: Bool
+    
+    var isSearchFieldExpanded: Bool {
+        return isSearchExpanded.wrappedValue
+    }
+    
+    var isTabbarVisible: Bool {
+        if tabBarVisibility == .visible {
+            return true
+        } else {
+            return false
+        }
+    }
+    
     var collapsedFrame: CGRect
     @Namespace private var namespace
     
@@ -35,8 +51,8 @@ struct ExpandablePlayer: View {
                     
                     playerContent(size: size)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, isExpanded ? 0 : safeArea.bottom + 25)
-                        .padding(.horizontal, isExpanded ? 0 : 20)
+                        .padding(.bottom, isPlayerExpanded ? 0 : (isSearchFieldExpanded ? (isTabbarVisible ? safeArea.bottom + 18 : -12) : safeArea.bottom + 25))
+                        .padding(.horizontal, isPlayerExpanded ? 0 : (isSearchFieldExpanded ? 30 : (isTabbarVisible ? 20 : 10)))
                         .gesture(
                             PanGesture { newValue in
                                 handleGestureChange(value: newValue, viewSize: size)
@@ -46,8 +62,8 @@ struct ExpandablePlayer: View {
                         )
                 }
                 .opacity(isFullyCollapsed ? 0 : 1)
-                .onChange(of: isExpanded) {
-                    if isExpanded {
+                .onChange(of: isPlayerExpanded) {
+                    if isPlayerExpanded {
                         stacked(progress: 1, withAnimation: true)
                     }
                 }
@@ -64,12 +80,12 @@ struct ExpandablePlayer: View {
                     
                     playerContent(size: size)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, isExpanded ? 0 : safeArea.bottom + 88)
-                        .padding(.horizontal, isExpanded ? 0 : 20)
+                        .padding(.bottom, isPlayerExpanded ? 0 : safeArea.bottom + (isSearchExpanded.wrappedValue ? 77 : 88))
+                        .padding(.horizontal, isPlayerExpanded ? 0 : 20)
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onChanged { value in
-                                    guard isExpanded else { return }
+                                    guard isPlayerExpanded else { return }
                                     let translation = max(value.translation.height, 0)
                                     offsetY = translation
                                     windowProgress = max(min(translation / size.height, 1), 0) * 0.1
@@ -77,14 +93,14 @@ struct ExpandablePlayer: View {
                                     resizeWindow(0.1 - windowProgress)
                                 }
                                 .onEnded { value in
-                                    guard isExpanded else { return }
+                                    guard isPlayerExpanded else { return }
                                     let translation = max(value.translation.height, 0)
                                     let velocity = value.velocity.height / 5
                                     
                                     withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
                                         if (translation + velocity) > (size.height * 0.3) {
                                             /// Closing View
-                                            isExpanded = false
+                                            isPlayerExpanded = false
                                             /// Resetting Window to identity with Animation
                                             resetWindowWithAnimation()
                                         } else {
@@ -100,7 +116,7 @@ struct ExpandablePlayer: View {
                             ,including: .all)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                    if isExpanded {
+                    if isPlayerExpanded {
                         resetWindowToIdentity()
                     }
                 }
@@ -158,32 +174,32 @@ private extension ExpandablePlayer {
     func playerContent(size: CGSize) -> some View {
         ZStack(alignment: .top) {
             PlayerBackground(
-                isExpanded: isExpanded,
+                isPlayerExpanded: isPlayerExpanded,
                 isFullExpanded: isFullyExpanded
             )
             
             DynamicPlayerIsland(
-                isExpanded: $isExpanded,
+                isPlayerExpanded: $isPlayerExpanded,
                 namespace: namespace
             )
-            .opacity(isExpanded ? 0 : 1)
+            .opacity(isPlayerExpanded ? 0 : 1)
             
             NowPlayingView(
-                isExpanded: isExpanded,
+                isPlayerExpanded: isPlayerExpanded,
                 size: size,
                 namespace: namespace
             )
-            .opacity(isExpanded ? 1 : 0)
+            .opacity(isPlayerExpanded ? 1 : 0)
             
             ProgressTracker(progress: progressTrackState)
         }
-        .frame(height: isExpanded ? nil : Constants.dynamicPlayerIslandHeight, alignment: .top)
+        .frame(height: isPlayerExpanded ? nil : Constants.dynamicPlayerIslandHeight, alignment: .top)
         .offset(y: offsetY)
         .ignoresSafeArea()
     }
     
     func handleGestureChange(value: PanGesture.Value, viewSize: CGSize) {
-        guard isExpanded else { return }
+        guard isPlayerExpanded else { return }
         let translation = max(value.translation.height, 0)
         offsetY = translation
         windowProgress = max(min(translation / viewSize.height, 1), 0)
@@ -191,12 +207,12 @@ private extension ExpandablePlayer {
     }
 
     func handleGestureEnd(value: PanGesture.Value, viewSize: CGSize) {
-        guard isExpanded else { return }
+        guard isPlayerExpanded else { return }
         let translation = max(value.translation.height, 0)
         let velocity = value.velocity.height / 5
         withAnimation(.playerExpandAnimation) {
             if (translation + velocity) > (viewSize.height * 0.3) {
-                isExpanded = false
+                isPlayerExpanded = false
                 resetStackedWithAnimation()
             } else {
                 stacked(progress: 1, withAnimation: true)
@@ -222,7 +238,7 @@ private extension ExpandablePlayer {
     }
     
     var insets: EdgeInsets {
-        if isExpanded {
+        if isPlayerExpanded {
             return .init(top: 0, leading: 0, bottom: 0, trailing: 0)
         }
 

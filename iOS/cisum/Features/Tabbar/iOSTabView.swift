@@ -17,6 +17,7 @@ struct iOSTabView<SelectionValue: Hashable>: View {
     let tabs: [TabViewData<SelectionValue>]
     
     @State private var showMiniPlayer: Bool = false
+    @State private var isSearchExpanded: Bool = false
     @Binding var expandMiniPlayer: Bool
     var playerAnimationNamespace: Namespace.ID
 
@@ -63,7 +64,7 @@ struct iOSTabView<SelectionValue: Hashable>: View {
                     .overlay {
                         ExpandablePlayer(
                             show: .constant(true),
-                            isExpanded: $expandMiniPlayer,
+                            isPlayerExpanded: $expandMiniPlayer,
                             collapsedFrame: .zero
                         )
                         // Hack to fix the status bar color not updating correctly in iOS 26
@@ -74,14 +75,28 @@ struct iOSTabView<SelectionValue: Hashable>: View {
                     .universalOverlay(show: .constant(true)) {
                         ExpandablePlayer(
                             show: .constant(true),
-                            isExpanded: $expandMiniPlayer,
+                            isPlayerExpanded: $expandMiniPlayer,
                             collapsedFrame: .zero
                         )
                         .ignoresSafeArea(.keyboard)
                     }
             }
         }
+        .environment(\.isSearchExpanded, $isSearchExpanded)
+        .onAppear {
+            isSearchExpanded = isSearchTabSelection(selection)
+        }
+        .onChange(of: selection) { _, newValue in
+            let isSearchSelected = isSearchTabSelection(newValue)
+            if isSearchExpanded != isSearchSelected {
+                isSearchExpanded = isSearchSelected
+            }
+        }
         .enableInjection()
+    }
+
+    private func isSearchTabSelection(_ value: SelectionValue) -> Bool {
+        tabs.first(where: { $0.role == .search })?.value == value
     }
     
     // MARK: - Native TabView (iOS 26+)

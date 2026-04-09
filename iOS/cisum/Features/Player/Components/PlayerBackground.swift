@@ -12,7 +12,7 @@ import SwiftUI
 struct PlayerBackground: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
 
-    let isExpanded: Bool
+    let isPlayerExpanded: Bool
     let isFullExpanded: Bool
     var canBeExpanded: Bool = true
     
@@ -57,18 +57,18 @@ struct PlayerBackground: View {
                         }
                         .compositingGroup()
                     }
-                    .opacity(isExpanded ? 1 : 0)
+                    .opacity(isPlayerExpanded ? 1 : 0)
             }
         }
         .clipShape(.rect(cornerRadius: dynamicCornerRadius))
-        .frame(height: isExpanded ? nil : Constants.dynamicPlayerIslandHeight)
+        .frame(height: isPlayerExpanded ? nil : Constants.dynamicPlayerIslandHeight)
         .enableInjection()
     }
 }
 
 private extension PlayerBackground {
     var dynamicCornerRadius: CGFloat {
-        isExpanded ? expandPlayerCornerRadius : collapsedPlayerCornerRadius
+        isPlayerExpanded ? expandPlayerCornerRadius : collapsedPlayerCornerRadius
     }
 
     var expandPlayerCornerRadius: CGFloat {

@@ -12,6 +12,10 @@ import MediaPlayer
 import YouTubeSDK
 import iTunesKit
 
+#if canImport(LyricsKit)
+import LyricsKit
+#endif
+
 #if os(iOS)
 import UIKit
 #endif
@@ -50,6 +54,33 @@ final class PlayerViewModel {
         case tidal = "Tidal"
         case spotify = "Spotify"
         case external = "External"
+    }
+
+    enum LyricsState: Equatable {
+        case idle
+        case loading
+        case synced
+        case plain
+        case unavailable(String)
+    }
+
+    struct TimedLyricLine: Identifiable, Equatable {
+        let id: String
+        let timestamp: TimeInterval
+        let text: String
+
+        init(timestamp: TimeInterval, text: String) {
+            self.timestamp = timestamp
+            self.text = text
+            self.id = "\(timestamp)-\(text)"
+        }
+    }
+
+    struct QueuePreviewItem: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let subtitle: String
+        let artworkURL: URL?
     }
 
     private enum PlaybackQueueEntry {
@@ -91,6 +122,10 @@ final class PlayerViewModel {
     var currentStreamingServiceName: String = StreamingService.youtubeMusic.rawValue
     var currentAudioQualityLabel: String = "Adaptive"
     var currentAudioCodecLabel: String = "HLS"
+    var lyricsState: LyricsState = .idle
+    var syncedLyricsLines: [TimedLyricLine] = []
+    var plainLyricsText: String?
+    var lyricsAttribution: String?
 
     // Queue
     var queueSource: PlaybackQueueSource = .detached
@@ -102,6 +137,54 @@ final class PlayerViewModel {
     var canSkipBackward: Bool {
         guard currentVideoId != nil else { return false }
         return hasPreviousTrackInQueue || currentTime > 5
+    }
+
+    var queuePreviewItems: [QueuePreviewItem] {
+        playbackQueue.map { makeQueuePreviewItem(from: $0) }
+    }
+
+    var currentQueuePreviewIndex: Int? {
+        queuePosition
+    }
+
+    var previousQueuePreviewItem: QueuePreviewItem? {
+        guard let queuePosition, queuePosition > 0 else { return nil }
+        return makeQueuePreviewItem(from: playbackQueue[queuePosition - 1])
+    }
+
+    var nextQueuePreviewItem: QueuePreviewItem? {
+        guard let queuePosition, queuePosition + 1 < playbackQueue.count else { return nil }
+        return makeQueuePreviewItem(from: playbackQueue[queuePosition + 1])
+    }
+
+    var currentSyncedLyricIndex: Int? {
+        guard !syncedLyricsLines.isEmpty else { return nil }
+
+        let playbackTime = max(currentTime, 0)
+        if let firstTimestamp = syncedLyricsLines.first?.timestamp,
+           playbackTime < firstTimestamp {
+            return 0
+        }
+
+        return syncedLyricsLines.lastIndex { line in
+            line.timestamp <= playbackTime
+        }
+    }
+
+    var currentSyncedLyricText: String? {
+        guard let index = currentSyncedLyricIndex,
+              syncedLyricsLines.indices.contains(index) else {
+            return nil
+        }
+
+        return syncedLyricsLines[index].text
+    }
+
+    var upcomingSyncedLyricText: String? {
+        guard let index = currentSyncedLyricIndex else { return nil }
+        let nextIndex = index + 1
+        guard syncedLyricsLines.indices.contains(nextIndex) else { return nil }
+        return syncedLyricsLines[nextIndex].text
     }
 
     var isPlaying = false {
@@ -122,6 +205,7 @@ final class PlayerViewModel {
     private var currentLoadTask: Task<Void, Never>?
     private var artworkLoadTask: Task<Void, Never>?
     private var artworkVideoTask: Task<Void, Never>?
+    private var lyricsLoadTask: Task<Void, Never>?
     private var playbackRecoveryTask: Task<Void, Never>?
     private var playbackRecoveryAttemptedIDs: Set<String> = []
     private var playbackCandidates: [PlaybackCandidate] = []
@@ -276,9 +360,16 @@ final class PlayerViewModel {
         resetArtworkVideoState()
 #if os(iOS)
         artworkLoadTask?.cancel()
-    accentLoadTask?.cancel()
+        accentLoadTask?.cancel()
         applyCachedArtworkIfAvailable(for: song.videoId)
 #endif
+        startLyricsResolution(
+            mediaID: song.videoId,
+            title: displayTitle,
+            artist: displayArtist,
+            albumName: song.album,
+            durationHint: Self.lyricsDurationHint(from: song.duration)
+        )
         updateNowPlayingMetadata(force: true)
 #if os(iOS)
         loadNowPlayingArtwork(for: song.videoId, title: displayTitle, artist: displayArtist, fallbackURL: song.thumbnailURL)
@@ -348,9 +439,16 @@ final class PlayerViewModel {
         resetArtworkVideoState()
 #if os(iOS)
         artworkLoadTask?.cancel()
-    accentLoadTask?.cancel()
+        accentLoadTask?.cancel()
         applyCachedArtworkIfAvailable(for: video.id)
 #endif
+        startLyricsResolution(
+            mediaID: video.id,
+            title: displayTitle,
+            artist: displayArtist,
+            albumName: nil,
+            durationHint: Self.lyricsDurationHint(from: video.lengthInSeconds)
+        )
         updateNowPlayingMetadata(force: true)
 #if os(iOS)
         loadNowPlayingArtwork(for: video.id, title: displayTitle, artist: displayArtist, fallbackURL: fallbackURL)
@@ -432,6 +530,14 @@ final class PlayerViewModel {
         accentLoadTask?.cancel()
         applyCachedArtworkIfAvailable(for: normalizedMediaID)
 #endif
+
+    startLyricsResolution(
+        mediaID: normalizedMediaID,
+        title: currentTitle,
+        artist: currentArtist,
+        albumName: nil,
+        durationHint: nil
+    )
 
         updateNowPlayingMetadata(force: true)
 #if os(iOS)
@@ -567,6 +673,226 @@ final class PlayerViewModel {
         queueCount = 0
         queueSource = .detached
         updateRemoteCommandState()
+    }
+
+    private func makeQueuePreviewItem(from entry: PlaybackQueueEntry) -> QueuePreviewItem {
+        switch entry {
+        case .song(let song):
+            return QueuePreviewItem(
+                id: song.videoId,
+                title: normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay),
+                subtitle: normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title),
+                artworkURL: song.thumbnailURL
+            )
+        case .video(let video):
+            return QueuePreviewItem(
+                id: video.id,
+                title: normalizedMusicDisplayTitle(video.title, artist: video.author),
+                subtitle: normalizedMusicDisplayArtist(video.author, title: video.title),
+                artworkURL: Self.normalizedQueueArtworkURL(from: video.thumbnailURL)
+            )
+        }
+    }
+
+    private static func normalizedQueueArtworkURL(from rawValue: String?) -> URL? {
+        guard var candidate = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !candidate.isEmpty else {
+            return nil
+        }
+
+        if candidate.hasPrefix("//") {
+            candidate = "https:" + candidate
+        } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
+            candidate = "https://" + candidate
+        }
+
+        return URL(string: candidate)
+    }
+
+    private struct LyricsResolution {
+        let syncedLines: [TimedLyricLine]
+        let plainText: String?
+        let attribution: String?
+    }
+
+    private func startLyricsResolution(
+        mediaID: String,
+        title: String,
+        artist: String,
+        albumName: String?,
+        durationHint: Int?
+    ) {
+        lyricsLoadTask?.cancel()
+        syncedLyricsLines = []
+        plainLyricsText = nil
+        lyricsAttribution = nil
+
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAlbum = Self.nonEmptyTrimmed(albumName)
+
+        guard !normalizedTitle.isEmpty else {
+            lyricsState = .idle
+            return
+        }
+
+#if canImport(LyricsKit)
+        lyricsState = .loading
+        lyricsLoadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            do {
+                let resolvedLyrics = try await Self.resolveLyrics(
+                    title: normalizedTitle,
+                    artist: normalizedArtist,
+                    albumName: normalizedAlbum,
+                    durationHint: durationHint
+                )
+
+                guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
+
+                self.syncedLyricsLines = resolvedLyrics.syncedLines
+                self.plainLyricsText = resolvedLyrics.plainText
+                self.lyricsAttribution = resolvedLyrics.attribution
+
+                if !resolvedLyrics.syncedLines.isEmpty {
+                    self.lyricsState = .synced
+                } else if let plainText = resolvedLyrics.plainText,
+                          !plainText.isEmpty {
+                    self.lyricsState = .plain
+                } else {
+                    self.lyricsState = .unavailable("Lyrics unavailable for this track.")
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
+                self.lyricsState = .unavailable(error.localizedDescription)
+            }
+        }
+#else
+        lyricsState = .unavailable("LyricsKit is not linked to this target.")
+#endif
+    }
+
+#if canImport(LyricsKit)
+    private static func resolveLyrics(
+        title: String,
+        artist: String,
+        albumName: String?,
+        durationHint: Int?
+    ) async throws -> LyricsResolution {
+        let kit = LyricsKit.shared
+        let artistName = nonEmptyTrimmed(artist)
+        let album = nonEmptyTrimmed(albumName)
+
+        if let durationHint,
+           durationHint > 0,
+           let artistName {
+            let signatureAlbum = album ?? "Single"
+            if let best = try await kit.bestLyrics(
+                trackName: title,
+                artistName: artistName,
+                albumName: signatureAlbum,
+                durationInSeconds: durationHint
+            ) {
+                let mapped = mapLyricsRecord(best)
+                if !mapped.syncedLines.isEmpty || mapped.plainText != nil {
+                    return mapped
+                }
+            }
+        }
+
+        let syncedCandidates = try await kit.searchSynced(
+            trackName: title,
+            artistName: artistName,
+            albumName: album
+        )
+
+        if let syncedMatch = syncedCandidates.first {
+            let mapped = mapLyricsRecord(syncedMatch)
+            if !mapped.syncedLines.isEmpty || mapped.plainText != nil {
+                return mapped
+            }
+        }
+
+        let fallbackCandidates = try await kit.search(
+            trackName: title,
+            artistName: artistName,
+            albumName: album
+        )
+
+        if let firstFallback = fallbackCandidates.first {
+            return mapLyricsRecord(firstFallback)
+        }
+
+        return LyricsResolution(syncedLines: [], plainText: nil, attribution: nil)
+    }
+
+    private static func mapLyricsRecord(_ record: LyricsRecord) -> LyricsResolution {
+        let syncedLines: [TimedLyricLine] = (record.parsedSyncedLyrics?.lines ?? [])
+            .compactMap { line in
+                let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return nil }
+                return TimedLyricLine(timestamp: line.timestamp, text: text)
+            }
+
+        var plainLyrics = nonEmptyTrimmed(record.plainLyrics)
+        if plainLyrics == nil, record.instrumental {
+            plainLyrics = "Instrumental"
+        }
+
+        let attributionParts = [
+            nonEmptyTrimmed(record.artistName),
+            nonEmptyTrimmed(record.trackName)
+        ]
+        .compactMap { $0 }
+        let attribution = attributionParts.isEmpty ? nil : attributionParts.joined(separator: " • ")
+
+        return LyricsResolution(
+            syncedLines: syncedLines,
+            plainText: plainLyrics,
+            attribution: attribution
+        )
+    }
+#endif
+
+    private static func nonEmptyTrimmed(_ value: String?) -> String? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty else {
+            return nil
+        }
+
+        return value
+    }
+
+    private static func lyricsDurationHint(from duration: TimeInterval?) -> Int? {
+        guard let duration,
+              duration.isFinite,
+              duration > 0 else {
+            return nil
+        }
+
+        return Int(duration.rounded())
+    }
+
+    private static func lyricsDurationHint(from rawDuration: String) -> Int? {
+        let trimmed = rawDuration.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let directSeconds = Int(trimmed), directSeconds > 0 {
+            return directSeconds
+        }
+
+        let parts = trimmed.split(separator: ":").compactMap { Int($0) }
+        if parts.count == 2 {
+            return (parts[0] * 60) + parts[1]
+        }
+        if parts.count == 3 {
+            return (parts[0] * 3600) + (parts[1] * 60) + parts[2]
+        }
+
+        return nil
     }
 
     // MARK: - Playback Resolution

@@ -11,7 +11,7 @@ import SwiftUI
 struct NowPlayingView: View {
     @Environment(PlayerViewModel.self) var playerViewModel
 
-    var isExpanded: Bool
+    var isPlayerExpanded: Bool
     var size: CGSize
     var namespace: Namespace.ID
     
@@ -41,7 +41,7 @@ private extension NowPlayingView {
         Capsule()
             .fill(.white.secondary)
             .blendMode(.overlay)
-            .opacity(isExpanded ? 1 : 0)
+            .opacity(isPlayerExpanded ? 1 : 0)
             .frame(width: 40, height: 5)
             .offset(y: 10)
 //                .onTapGesture {

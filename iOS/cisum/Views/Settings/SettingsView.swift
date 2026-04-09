@@ -164,6 +164,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .contentMargins(.bottom, 140)
         .task {
             await refreshMetrics()
         }

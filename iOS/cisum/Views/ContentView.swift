@@ -66,7 +66,7 @@ struct ContentView: View {
         }
         .tabbarBottomViewAccessory {
             DynamicPlayerIsland(
-                isExpanded: $expandMiniPlayer,
+                isPlayerExpanded: $expandMiniPlayer,
                 namespace: playerAnimationNamespace
             )
         }
