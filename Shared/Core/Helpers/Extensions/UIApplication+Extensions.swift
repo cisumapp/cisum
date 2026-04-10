@@ -5,6 +5,7 @@
 //  Created by Aarav Gupta on 08/04/26.
 //
 
+#if canImport(UIKit)
 import UIKit
 
 extension UIApplication {
@@ -12,3 +13,4 @@ extension UIApplication {
         (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow
     }
 }
+#endif

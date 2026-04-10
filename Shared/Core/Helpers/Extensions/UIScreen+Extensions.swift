@@ -5,6 +5,7 @@
 //  Created by Aarav Gupta on 08/04/26.
 //
 
+#if canImport(UIKit)
 import UIKit
 
 public extension UIScreen {
@@ -18,3 +19,4 @@ public extension UIScreen {
 
     static let size = UIScreen.main.bounds.size
 }
+#endif
