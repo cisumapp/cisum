@@ -36,7 +36,7 @@ final class HomeViewModel {
         continuationToken != nil && loadedContinuationPages < Pagination.maxPages
     }
 
-    init(youtube: YouTube = .shared) {
+    init(youtube: YouTube) {
         self.youtube = youtube
     }
 

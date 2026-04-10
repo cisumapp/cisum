@@ -8,6 +8,13 @@
 import SwiftUI
 
 struct iOS26TabBar<SelectionValue: Hashable>: View {
+    private struct AnimationState: Equatable {
+        var dragOffset: CGFloat
+        var isActive: Bool
+        var activeTab: SelectionValue
+        var isKeyboardActive: Bool
+    }
+
     let tabs: [TabViewData<SelectionValue>]
     @Binding var activeTab: SelectionValue
     var showsSearchBar: Bool = false
@@ -30,6 +37,10 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
         get { searchExpansion.wrappedValue }
         nonmutating set { searchExpansion.wrappedValue = newValue }
     }
+
+    private var visibleTabs: [TabViewData<SelectionValue>] {
+        tabs.filter { $0.role != .search }
+    }
     
     #if DEBUG
     @ObserveInjection var forceRedraw
@@ -38,7 +49,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let visibleTabs = tabs.filter { $0.role != .search }
+            let visibleTabs = self.visibleTabs
             let tabsCount = CGFloat(max(visibleTabs.count, 1))
             let tabItemWidth = max(min(size.width / tabsCount, 90), 60)
             let tabItemHeight: CGFloat = 56
@@ -52,7 +63,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                         
                         tabLayout {
                             ForEach(visibleTabs) { tab in
-                                TabItemView(
+                                tabItemView(
                                     tab,
                                     width: isSearchExpanded ? 45 : tabItemWidth,
                                     height: isSearchExpanded ? 45 : tabItemHeight,
@@ -77,7 +88,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                             .opacity(isSearchExpanded ? 0 : 1)
                         }
                         .padding(isSearchExpanded ? 0 : 3)
-                        .background(TabBarBackground())
+                        .background(tabBarBackground())
                         .overlay {
                             if isSearchExpanded {
                                 Capsule()
@@ -97,7 +108,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                         .opacity(isKeyboardActive ? 0 : 1)
                         
                         if showsSearchBar {
-                            ExpandableSearchBar(height: isSearchExpanded ? 45 : tabItemHeight)
+                            expandableSearchBar(height: isSearchExpanded ? 45 : tabItemHeight)
                         }
                     }
                     .geometryGroup()
@@ -108,7 +119,6 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                 setInitialOffset(width: tabItemWidth)
             }
             .onChange(of: activeTab) { _, newValue in
-                // Update lastVisibleSelection if the new activeTab is one of the visible tabs
                 if visibleTabs.contains(where: { $0.value == newValue }) {
                     lastVisibleSelection = newValue
                 }
@@ -120,10 +130,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
         .frame(height: 56)
         .padding(.horizontal, isSearchExpanded ? (isKeyboardActive ? 10 : 25) : 0)
         .padding(.bottom, isKeyboardActive ? 10 : -10)
-        .animation(bouncyAnimation, value: dragOffset)
-        .animation(bouncyAnimation, value: isActive)
-        .animation(bouncyAnimation, value: activeTab)
-        .animation(bouncyAnimation, value: isKeyboardActive)
+        .animation(bouncyAnimation, value: animationState)
         .enableInjection()
     }
     
@@ -134,9 +141,18 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
             .smooth(duration: 0.35, extraBounce: 0.185)
         }
     }
+
+    private var animationState: AnimationState {
+        AnimationState(
+            dragOffset: dragOffset,
+            isActive: isActive,
+            activeTab: activeTab,
+            isKeyboardActive: isKeyboardActive
+        )
+    }
     
     private func setInitialOffset(width: CGFloat) {
-        let visible = tabs.filter { $0.role != .search }
+        let visible = visibleTabs
         if let index = visible.firstIndex(where: { $0.value == activeTab }) {
             dragOffset = CGFloat(index) * width
             lastVisibleSelection = activeTab
@@ -152,7 +168,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     }
     
     @ViewBuilder
-    private func TabItemView(_ tab: TabViewData<SelectionValue>, width: CGFloat, height: CGFloat, visibleTabs: [TabViewData<SelectionValue>]) -> some View {
+    private func tabItemView(
+        _ tab: TabViewData<SelectionValue>,
+        width: CGFloat,
+        height: CGFloat,
+        visibleTabs: [TabViewData<SelectionValue>]
+    ) -> some View {
         let tabCount = CGFloat(max(visibleTabs.count - 1, 0))
         
         VStack(spacing: 6) {
@@ -176,12 +197,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     let xOffset = value.translation.width
                     if let lastDragOffset {
                         let newDragOffset = xOffset + lastDragOffset
-                                dragOffset = max(min(newDragOffset, tabCount * width), 0)
+                        dragOffset = max(min(newDragOffset, tabCount * width), 0)
                     } else {
                         lastDragOffset = dragOffset
                     }
                 })
-                .onEnded({ value in
+                .onEnded({ _ in
                     lastDragOffset = nil
                     let landingIndex  = Int((dragOffset / width).rounded())
                     if visibleTabs.indices.contains(landingIndex) {
@@ -203,7 +224,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     }
     
     @ViewBuilder
-    private func TabBarBackground() -> some View {
+    private func tabBarBackground() -> some View {
         ZStack {
             Capsule(style: .continuous)
                 .stroke(.gray.opacity(0.25), lineWidth: 1.5)
@@ -216,7 +237,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     }
     
     @ViewBuilder
-    private func ExpandableSearchBar(height: CGFloat) -> some View {
+    private func expandableSearchBar(height: CGFloat) -> some View {
         let searchLayout = isKeyboardActive ? AnyLayout(HStackLayout(spacing: 12)) : AnyLayout(ZStackLayout(alignment: .trailing))
         
         searchLayout {
@@ -228,7 +249,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     .onTapGesture {
                         withAnimation(bouncyAnimation) {
                             isSearchExpanded = true
-                            let visible = tabs.filter { $0.role != .search }
+                            let visible = visibleTabs
                             if visible.contains(where: { $0.value == activeTab }) {
                                 lastVisibleSelection = activeTab
                             }
@@ -247,7 +268,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
             }
             .padding(.horizontal, isSearchExpanded ? 15 : 0)
             .padding(isSearchExpanded ? 0 : 3)
-            .background(TabBarBackground())
+            .background(tabBarBackground())
             .geometryGroup()
             .zIndex(1)
             
@@ -260,7 +281,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     .font(.title2)
                     .foregroundStyle(.primary)
                     .frame(width: height, height: height)
-                    .background(TabBarBackground())
+                    .background(tabBarBackground())
             }
             .opacity(isKeyboardActive ? 1 : 0)
         }

@@ -7,6 +7,7 @@
 
 import YouTubeSDK
 import SwiftUI
+import Kingfisher
 
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var searchViewModel
@@ -216,11 +217,13 @@ struct SearchView: View {
     @ViewBuilder
     private func federatedRow(_ item: FederatedSearchItem) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: item.artworkURL) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Color.gray.opacity(0.3)
-            }
+            KFImage(item.artworkURL)
+                .downsampling(size: CGSize(width: 100, height: 100))
+                .placeholder {
+                    Color.gray.opacity(0.3)
+                }
+                .resizable()
+                .scaledToFill()
             .frame(width: 50, height: 50)
             .clipShape(RoundedRectangle(cornerRadius: 6))
 
@@ -264,8 +267,7 @@ struct SearchView: View {
 
 #Preview {
     SearchView()
-        .environment(PlayerViewModel())
-        .environment(SearchViewModel())
+    .injectPreviewDependencies()
 }
 
 extension View {

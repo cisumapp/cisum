@@ -85,12 +85,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environment(PlayerViewModel())
-        .environment(SearchViewModel())
-        .environment(PrefetchSettings.shared)
-        .environment(NetworkPathMonitor.shared)
-    .environment(\.router, Router())
-    .environment(\.youtube, YouTube.shared)
+        .injectPreviewDependencies()
 }
 
 private extension ContentView {

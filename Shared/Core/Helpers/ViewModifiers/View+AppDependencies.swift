@@ -19,4 +19,12 @@ extension View {
             .environment(dependencies.prefetchSettings)
             .environment(dependencies.networkMonitor)
     }
+
+    func injectPreviewDependencies(_ dependencies: AppDependencies = .preview()) -> some View {
+        injectAppDependencies(dependencies)
+    }
+
+    func injectPreviewSettingsDependencies(_ dependencies: AppDependencies = .preview()) -> some View {
+        injectSettingsDependencies(dependencies)
+    }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import YouTubeSDK
+import Kingfisher
 
 struct YouTubePlaylistImportSheet: View {
     enum ImportMode: String, CaseIterable, Identifiable {
@@ -237,14 +238,14 @@ private struct SearchPlaylistImportRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: playlist.thumbnailURL) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            }
+            KFImage(playlist.thumbnailURL)
+                .downsampling(size: CGSize(width: 100, height: 100))
+                .placeholder {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                }
+                .resizable()
+                .scaledToFill()
             .frame(width: 50, height: 50)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 

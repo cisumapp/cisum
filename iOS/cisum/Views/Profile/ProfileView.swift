@@ -111,5 +111,5 @@ struct ProfileView: View {
 
 #Preview {
     ProfileView()
-        .environment(\.youtube, YouTube.shared)
+    .injectPreviewDependencies()
 }

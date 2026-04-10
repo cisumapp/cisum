@@ -34,14 +34,14 @@ class SearchViewModel {
     private let searchCache: any SearchResultsCaching
 
     init(
-        youtube: YouTube = .shared,
-        settings: PrefetchSettings = .shared,
-        networkMonitor: NetworkPathMonitor = .shared,
+        youtube: YouTube,
+        settings: PrefetchSettings,
+        networkMonitor: NetworkPathMonitor,
         historyStore: SearchHistoryStore? = nil,
         searchCacheHintStore: SearchCacheHintStore? = nil,
-        streamingProviderSettings: StreamingProviderSettings = .shared,
-        metadataCache: any VideoMetadataCaching = VideoMetadataCache.shared,
-        searchCache: any SearchResultsCaching = SearchResultsCache.shared
+        streamingProviderSettings: StreamingProviderSettings,
+        metadataCache: any VideoMetadataCaching,
+        searchCache: any SearchResultsCaching
     ) {
         self.youtube = youtube
         self.settings = settings

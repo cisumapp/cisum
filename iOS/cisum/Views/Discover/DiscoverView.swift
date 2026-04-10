@@ -7,6 +7,7 @@
 
 import SwiftUI
 import YouTubeSDK
+import Kingfisher
 
 struct DiscoverView: View {
     @Environment(\.youtube) private var youtube
@@ -165,8 +166,8 @@ private struct DiscoverSectionView: View {
             }
 
             LazyVStack(spacing: 8) {
-                ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
-                    DiscoverChartRow(rank: index + 1, item: item)
+                ForEach(section.items.indices, id: \.self) { index in
+                    DiscoverChartRow(rank: index + 1, item: section.items[index])
                 }
             }
         }
@@ -190,14 +191,14 @@ private struct DiscoverChartRow: View {
                 .foregroundStyle(.secondary)
 
             if let artworkURL = item.thumbnailURL {
-                AsyncImage(url: artworkURL) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.gray.opacity(0.2))
-                }
+                KFImage(artworkURL)
+                    .downsampling(size: CGSize(width: 104, height: 104))
+                    .placeholder {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.gray.opacity(0.2))
+                    }
+                    .resizable()
+                    .scaledToFill()
                 .frame(width: 52, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
@@ -225,5 +226,5 @@ private struct DiscoverChartRow: View {
 
 #Preview {
     DiscoverView()
-        .environment(\.youtube, YouTube.shared)
+    .injectPreviewDependencies()
 }

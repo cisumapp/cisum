@@ -308,6 +308,6 @@ struct ProfileButton: View {
 
 #Preview {
     ProfileButton()
-    .environment(\.router, Router())
+    .injectPreviewDependencies()
         .preferredColorScheme(.dark)
 }

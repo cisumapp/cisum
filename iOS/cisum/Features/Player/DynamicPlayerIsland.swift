@@ -143,6 +143,7 @@ private extension DynamicPlayerIsland {
         ZStack {
             if !isPlayerExpanded {
                 KFImage(playerViewModel.currentImageURL)
+                    .downsampling(size: CGSize(width: 80, height: 80))
                     .resizable()
                     .frame(width: 40, height: 40)
                     .aspectRatio(contentMode: .fit)

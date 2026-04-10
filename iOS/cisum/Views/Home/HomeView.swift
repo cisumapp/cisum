@@ -11,7 +11,7 @@ import YouTubeSDK
 struct HomeView: View {
     @State private var viewModel: HomeViewModel
 
-    init(youtube: YouTube = .shared) {
+    init(youtube: YouTube) {
         _viewModel = State(initialValue: HomeViewModel(youtube: youtube))
     }
     

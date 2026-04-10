@@ -36,6 +36,7 @@ struct PlayerBackground: View {
 
                             Vinyl {
                                 KFImage(playerViewModel.currentImageURL)
+                                    .downsampling(size: CGSize(width: 1400, height: 1400))
                                     .resizable()
                                     .scaledToFill()
                             } previous: {

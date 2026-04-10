@@ -170,15 +170,19 @@ private extension StretchySlider {
                 maxHeight: size.height,
                 alignment: (progress < 0 ? .trailing : .leading)
             )
-            .onChange(of: value, initial: true) { oldValue, newValue in
-                /// Initial Progress Settings
-                guard value != progress else { return }
-                progress = max(min(value, 1.0), .zero)
+            .onChange(of: value, initial: true) { _, newValue in
+                /// Initial progress settings
+                let clampedValue = max(min(newValue, 1.0), .zero)
+                guard abs(Double(progress) - clampedValue) > 0.0001 else { return }
+                progress = CGFloat(clampedValue)
                 dragOffset = progress * orientationSize
                 lastDragOffset = dragOffset
             }
-            .onChange(of: progress) { oldValue, newValue in
-                value = max(min(progress, 1.0), .zero)
+            .onChange(of: progress) { _, newValue in
+                let clampedProgress = max(min(newValue, 1.0), .zero)
+                let normalized = Double(clampedProgress)
+                guard abs(value - normalized) > 0.0001 else { return }
+                value = normalized
             }
         }
     }

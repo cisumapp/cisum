@@ -178,6 +178,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
-        .environment(PrefetchSettings.shared)
-        .environment(NetworkPathMonitor.shared)
+    .injectPreviewSettingsDependencies()
 }

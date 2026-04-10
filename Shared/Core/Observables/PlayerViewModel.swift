@@ -264,10 +264,10 @@ final class PlayerViewModel {
     }
 
     init(
-        youtube: YouTube = .shared,
-        settings: PrefetchSettings = .shared,
-        artworkVideoProcessor: ArtworkVideoProcessor = .shared,
-        metadataCache: any VideoMetadataCaching = VideoMetadataCache.shared,
+        youtube: YouTube,
+        settings: PrefetchSettings,
+        artworkVideoProcessor: ArtworkVideoProcessor,
+        metadataCache: any VideoMetadataCaching,
         mediaCacheStore: MediaCacheStore? = nil
     ) {
         self.youtube = youtube

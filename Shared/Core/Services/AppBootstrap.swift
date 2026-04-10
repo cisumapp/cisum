@@ -51,6 +51,9 @@ enum AppBootstrap {
         let playlistLibraryStore = PlaylistLibraryStore(context: modelContext)
         let playlistImportJobStore = PlaylistImportJobStore(context: modelContext)
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
+        let metadataCache = VideoMetadataCache.shared
+        let searchCache = SearchResultsCache.shared
+        let streamingProviderSettings = StreamingProviderSettings.shared
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -69,6 +72,7 @@ enum AppBootstrap {
                 youtube: youtube,
                 settings: prefetchSettings,
                 artworkVideoProcessor: artworkVideoProcessor,
+                metadataCache: metadataCache,
                 mediaCacheStore: mediaCacheStore
             ),
             searchViewModel: SearchViewModel(
@@ -76,7 +80,10 @@ enum AppBootstrap {
                 settings: prefetchSettings,
                 networkMonitor: networkMonitor,
                 historyStore: historyStore,
-                searchCacheHintStore: searchCacheHintStore
+                searchCacheHintStore: searchCacheHintStore,
+                streamingProviderSettings: streamingProviderSettings,
+                metadataCache: metadataCache,
+                searchCache: searchCache
             )
         )
     }
@@ -112,6 +119,9 @@ enum AppBootstrap {
         let playlistLibraryStore = PlaylistLibraryStore(context: modelContext)
         let playlistImportJobStore = PlaylistImportJobStore(context: modelContext)
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
+        let metadataCache = VideoMetadataCache.shared
+        let searchCache = SearchResultsCache.shared
+        let streamingProviderSettings = StreamingProviderSettings.shared
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -130,6 +140,7 @@ enum AppBootstrap {
                 youtube: youtube,
                 settings: prefetchSettings,
                 artworkVideoProcessor: artworkVideoProcessor,
+                metadataCache: metadataCache,
                 mediaCacheStore: mediaCacheStore
             ),
             searchViewModel: SearchViewModel(
@@ -137,7 +148,10 @@ enum AppBootstrap {
                 settings: prefetchSettings,
                 networkMonitor: networkMonitor,
                 historyStore: historyStore,
-                searchCacheHintStore: searchCacheHintStore
+                searchCacheHintStore: searchCacheHintStore,
+                streamingProviderSettings: streamingProviderSettings,
+                metadataCache: metadataCache,
+                searchCache: searchCache
             )
         )
     }

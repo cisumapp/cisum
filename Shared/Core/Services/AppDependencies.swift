@@ -57,4 +57,8 @@ extension AppDependencies {
             searchViewModel: bootstrap.searchViewModel
         )
     }
+
+    static func preview() -> AppDependencies {
+        make(youtube: .shared, router: Router())
+    }
 }
