@@ -48,10 +48,10 @@ struct HomeView: View {
                         .buttonStyle(.borderedProminent)
                     }
 
-                    ForEach(Array(viewModel.items.enumerated()), id: \.element.id) { index, item in
+                    ForEach(viewModel.items) { item in
                         HomeFeedRow(item: item)
                             .onAppear {
-                                viewModel.loadMoreIfNeeded(currentIndex: index, totalCount: viewModel.items.count)
+                                viewModel.loadMoreIfNeeded(currentItemID: item.id)
                             }
                     }
 

@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import YouTubeSDK
-import SwiftData
 
 @main
 struct iOSApp: App {
@@ -46,14 +44,7 @@ struct iOSApp: App {
     
     var content: some View {
         ContentView()
-            .modelContainer(dependencies.modelContainer)
-            .environment(dependencies)
-            .environment(\.youtube, dependencies.youtube)
-            .environment(\.router, dependencies.router)
-            .environment(dependencies.prefetchSettings)
-            .environment(dependencies.playerViewModel)
-            .environment(dependencies.searchViewModel)
-            .environment(dependencies.networkMonitor)
+            .injectAppDependencies(dependencies)
             .persistentSystemOverlays(.hidden)
             .tint(dependencies.playerViewModel.currentAccentColor)
     }

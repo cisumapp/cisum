@@ -49,10 +49,15 @@ final class HomeViewModel {
         await loadInitialFeed(force: true)
     }
 
-    func loadMoreIfNeeded(currentIndex: Int, totalCount: Int) {
-        guard totalCount > 0 else { return }
-        let triggerIndex = max(totalCount - Pagination.threshold, 0)
-        guard currentIndex >= triggerIndex else { return }
+    private var paginationTriggerItemID: String? {
+        guard !items.isEmpty else { return nil }
+        let triggerIndex = max(items.count - Pagination.threshold, 0)
+        return items[triggerIndex].id
+    }
+
+    func loadMoreIfNeeded(currentItemID: String) {
+        guard let triggerItemID = paginationTriggerItemID else { return }
+        guard currentItemID == triggerItemID else { return }
         guard canLoadMore else {
             if loadedContinuationPages >= Pagination.maxPages {
                 footerMessage = "Showing the latest music recommendations for now."
