@@ -11,6 +11,7 @@ import SwiftUI
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var searchViewModel
     @Environment(PlayerViewModel.self) private var playerViewModel
+    @Environment(\.playerPresentationActions) private var playerPresentationActions
 
     @FocusState private var isSearchFocused: Bool
     @State private var isSearchPresentationActive: Bool = false
@@ -129,8 +130,7 @@ struct SearchView: View {
                 return queueSong
             }
             playerViewModel.load(song: song, in: queue, source: .searchMusic)
-            #warning("expandPlayer not implemented globally (dependency injection)")
-//            expandPlayer()
+            playerPresentationActions.expand()
 
         case .youtubeVideo(let video):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
@@ -139,8 +139,7 @@ struct SearchView: View {
                 return queueVideo
             }
             playerViewModel.load(video: video, in: queue, source: .searchVideo)
-            #warning("expandPlayer not implemented globally (dependency injection)")
-//            expandPlayer()
+            playerPresentationActions.expand()
 
         case .tidal, .spotify:
             Task {
@@ -167,8 +166,7 @@ struct SearchView: View {
                 qualityLabel: payload.qualityLabel,
                 codecLabel: payload.codecLabel
             )
-            #warning("expandPlayer not implemented globally (dependency injection)")
-//            expandPlayer()
+            playerPresentationActions.expand()
         } catch {
             nonPlayableMessage = error.localizedDescription
             showNonPlayableAlert = true

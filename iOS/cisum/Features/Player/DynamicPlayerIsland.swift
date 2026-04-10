@@ -29,6 +29,7 @@ struct DynamicPlayerIsland: View {
                     .contentShape(.rect)
                     .transformEffect(.identity)
                     .onTapGesture {
+                        guard !isPlayerExpanded else { return }
                         withAnimation(.playerExpandAnimation) {
                             isPlayerExpanded = true
                         }

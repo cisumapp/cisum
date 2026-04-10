@@ -30,6 +30,8 @@ class SearchViewModel {
     private let historyStore: SearchHistoryStore?
     private let searchCacheHintStore: SearchCacheHintStore?
     private let streamingProviderSettings: StreamingProviderSettings
+    private let metadataCache: any VideoMetadataCaching
+    private let searchCache: any SearchResultsCaching
 
     init(
         youtube: YouTube = .shared,
@@ -37,7 +39,9 @@ class SearchViewModel {
         networkMonitor: NetworkPathMonitor = .shared,
         historyStore: SearchHistoryStore? = nil,
         searchCacheHintStore: SearchCacheHintStore? = nil,
-        streamingProviderSettings: StreamingProviderSettings = .shared
+        streamingProviderSettings: StreamingProviderSettings = .shared,
+        metadataCache: any VideoMetadataCaching = VideoMetadataCache.shared,
+        searchCache: any SearchResultsCaching = SearchResultsCache.shared
     ) {
         self.youtube = youtube
         self.settings = settings
@@ -45,6 +49,8 @@ class SearchViewModel {
         self.historyStore = historyStore
         self.searchCacheHintStore = searchCacheHintStore
         self.streamingProviderSettings = streamingProviderSettings
+        self.metadataCache = metadataCache
+        self.searchCache = searchCache
     }
 
     // Inputs
@@ -84,9 +90,6 @@ class SearchViewModel {
     /// Increasing this reduces UI jumps at the cost of earlier network calls.
     private let videoPrefetchThreshold = 10
     private let paginationTriggerCooldown: TimeInterval = 0.25
-    // Prefetch / cache
-    private let metadataCache = VideoMetadataCache.shared
-    private let searchCache = SearchResultsCache.shared
 
     var isVideoPaginationLoading: Bool {
         searchScope == .video && isLoadingMoreVideos && !videoResults.isEmpty

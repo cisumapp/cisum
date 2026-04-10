@@ -216,7 +216,7 @@ final class PlayerViewModel {
     private var playbackQueue: [PlaybackQueueEntry] = []
     private var currentItemStatusObservation: NSKeyValueObservation?
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
-    private let metadataCache = VideoMetadataCache.shared
+    private let metadataCache: any VideoMetadataCaching
     private let itunes = iTunesKit()
     private let mediaCacheStore: MediaCacheStore?
     private let settings: PrefetchSettings
@@ -267,11 +267,13 @@ final class PlayerViewModel {
         youtube: YouTube = .shared,
         settings: PrefetchSettings = .shared,
         artworkVideoProcessor: ArtworkVideoProcessor = .shared,
+        metadataCache: any VideoMetadataCaching = VideoMetadataCache.shared,
         mediaCacheStore: MediaCacheStore? = nil
     ) {
         self.youtube = youtube
         self.settings = settings
         self.artworkVideoProcessor = artworkVideoProcessor
+        self.metadataCache = metadataCache
         self.mediaCacheStore = mediaCacheStore
         self.player = AVPlayer()
 

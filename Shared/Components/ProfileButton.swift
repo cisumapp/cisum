@@ -47,60 +47,69 @@ struct ProfileButton: View {
     }
 
     var body: some View {
+        ZStack(alignment: .topTrailing) {
+#if os(iOS)
+            if isClicked {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        closeMenu()
+                    }
+            }
+#endif
+
+            menuSurface
+                .padding()
+                .onTapGesture {
+                    toggleMenu()
+                }
+        }
+#if os(macOS)
+        .onHover { hovering in
+            guard hovering != isHovered else { return }
+            withAnimation(hoverAnimation) {
+                isHovered = hovering
+            }
+        }
+        .scaleEffect(isHovered ? Layout.hoverScale : 1, anchor: .topTrailing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+#else
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+#endif
+        .onDisappear {
+            isClicked = false
+            isHovered = false
+        }
+    }
+
+    @ViewBuilder
+    private var menuSurface: some View {
         if #available(macOS 26.0, iOS 26.0, *) {
-            ZStack(alignment: .topTrailing) {
-                if !isClicked {
-                    collapsedGlass
-                } else {
-                    expandedGlass
-                }
+            if !isClicked {
+                collapsedGlass
+            } else {
+                expandedGlass
             }
-            .padding()
-            .onTapGesture {
-                withAnimation(toggleAnimation) {
-                    isClicked.toggle()
-                }
-            }
-
-#if os(macOS)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(hoverAnimation) {
-                    isHovered = hovering
-                }
-            }
-            .scaleEffect(isHovered ? Layout.hoverScale : 1, anchor: .topTrailing)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-#else
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-#endif
         } else {
-            ZStack(alignment: .topTrailing) {
-                if !isClicked {
-                    fallbackCollapsedGlass
-                } else {
-                    fallbackExpandedGlass
-                }
+            if !isClicked {
+                fallbackCollapsedGlass
+            } else {
+                fallbackExpandedGlass
             }
-            .padding()
-            .onTapGesture {
-                withAnimation(toggleAnimation) {
-                    isClicked.toggle()
-                }
-            }
-#if os(macOS)
-            .onHover { hovering in
-                guard hovering != isHovered else { return }
-                withAnimation(hoverAnimation) {
-                    isHovered = hovering
-                }
-            }
-            .scaleEffect(isHovered ? Layout.hoverScale : 1, anchor: .topTrailing)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-#else
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-#endif
+        }
+    }
+
+    private func toggleMenu() {
+        withAnimation(toggleAnimation) {
+            isClicked.toggle()
+        }
+    }
+
+    private func closeMenu() {
+        guard isClicked else { return }
+        withAnimation(toggleAnimation) {
+            isClicked = false
         }
     }
 

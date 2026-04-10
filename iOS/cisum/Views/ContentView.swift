@@ -72,6 +72,7 @@ struct ContentView: View {
         }
         .tabbarVisibility(tabBarVisibility)
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)
+        .environment(\.playerPresentationActions, playerPresentationActions)
         .systemVolumeController(SystemVolumeController.shared, showsSystemVolumeHUD: false)
         .onAppear {
             router.selectedTab = activeTab
@@ -95,6 +96,42 @@ struct ContentView: View {
 }
 
 private extension ContentView {
+    var playerPresentationActions: PlayerPresentationActions {
+        PlayerPresentationActions(
+            expand: {
+                expandPlayer()
+            },
+            collapse: {
+                collapsePlayer()
+            },
+            toggle: {
+                togglePlayerExpansion()
+            }
+        )
+    }
+
+    func expandPlayer() {
+        guard !expandMiniPlayer else { return }
+        withAnimation(.playerExpandAnimation) {
+            expandMiniPlayer = true
+        }
+    }
+
+    func collapsePlayer() {
+        guard expandMiniPlayer else { return }
+        withAnimation(.playerExpandAnimation) {
+            expandMiniPlayer = false
+        }
+    }
+
+    func togglePlayerExpansion() {
+        if expandMiniPlayer {
+            collapsePlayer()
+        } else {
+            expandPlayer()
+        }
+    }
+
     func tabRoot<Content: View>(for tab: TabItem, @ViewBuilder content: () -> Content) -> some View {
         NavigationStack(path: router.binding(for: tab)) {
             content()

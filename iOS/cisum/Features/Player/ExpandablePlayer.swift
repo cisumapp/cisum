@@ -52,7 +52,7 @@ struct ExpandablePlayer: View {
                     playerContent(size: size)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, isPlayerExpanded ? 0 : (isSearchFieldExpanded ? (isTabbarVisible ? safeArea.bottom + 18 : -12) : safeArea.bottom + 25))
-                        .padding(.horizontal, isPlayerExpanded ? 0 : (isSearchFieldExpanded ? 30 : (isTabbarVisible ? 20 : 10)))
+                        .padding(.horizontal, isPlayerExpanded ? 0 : (isTabbarVisible ? 30 : (isSearchFieldExpanded ? 20 : 10)))
                         .gesture(
                             PanGesture { newValue in
                                 handleGestureChange(value: newValue, viewSize: size)
@@ -113,11 +113,18 @@ struct ExpandablePlayer: View {
                                         offsetY = 0
                                     }
                                 }
-                            ,including: .all)
+                            ,including: isPlayerExpanded ? .all : .subviews)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
                     if isPlayerExpanded {
                         resetWindowToIdentity()
+                    }
+                }
+                .onChange(of: isPlayerExpanded) { _, expanded in
+                    if expanded {
+                        applyExpandedWindowTransform()
+                    } else {
+                        resetWindowWithAnimation()
                     }
                 }
 //                .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
@@ -127,7 +134,7 @@ struct ExpandablePlayer: View {
             }
         }
         .onAppear {
-            if let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow, mainWindow != nil {
+            if let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.keyWindow, mainWindow == nil {
                 mainWindow = window
             }
         }
@@ -136,6 +143,12 @@ struct ExpandablePlayer: View {
 }
 
 private extension ExpandablePlayer {
+    func applyExpandedWindowTransform() {
+        UIView.animate(withDuration: Animation.playerExpandAnimationDuration) {
+            resizeWindow(0.1)
+        }
+    }
+
     func resetWindowToIdentity() {
         mainWindow?.subviews.first?.transform = .identity
     }
