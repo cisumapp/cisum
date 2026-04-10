@@ -8,9 +8,7 @@
 import SwiftUI
 
 private struct RouterEnvironmentKey: EnvironmentKey {
-    static var defaultValue: Router {
-        fatalError("Missing Router environment value. Inject it with .environment(\\.router, ...).")
-    }
+    static let defaultValue: Router = Router.shared
 }
 
 extension EnvironmentValues {

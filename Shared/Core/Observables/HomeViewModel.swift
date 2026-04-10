@@ -18,7 +18,7 @@ final class HomeViewModel {
         static let cooldown: TimeInterval = 0.35
     }
 
-    private var youtube: YouTube = .shared
+    private let youtube: YouTube
     private var continuationToken: String?
     private var loadedContinuationPages = 0
     private var seenItemKeys = Set<String>()
@@ -36,7 +36,7 @@ final class HomeViewModel {
         continuationToken != nil && loadedContinuationPages < Pagination.maxPages
     }
 
-    func configure(youtube: YouTube) {
+    init(youtube: YouTube = .shared) {
         self.youtube = youtube
     }
 

@@ -9,9 +9,11 @@ import SwiftUI
 import YouTubeSDK
 
 struct HomeView: View {
-    @Environment(\.youtube) private var youtube
+    @State private var viewModel: HomeViewModel
 
-    @State private var viewModel = HomeViewModel()
+    init(youtube: YouTube = .shared) {
+        _viewModel = State(initialValue: HomeViewModel(youtube: youtube))
+    }
     
     #if DEBUG
     @ObserveInjection var forceRedraw
@@ -95,7 +97,6 @@ struct HomeView: View {
             .padding(.top, 200)
         }
         .task {
-            viewModel.configure(youtube: youtube)
             await viewModel.loadIfNeeded()
         }
         .refreshable {

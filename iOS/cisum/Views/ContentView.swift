@@ -12,6 +12,7 @@ struct ContentView: View {
     @Environment(SearchViewModel.self) private var searchViewModel
     @Environment(PlayerViewModel.self) private var playerViewModel
     @Environment(\.router) private var router
+    @Environment(\.youtube) private var youtube
 
     @State private var isScrollingDown = false
     @State private var storedOffset: CGFloat = 0
@@ -39,7 +40,7 @@ struct ContentView: View {
         ) {
             Tab("Home", systemImage: "house.fill", value: TabItem.home) {
                 tabRoot(for: .home) {
-                    HomeView()
+                    HomeView(youtube: youtube)
                 }
             }
             

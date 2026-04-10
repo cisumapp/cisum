@@ -12,35 +12,24 @@ import SwiftData
 @main
 struct macOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    
-    private let youtube = YouTube.shared
-    private let router = Router.shared
-    private let modelContainer: ModelContainer
 
-    @State private var prefetchSettings: PrefetchSettings
-    @State private var networkMonitor: NetworkPathMonitor
-    @State private var playerViewModel: PlayerViewModel
-    @State private var searchViewModel: SearchViewModel
+    @State private var dependencies: AppDependencies
     
     init() {
-        let bootstrap = AppBootstrap.makeDependenciesOrFallback(youtube: YouTube.shared)
-        self.modelContainer = bootstrap.modelContainer
-        self.prefetchSettings = bootstrap.prefetchSettings
-        self.networkMonitor = bootstrap.networkMonitor
-        self.playerViewModel = bootstrap.playerViewModel
-        self.searchViewModel = bootstrap.searchViewModel
+        _dependencies = State(initialValue: AppDependencies.make())
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .modelContainer(modelContainer)
-                .environment(\.youtube, youtube)
-                .environment(\.router, router)
-                .environment(prefetchSettings)
-                .environment(playerViewModel)
-                .environment(searchViewModel)
-                .environment(networkMonitor)
+                .modelContainer(dependencies.modelContainer)
+                .environment(dependencies)
+                .environment(\.youtube, dependencies.youtube)
+                .environment(\.router, dependencies.router)
+                .environment(dependencies.prefetchSettings)
+                .environment(dependencies.playerViewModel)
+                .environment(dependencies.searchViewModel)
+                .environment(dependencies.networkMonitor)
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             switch newPhase {
@@ -57,8 +46,8 @@ struct macOSApp: App {
         
         Settings {
             SettingsView()
-                .environment(prefetchSettings)
-                .environment(networkMonitor)
+                .environment(dependencies.prefetchSettings)
+                .environment(dependencies.networkMonitor)
         }
     }
 }
