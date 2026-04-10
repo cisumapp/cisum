@@ -139,22 +139,29 @@ final class PlayerViewModel {
         return hasPreviousTrackInQueue || currentTime > 5
     }
 
-    var queuePreviewItems: [QueuePreviewItem] {
-        playbackQueue.map { makeQueuePreviewItem(from: $0) }
-    }
+    var queuePreviewItems: [QueuePreviewItem] = []
 
     var currentQueuePreviewIndex: Int? {
         queuePosition
     }
 
     var previousQueuePreviewItem: QueuePreviewItem? {
-        guard let queuePosition, queuePosition > 0 else { return nil }
-        return makeQueuePreviewItem(from: playbackQueue[queuePosition - 1])
+        guard let queuePosition,
+              queuePosition > 0,
+              queuePreviewItems.indices.contains(queuePosition - 1) else {
+            return nil
+        }
+
+        return queuePreviewItems[queuePosition - 1]
     }
 
     var nextQueuePreviewItem: QueuePreviewItem? {
-        guard let queuePosition, queuePosition + 1 < playbackQueue.count else { return nil }
-        return makeQueuePreviewItem(from: playbackQueue[queuePosition + 1])
+        guard let queuePosition,
+              queuePreviewItems.indices.contains(queuePosition + 1) else {
+            return nil
+        }
+
+        return queuePreviewItems[queuePosition + 1]
     }
 
     var currentSyncedLyricIndex: Int? {
@@ -213,7 +220,11 @@ final class PlayerViewModel {
     private var playbackCandidatesMediaID: String?
     private var pendingPlaybackFormatOverride: (quality: String, codec: String)?
     private var currentAlbumNameHint: String?
-    private var playbackQueue: [PlaybackQueueEntry] = []
+    private var playbackQueue: [PlaybackQueueEntry] = [] {
+        didSet {
+            queuePreviewItems = playbackQueue.map { makeQueuePreviewItem(from: $0) }
+        }
+    }
     private var currentItemStatusObservation: NSKeyValueObservation?
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private let metadataCache: any VideoMetadataCaching
@@ -1418,11 +1429,20 @@ final class PlayerViewModel {
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self = self else { return }
-            Task { @MainActor in
+
+            MainActor.assumeIsolated {
                 let previousDuration = self.duration
                 let previousCanSkipBackward = self.canSkipBackward
-                self.currentTime = max(time.seconds, 0)
-                if let duration = self.player.currentItem?.duration.seconds, !duration.isNaN {
+
+                let nextCurrentTime = max(time.seconds, 0)
+                if abs(self.currentTime - nextCurrentTime) > 0.0001 {
+                    self.currentTime = nextCurrentTime
+                }
+
+                if let duration = self.player.currentItem?.duration.seconds,
+                   duration.isFinite,
+                   !duration.isNaN,
+                   abs(self.duration - duration) > 0.0001 {
                     self.duration = duration
                 }
 

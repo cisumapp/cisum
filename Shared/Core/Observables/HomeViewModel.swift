@@ -25,7 +25,7 @@ final class HomeViewModel {
     private var lastPaginationTriggerAt: Date?
     private var lastPaginationTriggerToken: String?
 
-    var items: [HomeFeedItem] = []
+    var items: [HomeFeedDisplayItem] = []
     var isLoading = false
     var isLoadingMore = false
     var didLoadInitialFeed = false
@@ -220,7 +220,7 @@ final class HomeViewModel {
         for item in incomingItems {
             let key = item.stableKey
             if seenItemKeys.insert(key).inserted {
-                items.append(item)
+                items.append(item.displayItem())
                 appended = true
             }
         }
@@ -264,5 +264,89 @@ enum HomeFeedItem: Identifiable {
                 return "shelf:\(shelf.title.lowercased())"
             }
         }
+    }
+}
+
+struct HomeFeedDisplayItem: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let symbolName: String
+}
+
+private extension HomeFeedItem {
+    func displayItem() -> HomeFeedDisplayItem {
+        let title: String
+        let subtitle: String
+        let symbolName: String
+
+        switch self {
+        case .musicSong(let song):
+            title = normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
+            let album = song.album ?? "Single"
+            subtitle = "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
+            symbolName = "music.note"
+
+        case .musicAlbum(let album):
+            title = normalizedMusicDisplayTitle(album.title, artist: album.artist)
+            let artist = album.artist ?? "Album"
+            if let year = album.year, !year.isEmpty {
+                subtitle = "\(artist) • \(year)"
+            } else {
+                subtitle = artist
+            }
+            symbolName = "square.stack.fill"
+
+        case .musicArtist(let artist):
+            title = normalizedMusicDisplayTitle(artist.name)
+            subtitle = artist.subscriberCount ?? "Artist"
+            symbolName = "person.crop.square"
+
+        case .musicPlaylist(let playlist):
+            title = normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
+            let author = playlist.author ?? "Playlist"
+            if let count = playlist.count, !count.isEmpty {
+                subtitle = "\(author) • \(count)"
+            } else {
+                subtitle = author
+            }
+            symbolName = "music.note.list"
+
+        case .main(let sourceItem):
+            switch sourceItem {
+            case .video(let video):
+                title = normalizedMusicDisplayTitle(video.title, artist: video.author)
+                subtitle = normalizedMusicDisplayArtist(video.author, title: video.title)
+                symbolName = "play.rectangle.fill"
+
+            case .song(let song):
+                title = normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
+                let album = song.album ?? "Single"
+                subtitle = "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
+                symbolName = "music.note"
+
+            case .playlist(let playlist):
+                title = normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
+                subtitle = playlist.author ?? "Playlist"
+                symbolName = "music.note.list"
+
+            case .channel(let channel):
+                title = normalizedMusicDisplayTitle(channel.title)
+                subtitle = channel.subscriberCount ?? "Channel"
+                symbolName = "person.crop.circle"
+
+            case .shelf(let shelf):
+                title = normalizedMusicDisplayTitle(shelf.title)
+                subtitle = "\(shelf.items.count) item\(shelf.items.count == 1 ? "" : "s")"
+                symbolName = "square.grid.2x2.fill"
+            }
+        }
+
+        return HomeFeedDisplayItem(
+            id: stableKey,
+            title: title,
+            subtitle: subtitle,
+            symbolName: symbolName
+        )
     }
 }

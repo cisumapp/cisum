@@ -107,7 +107,7 @@ struct HomeView: View {
 }
 
 private struct HomeFeedRow: View {
-    let item: HomeFeedItem
+    let item: HomeFeedDisplayItem
 
     #if DEBUG
     @ObserveInjection var forceRedraw
@@ -116,16 +116,16 @@ private struct HomeFeedRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: symbolName)
+                Image(systemName: item.symbolName)
                     .foregroundStyle(.white)
 
-                Text(title)
+                Text(item.title)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .lineLimit(1)
             }
 
-            Text(subtitle)
+            Text(item.subtitle)
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.8))
                 .lineLimit(2)
@@ -137,93 +137,5 @@ private struct HomeFeedRow: View {
                 .fill(.white.opacity(0.08))
         )
         .enableInjection()
-    }
-
-    private var title: String {
-        switch item {
-        case .musicSong(let song):
-            return normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
-        case .musicAlbum(let album):
-            return normalizedMusicDisplayTitle(album.title, artist: album.artist)
-        case .musicArtist(let artist):
-            return normalizedMusicDisplayTitle(artist.name)
-        case .musicPlaylist(let playlist):
-            return normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
-        case .main(let sourceItem):
-            switch sourceItem {
-            case .video(let video):
-                return normalizedMusicDisplayTitle(video.title, artist: video.author)
-            case .song(let song):
-                return normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
-            case .playlist(let playlist):
-                return normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
-            case .channel(let channel):
-                return normalizedMusicDisplayTitle(channel.title)
-            case .shelf(let shelf):
-                return normalizedMusicDisplayTitle(shelf.title)
-            }
-        }
-    }
-
-    private var subtitle: String {
-        switch item {
-        case .musicSong(let song):
-            let album = song.album ?? "Single"
-            return "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
-        case .musicAlbum(let album):
-            let artist = album.artist ?? "Album"
-            if let year = album.year, !year.isEmpty {
-                return "\(artist) • \(year)"
-            }
-            return artist
-        case .musicArtist(let artist):
-            return artist.subscriberCount ?? "Artist"
-        case .musicPlaylist(let playlist):
-            let author = playlist.author ?? "Playlist"
-            if let count = playlist.count, !count.isEmpty {
-                return "\(author) • \(count)"
-            }
-            return author
-        case .main(let sourceItem):
-            switch sourceItem {
-            case .video(let video):
-                return normalizedMusicDisplayArtist(video.author, title: video.title)
-            case .song(let song):
-                let album = song.album ?? "Single"
-                return "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
-            case .playlist(let playlist):
-                return playlist.author ?? "Playlist"
-            case .channel(let channel):
-                return channel.subscriberCount ?? "Channel"
-            case .shelf(let shelf):
-                return "\(shelf.items.count) item\(shelf.items.count == 1 ? "" : "s")"
-            }
-        }
-    }
-
-    private var symbolName: String {
-        switch item {
-        case .musicSong:
-            return "music.note"
-        case .musicAlbum:
-            return "square.stack.fill"
-        case .musicArtist:
-            return "person.crop.square"
-        case .musicPlaylist:
-            return "music.note.list"
-        case .main(let sourceItem):
-            switch sourceItem {
-            case .video:
-                return "play.rectangle.fill"
-            case .song:
-                return "music.note"
-            case .playlist:
-                return "music.note.list"
-            case .channel:
-                return "person.crop.circle"
-            case .shelf:
-                return "square.grid.2x2.fill"
-            }
-        }
     }
 }

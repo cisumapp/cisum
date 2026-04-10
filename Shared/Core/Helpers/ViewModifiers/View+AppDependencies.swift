@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 extension View {
     func injectAppDependencies(_ dependencies: AppDependencies) -> some View {

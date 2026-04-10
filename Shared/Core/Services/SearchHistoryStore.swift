@@ -73,8 +73,11 @@ final class SearchHistoryStore {
     }
 
     private func fetchEntry(for normalized: String) -> SearchHistoryEntry? {
-        let descriptor = FetchDescriptor<SearchHistoryEntry>()
-        return (try? context.fetch(descriptor))?.first(where: { $0.normalizedQuery == normalized })
+        var descriptor = FetchDescriptor<SearchHistoryEntry>(
+            predicate: #Predicate { $0.normalizedQuery == normalized }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
     }
 
     private func normalizedQuery(_ query: String) -> String {
