@@ -190,4 +190,5 @@ private struct PlaylistRow: View {
 
 #Preview {
     LibraryView()
+        .environment(\.router, Router())
 }

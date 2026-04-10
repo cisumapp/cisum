@@ -6,13 +6,12 @@
 //
 
 import SwiftUI
+import YouTubeSDK
 
 struct ContentView: View {
     @Environment(SearchViewModel.self) private var searchViewModel
     @Environment(PlayerViewModel.self) private var playerViewModel
     @Environment(\.router) private var router
-    
-    @State private var activeTab: TabItem = .home
 
     @State private var isScrollingDown = false
     @State private var storedOffset: CGFloat = 0
@@ -33,7 +32,7 @@ struct ContentView: View {
 
     var body: some View {
         iOSTabView(
-            selection: $activeTab,
+            selection: selectedTabBinding,
             expandMiniPlayer: $expandMiniPlayer,
             playerAnimationNamespace: playerAnimationNamespace,
             searchText: Bindable(searchViewModel).searchText
@@ -74,11 +73,7 @@ struct ContentView: View {
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)
         .environment(\.playerPresentationActions, playerPresentationActions)
         .systemVolumeController(SystemVolumeController.shared, showsSystemVolumeHUD: false)
-        .onAppear {
-            router.selectedTab = activeTab
-        }
-        .onChange(of: activeTab) { _, newValue in
-            router.selectedTab = newValue
+        .onChange(of: router.selectedTab) { _, _ in
             if tabBarVisibility != .visible {
                 tabBarVisibility = .visible
             }
@@ -93,9 +88,18 @@ struct ContentView: View {
         .environment(SearchViewModel())
         .environment(PrefetchSettings.shared)
         .environment(NetworkPathMonitor.shared)
+    .environment(\.router, Router())
+    .environment(\.youtube, YouTube.shared)
 }
 
 private extension ContentView {
+    var selectedTabBinding: Binding<TabItem> {
+        Binding(
+            get: { router.selectedTab },
+            set: { router.selectedTab = $0 }
+        )
+    }
+
     var playerPresentationActions: PlayerPresentationActions {
         PlayerPresentationActions(
             expand: {

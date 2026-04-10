@@ -225,4 +225,5 @@ private struct DiscoverChartRow: View {
 
 #Preview {
     DiscoverView()
+        .environment(\.youtube, YouTube.shared)
 }
