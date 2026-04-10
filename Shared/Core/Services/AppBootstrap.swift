@@ -13,6 +13,8 @@ struct AppBootstrapDependencies {
     let modelContainer: ModelContainer
     let prefetchSettings: PrefetchSettings
     let networkMonitor: NetworkPathMonitor
+    let playbackControlSettings: PlaybackControlSettings
+    let streamingProviderSettings: StreamingProviderSettings
     let playlistLibraryStore: PlaylistLibraryStore
     let playlistImportJobStore: PlaylistImportJobStore
     let playerViewModel: PlayerViewModel
@@ -44,6 +46,8 @@ enum AppBootstrap {
         )
         let prefetchSettings = PrefetchSettings.shared
         let networkMonitor = NetworkPathMonitor.shared
+        let playbackControlSettings = PlaybackControlSettings.shared
+        let streamingProviderSettings = StreamingProviderSettings.shared
         let modelContext = ModelContext(modelContainer)
         let historyStore = SearchHistoryStore(context: modelContext)
         let mediaCacheStore = MediaCacheStore(context: modelContext)
@@ -53,7 +57,6 @@ enum AppBootstrap {
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
         let searchCache = SearchResultsCache.shared
-        let streamingProviderSettings = StreamingProviderSettings.shared
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -66,6 +69,8 @@ enum AppBootstrap {
             modelContainer: modelContainer,
             prefetchSettings: prefetchSettings,
             networkMonitor: networkMonitor,
+            playbackControlSettings: playbackControlSettings,
+            streamingProviderSettings: streamingProviderSettings,
             playlistLibraryStore: playlistLibraryStore,
             playlistImportJobStore: playlistImportJobStore,
             playerViewModel: PlayerViewModel(
@@ -112,6 +117,8 @@ enum AppBootstrap {
 
         let prefetchSettings = PrefetchSettings.shared
         let networkMonitor = NetworkPathMonitor.shared
+        let playbackControlSettings = PlaybackControlSettings.shared
+        let streamingProviderSettings = StreamingProviderSettings.shared
         let modelContext = ModelContext(modelContainer)
         let historyStore = SearchHistoryStore(context: modelContext)
         let mediaCacheStore = MediaCacheStore(context: modelContext)
@@ -121,7 +128,6 @@ enum AppBootstrap {
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
         let searchCache = SearchResultsCache.shared
-        let streamingProviderSettings = StreamingProviderSettings.shared
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -134,6 +140,8 @@ enum AppBootstrap {
             modelContainer: modelContainer,
             prefetchSettings: prefetchSettings,
             networkMonitor: networkMonitor,
+            playbackControlSettings: playbackControlSettings,
+            streamingProviderSettings: streamingProviderSettings,
             playlistLibraryStore: playlistLibraryStore,
             playlistImportJobStore: playlistImportJobStore,
             playerViewModel: PlayerViewModel(

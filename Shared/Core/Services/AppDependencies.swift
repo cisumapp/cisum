@@ -10,6 +10,8 @@ final class AppDependencies {
     let modelContainer: ModelContainer
     let prefetchSettings: PrefetchSettings
     let networkMonitor: NetworkPathMonitor
+    let playbackControlSettings: PlaybackControlSettings
+    let streamingProviderSettings: StreamingProviderSettings
     let playlistLibraryStore: PlaylistLibraryStore
     let playlistImportJobStore: PlaylistImportJobStore
     let playerViewModel: PlayerViewModel
@@ -21,6 +23,8 @@ final class AppDependencies {
         modelContainer: ModelContainer,
         prefetchSettings: PrefetchSettings,
         networkMonitor: NetworkPathMonitor,
+        playbackControlSettings: PlaybackControlSettings,
+        streamingProviderSettings: StreamingProviderSettings,
         playlistLibraryStore: PlaylistLibraryStore,
         playlistImportJobStore: PlaylistImportJobStore,
         playerViewModel: PlayerViewModel,
@@ -31,6 +35,8 @@ final class AppDependencies {
         self.modelContainer = modelContainer
         self.prefetchSettings = prefetchSettings
         self.networkMonitor = networkMonitor
+        self.playbackControlSettings = playbackControlSettings
+        self.streamingProviderSettings = streamingProviderSettings
         self.playlistLibraryStore = playlistLibraryStore
         self.playlistImportJobStore = playlistImportJobStore
         self.playerViewModel = playerViewModel
@@ -41,7 +47,7 @@ final class AppDependencies {
 extension AppDependencies {
     static func make(
         youtube: YouTube = .shared,
-        router: Router = .shared
+        router: Router = Router()
     ) -> AppDependencies {
         let bootstrap = AppBootstrap.makeDependenciesOrFallback(youtube: youtube)
 
@@ -51,6 +57,8 @@ extension AppDependencies {
             modelContainer: bootstrap.modelContainer,
             prefetchSettings: bootstrap.prefetchSettings,
             networkMonitor: bootstrap.networkMonitor,
+            playbackControlSettings: bootstrap.playbackControlSettings,
+            streamingProviderSettings: bootstrap.streamingProviderSettings,
             playlistLibraryStore: bootstrap.playlistLibraryStore,
             playlistImportJobStore: bootstrap.playlistImportJobStore,
             playerViewModel: bootstrap.playerViewModel,

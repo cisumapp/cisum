@@ -7,8 +7,8 @@ import TidalKit
 struct SettingsView: View {
     @Environment(PrefetchSettings.self) private var settings
     @Environment(NetworkPathMonitor.self) private var networkMonitor
-    @State private var playbackControlSettings = PlaybackControlSettings.shared
-    @State private var streamingProviderSettings = StreamingProviderSettings.shared
+    @Environment(PlaybackControlSettings.self) private var playbackControlSettings
+    @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
 
     @State private var snapshot = PlaybackMetricsStore.Snapshot(
         cacheHitRate: 0,

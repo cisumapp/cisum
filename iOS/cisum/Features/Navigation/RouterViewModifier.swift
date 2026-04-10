@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct RouterViewModifier: ViewModifier {
-    @State private var router = Router.shared
+    @Environment(\.router) private var router
     
     private func routeView(to route: Routes) -> some View {
         Group {
@@ -21,7 +21,6 @@ struct RouterViewModifier: ViewModifier {
                 PlaylistDetailView(playlistID: playlistID)
             }
         }
-        .environment(\.router, router)
     }
 
     #if DEBUG
@@ -30,7 +29,6 @@ struct RouterViewModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environment(\.router, router)
             .navigationDestination(for: Routes.self) { newRoute in
                 routeView(to: newRoute)
             }

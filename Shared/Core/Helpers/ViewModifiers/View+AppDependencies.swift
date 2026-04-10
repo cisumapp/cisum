@@ -9,6 +9,8 @@ extension View {
             .environment(\.youtube, dependencies.youtube)
             .environment(\.router, dependencies.router)
             .environment(dependencies.prefetchSettings)
+            .environment(dependencies.playbackControlSettings)
+            .environment(dependencies.streamingProviderSettings)
             .environment(dependencies.playerViewModel)
             .environment(dependencies.searchViewModel)
             .environment(dependencies.networkMonitor)
@@ -18,6 +20,8 @@ extension View {
         self
             .environment(dependencies)
             .environment(dependencies.prefetchSettings)
+            .environment(dependencies.playbackControlSettings)
+            .environment(dependencies.streamingProviderSettings)
             .environment(dependencies.networkMonitor)
     }
 
