@@ -72,6 +72,11 @@ actor ArtworkVideoProcessor {
 
     private var inFlight: [String: Task<URL, Error>] = [:]
     private var progressObservers: [String: [UUID: ProgressHandler]] = [:]
+    private struct PendingProgressUpdate {
+        var latestProgress: Double
+        var task: Task<Void, Never>?
+    }
+    private var pendingProgressUpdates: [String: PendingProgressUpdate] = [:]
 #if canImport(ffmpegkit)
     private var activeSessions: [String: FFmpegSession] = [:]
 #else
@@ -112,6 +117,7 @@ actor ArtworkVideoProcessor {
         let outputURL = cacheDirectory.appending(path: "\(resolvedCacheID).mp4")
         if fileManager.fileExists(atPath: outputURL.path(percentEncoded: false)) {
             print("🖼️ ArtworkVideoProcessor: Cache hit for media=\(mediaID) cache=\(resolvedCacheID)")
+            cancelPendingProgressUpdate(for: resolvedCacheID)
             progress(1)
             return outputURL
         }
@@ -157,11 +163,13 @@ actor ArtworkVideoProcessor {
             inFlight[cacheID] = nil
             activeSessions[cacheID] = nil
             progressObservers[cacheID] = nil
+            cancelPendingProgressUpdate(for: cacheID)
         }
 
         do {
             if fileManager.fileExists(atPath: outputURL.path(percentEncoded: false)) {
                 print("🖼️ ArtworkVideoProcessor: Reusing cached artwork video for media=\(mediaID) cache=\(cacheID)")
+                cancelPendingProgressUpdate(for: cacheID)
                 notifyProgress(1, for: cacheID)
                 return outputURL
             }
@@ -194,6 +202,7 @@ actor ArtworkVideoProcessor {
             print("🖼️ ArtworkVideoProcessor: Finalizing motion artwork for media=\(mediaID) cache=\(cacheID)")
             try commitTemporaryOutput(from: tempURL, to: outputURL)
             try? writeCacheProfileMarker(in: cacheDirectory)
+            cancelPendingProgressUpdate(for: cacheID)
             notifyProgress(1, for: cacheID)
             print("🖼️ ArtworkVideoProcessor: Motion artwork ready for media=\(mediaID) cache=\(cacheID)")
             return outputURL
@@ -428,8 +437,36 @@ actor ArtworkVideoProcessor {
     nonisolated private func scheduleProgressUpdate(_ progress: Double, for mediaID: String) {
         Task(priority: .utility) { [weak self] in
             guard let self else { return }
-            await self.notifyProgress(progress, for: mediaID)
+            await self.enqueueProgressUpdate(progress, for: mediaID)
         }
+    }
+
+    private func enqueueProgressUpdate(_ progress: Double, for mediaID: String) {
+        guard progressObservers[mediaID] != nil else { return }
+
+        var pendingUpdate = pendingProgressUpdates[mediaID] ?? PendingProgressUpdate(latestProgress: progress, task: nil)
+        pendingUpdate.latestProgress = progress
+
+        if pendingUpdate.task == nil {
+            pendingUpdate.task = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled else { return }
+                await self?.flushPendingProgressUpdate(for: mediaID)
+            }
+        }
+
+        pendingProgressUpdates[mediaID] = pendingUpdate
+    }
+
+    private func flushPendingProgressUpdate(for mediaID: String) {
+        guard let pendingUpdate = pendingProgressUpdates.removeValue(forKey: mediaID) else { return }
+        pendingUpdate.task?.cancel()
+        notifyProgress(pendingUpdate.latestProgress, for: mediaID)
+    }
+
+    private func cancelPendingProgressUpdate(for mediaID: String) {
+        pendingProgressUpdates[mediaID]?.task?.cancel()
+        pendingProgressUpdates[mediaID] = nil
     }
 
     private func addProgressObserver(_ progress: @escaping ProgressHandler, for mediaID: String, id: UUID) {
@@ -464,8 +501,16 @@ actor ArtworkVideoProcessor {
 
     private func notifyProgress(_ progress: Double, for mediaID: String) {
         guard let handlers = progressObservers[mediaID]?.values else {
+            if progress >= 1 {
+                cancelPendingProgressUpdate(for: mediaID)
+            }
             return
         }
+
+        if progress >= 1 {
+            cancelPendingProgressUpdate(for: mediaID)
+        }
+
         for handler in handlers {
             handler(progress)
         }

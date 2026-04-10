@@ -46,7 +46,7 @@ final class AppDependencies {
 
 extension AppDependencies {
     static func make(
-        youtube: YouTube = .shared,
+        youtube: YouTube = YouTube(),
         router: Router = Router()
     ) -> AppDependencies {
         let bootstrap = AppBootstrap.makeDependenciesOrFallback(youtube: youtube)
@@ -67,6 +67,6 @@ extension AppDependencies {
     }
 
     static func preview() -> AppDependencies {
-        make(youtube: .shared, router: Router())
+        make(youtube: YouTube(), router: Router())
     }
 }

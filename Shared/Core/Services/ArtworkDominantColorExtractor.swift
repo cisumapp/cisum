@@ -8,17 +8,98 @@
 #if os(iOS)
 import CoreImage
 import Foundation
+import ImageIO
 import SwiftUI
 import UIKit
 
 actor ArtworkDominantColorExtractor {
     static let shared = ArtworkDominantColorExtractor()
 
-    private let context = CIContext(options: [.useSoftwareRenderer: false])
+    private final class CacheIndex {
+        private final class Node {
+            let key: String
+            var previous: Node?
+            var next: Node?
+
+            init(key: String) {
+                self.key = key
+            }
+        }
+
+        private var nodes: [String: Node] = [:]
+        private var head: Node?
+        private var tail: Node?
+
+        var count: Int {
+            nodes.count
+        }
+
+        func touch(_ key: String) {
+            if let node = nodes[key] {
+                moveToFront(node)
+                return
+            }
+
+            let node = Node(key: key)
+            nodes[key] = node
+            insertAtFront(node)
+        }
+
+        @discardableResult
+        func removeLast() -> String? {
+            guard let node = tail else { return nil }
+            let key = node.key
+            remove(key)
+            return key
+        }
+
+        private func remove(_ key: String) {
+            guard let node = nodes.removeValue(forKey: key) else { return }
+            unlink(node)
+        }
+
+        private func insertAtFront(_ node: Node) {
+            node.previous = nil
+            node.next = head
+            head?.previous = node
+            head = node
+
+            if tail == nil {
+                tail = node
+            }
+        }
+
+        private func moveToFront(_ node: Node) {
+            guard head !== node else { return }
+            unlink(node)
+            insertAtFront(node)
+        }
+
+        private func unlink(_ node: Node) {
+            let previous = node.previous
+            let next = node.next
+
+            previous?.next = next
+            next?.previous = previous
+
+            if head === node {
+                head = next
+            }
+
+            if tail === node {
+                tail = previous
+            }
+
+            node.previous = nil
+            node.next = nil
+        }
+    }
+
+    private let context = CIContext()
     private let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
 
     private var cache: [String: UIColor] = [:]
-    private var lruKeys: [String] = []
+    private let cacheIndex = CacheIndex()
     private let maxCacheEntries = 128
 
     func dominantColor(from imageData: Data, cacheKey: String?) -> Color {
@@ -53,22 +134,18 @@ actor ArtworkDominantColorExtractor {
     }
 
     private func touchCacheKey(_ key: String) {
-        if let index = lruKeys.firstIndex(of: key) {
-            lruKeys.remove(at: index)
-        }
-        lruKeys.insert(key, at: 0)
+        cacheIndex.touch(key)
     }
 
     private func trimCacheIfNeeded() {
-        guard lruKeys.count > maxCacheEntries else { return }
-        while lruKeys.count > maxCacheEntries {
-            let staleKey = lruKeys.removeLast()
+        while cacheIndex.count > maxCacheEntries {
+            guard let staleKey = cacheIndex.removeLast() else { break }
             cache[staleKey] = nil
         }
     }
 
     private func extractDominantColor(from imageData: Data) -> UIColor? {
-        guard let image = CIImage(data: imageData) ?? UIImage(data: imageData).flatMap({ CIImage(image: $0) }) else {
+        guard let image = downsampledImage(from: imageData) ?? CIImage(data: imageData) ?? UIImage(data: imageData).flatMap({ CIImage(image: $0) }) else {
             return nil
         }
 
@@ -105,6 +182,30 @@ actor ArtworkDominantColorExtractor {
             blue: CGFloat(bitmap[2]) / 255.0,
             alpha: 1
         )
+    }
+
+    private func downsampledImage(from imageData: Data) -> CIImage? {
+        let sourceOptions = [
+            kCGImageSourceShouldCache: false
+        ] as CFDictionary
+
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, sourceOptions) else {
+            return nil
+        }
+
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: false,
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceThumbnailMaxPixelSize: 96
+        ] as CFDictionary
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
+            return nil
+        }
+
+        return CIImage(cgImage: cgImage)
     }
 
     private func normalize(_ color: UIColor) -> UIColor {

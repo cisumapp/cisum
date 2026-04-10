@@ -22,8 +22,7 @@ struct StretchySlider<LeadingContent: View, TrailingContent: View>: View {
     @State private var dragOffset: CGFloat = .zero
     @State private var lastDragOffset: CGFloat = .zero
     let limitation: CGFloat = 0.1
-    
-    @State private var lastStoredValue: CGFloat
+
     @State private var stretchingValue: CGFloat = 0
     @State private var viewSize: CGSize = .zero
     
@@ -38,7 +37,6 @@ struct StretchySlider<LeadingContent: View, TrailingContent: View>: View {
     ) {
         _value = value
         self.range = range
-        lastStoredValue = value.wrappedValue
         self.leadingLabel = leadingLabel?()
         self.trailingLabel = trailingLabel?()
         self.onEditingChanged = onEditingChanged
@@ -110,6 +108,11 @@ private extension StretchySlider {
                         let movement = translation.width + lastDragOffset
                         dragOffset = movement
                         calculateProgress(orientationSize: orientationSize)
+
+                        let liveValue = Double(max(min(progress, 1.0), 0.0))
+                        if abs(value - liveValue) > 0.0001 {
+                            value = liveValue
+                        }
                     }
                     .onEnded { _ in
                         withAnimation(.smooth) {
@@ -118,6 +121,10 @@ private extension StretchySlider {
                         }
                         
                         lastDragOffset = dragOffset
+                        let finalValue = Double(max(min(progress, 1.0), 0.0))
+                        if abs(value - finalValue) > 0.0001 {
+                            value = finalValue
+                        }
                         onEditingChanged(false)
                     }
             )
@@ -172,17 +179,12 @@ private extension StretchySlider {
             )
             .onChange(of: value, initial: true) { _, newValue in
                 /// Initial progress settings
+                guard !isActive else { return }
                 let clampedValue = max(min(newValue, 1.0), .zero)
                 guard abs(Double(progress) - clampedValue) > 0.0001 else { return }
                 progress = CGFloat(clampedValue)
                 dragOffset = progress * orientationSize
                 lastDragOffset = dragOffset
-            }
-            .onChange(of: progress) { _, newValue in
-                let clampedProgress = max(min(newValue, 1.0), .zero)
-                let normalized = Double(clampedProgress)
-                guard abs(value - normalized) > 0.0001 else { return }
-                value = normalized
             }
         }
     }
@@ -286,7 +288,6 @@ extension StretchySlider where LeadingContent == EmptyView {
     ) {
         _value = value
         self.range = range
-        lastStoredValue = value.wrappedValue
         leadingLabel = nil
         self.trailingLabel = trailingLabel?()
         self.onEditingChanged = onEditingChanged
@@ -303,7 +304,6 @@ extension StretchySlider where TrailingContent == EmptyView {
     ) {
         _value = value
         self.range = range
-        lastStoredValue = value.wrappedValue
         self.leadingLabel = leadingLabel?()
         trailingLabel = nil
         self.onEditingChanged = onEditingChanged
@@ -319,7 +319,6 @@ extension StretchySlider where LeadingContent == EmptyView, TrailingContent == E
     ) {
         _value = value
         self.range = range
-        lastStoredValue = value.wrappedValue
         leadingLabel = nil
         trailingLabel = nil
         self.onEditingChanged = onEditingChanged

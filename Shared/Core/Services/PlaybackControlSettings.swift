@@ -16,29 +16,30 @@ final class PlaybackControlSettings {
     }
 
     private let defaults: UserDefaults
+    private let persistenceScheduler = DebouncedWorkScheduler(delay: .milliseconds(250))
 
     var volumeButtonHoldSkipEnabled: Bool {
-        didSet { defaults.set(volumeButtonHoldSkipEnabled, forKey: Keys.volumeButtonHoldSkipEnabled) }
+        didSet { schedulePersistence() }
     }
 
     var volumeButtonHoldThreshold: Double {
-        didSet { defaults.set(volumeButtonHoldThreshold, forKey: Keys.volumeButtonHoldThreshold) }
+        didSet { schedulePersistence() }
     }
 
     var volumeButtonHoldRepeatInterval: Double {
-        didSet { defaults.set(volumeButtonHoldRepeatInterval, forKey: Keys.volumeButtonHoldRepeatInterval) }
+        didSet { schedulePersistence() }
     }
 
     var volumeButtonHoldReleaseTimeout: Double {
-        didSet { defaults.set(volumeButtonHoldReleaseTimeout, forKey: Keys.volumeButtonHoldReleaseTimeout) }
+        didSet { schedulePersistence() }
     }
 
     var volumeButtonHoldRestoreVolume: Bool {
-        didSet { defaults.set(volumeButtonHoldRestoreVolume, forKey: Keys.volumeButtonHoldRestoreVolume) }
+        didSet { schedulePersistence() }
     }
 
     var volumeButtonHoldUpSkipsForward: Bool {
-        didSet { defaults.set(volumeButtonHoldUpSkipsForward, forKey: Keys.volumeButtonHoldUpSkipsForward) }
+        didSet { schedulePersistence() }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -49,5 +50,25 @@ final class PlaybackControlSettings {
         self.volumeButtonHoldReleaseTimeout = defaults.object(forKey: Keys.volumeButtonHoldReleaseTimeout) as? Double ?? 0.18
         self.volumeButtonHoldRestoreVolume = defaults.object(forKey: Keys.volumeButtonHoldRestoreVolume) as? Bool ?? true
         self.volumeButtonHoldUpSkipsForward = defaults.object(forKey: Keys.volumeButtonHoldUpSkipsForward) as? Bool ?? true
+    }
+
+    func flushPendingWrites() {
+        persistenceScheduler.cancel()
+        persistToDefaults()
+    }
+
+    private func schedulePersistence() {
+        persistenceScheduler.schedule { [weak self] in
+            self?.persistToDefaults()
+        }
+    }
+
+    private func persistToDefaults() {
+        defaults.set(volumeButtonHoldSkipEnabled, forKey: Keys.volumeButtonHoldSkipEnabled)
+        defaults.set(volumeButtonHoldThreshold, forKey: Keys.volumeButtonHoldThreshold)
+        defaults.set(volumeButtonHoldRepeatInterval, forKey: Keys.volumeButtonHoldRepeatInterval)
+        defaults.set(volumeButtonHoldReleaseTimeout, forKey: Keys.volumeButtonHoldReleaseTimeout)
+        defaults.set(volumeButtonHoldRestoreVolume, forKey: Keys.volumeButtonHoldRestoreVolume)
+        defaults.set(volumeButtonHoldUpSkipsForward, forKey: Keys.volumeButtonHoldUpSkipsForward)
     }
 }

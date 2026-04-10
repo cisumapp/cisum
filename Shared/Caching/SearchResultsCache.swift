@@ -22,8 +22,8 @@ final class SearchResultsCache {
 
     private var musicStore: [String: MusicEntry] = [:]
     private var videoStore: [String: VideoEntry] = [:]
-    private var musicLRU: [String] = []
-    private var videoLRU: [String] = []
+    private let musicLRU = LRUList<String>()
+    private let videoLRU = LRUList<String>()
     private let musicMax: Int = 50
     private let videoMax: Int = 50
     private let ttl: TimeInterval = 300 // 5 minutes
@@ -66,32 +66,22 @@ final class SearchResultsCache {
     }
 
     private func touchMusic(_ q: String) {
-        guard musicLRU.first != q else { return }
-        if let idx = musicLRU.firstIndex(of: q) {
-            musicLRU.remove(at: idx)
-        }
-        musicLRU.insert(q, at: 0)
+        musicLRU.touch(q)
     }
 
     private func touchVideo(_ q: String) {
-        guard videoLRU.first != q else { return }
-        if let idx = videoLRU.firstIndex(of: q) {
-            videoLRU.remove(at: idx)
-        }
-        videoLRU.insert(q, at: 0)
+        videoLRU.touch(q)
     }
 
     private func evictMusicIfNeeded() {
-        while musicLRU.count > musicMax, let last = musicLRU.last {
-            musicStore[last] = nil
-            musicLRU.removeLast()
+        while musicLRU.count > musicMax, let staleKey = musicLRU.removeLast() {
+            musicStore[staleKey] = nil
         }
     }
 
     private func evictVideoIfNeeded() {
-        while videoLRU.count > videoMax, let last = videoLRU.last {
-            videoStore[last] = nil
-            videoLRU.removeLast()
+        while videoLRU.count > videoMax, let staleKey = videoLRU.removeLast() {
+            videoStore[staleKey] = nil
         }
     }
 

@@ -27,8 +27,8 @@ class SearchViewModel {
     private let youtube: YouTube
     private let settings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor
-    private let historyStore: SearchHistoryStore?
-    private let searchCacheHintStore: SearchCacheHintStore?
+    private let historyStore: SearchHistoryStore
+    private let searchCacheHintStore: SearchCacheHintStore
     private let streamingProviderSettings: StreamingProviderSettings
     private let metadataCache: any VideoMetadataCaching
     private let searchCache: any SearchResultsCaching
@@ -37,8 +37,8 @@ class SearchViewModel {
         youtube: YouTube,
         settings: PrefetchSettings,
         networkMonitor: NetworkPathMonitor,
-        historyStore: SearchHistoryStore? = nil,
-        searchCacheHintStore: SearchCacheHintStore? = nil,
+        historyStore: SearchHistoryStore,
+        searchCacheHintStore: SearchCacheHintStore,
         streamingProviderSettings: StreamingProviderSettings,
         metadataCache: any VideoMetadataCaching,
         searchCache: any SearchResultsCaching
@@ -163,7 +163,7 @@ class SearchViewModel {
         self.state = .loading
 
         resetFederatedSections(state: .loading)
-        historyStore?.recordSearch(query: query)
+        historyStore.recordSearch(query: query)
 
         let effectiveVideoQuery = effectiveSearchQuery(for: query, scope: .video)
 
@@ -268,7 +268,7 @@ class SearchViewModel {
             let results = try await youtube.music.search(query)
             musicResults = results
             searchCache.setMusicResults(results, for: query)
-            searchCacheHintStore?.recordMusicResults(query: query, results: results)
+            searchCacheHintStore.recordMusicResults(query: query, results: results)
 
             let topResults = Array(results.prefix(5))
             let ids = topResults.map(\.videoId)
@@ -298,7 +298,7 @@ class SearchViewModel {
             resetVideoPagination()
             updateVideoResults(with: continuation, appending: false)
             searchCache.setVideoResults(videoResults, for: query)
-            searchCacheHintStore?.recordVideoResults(query: query, results: videoResults)
+            searchCacheHintStore.recordVideoResults(query: query, results: videoResults)
 
             let topVideos = videoResults.compactMap { item -> YouTubeVideo? in
                 if case .video(let video) = item {
@@ -495,12 +495,12 @@ class SearchViewModel {
         guard !cleaned.isEmpty else { return }
         searchTask?.cancel()
         searchText = cleaned
-        historyStore?.recordSearch(query: cleaned)
+        historyStore.recordSearch(query: cleaned)
         Task { await executeSearch() }
     }
 
     public func recordSuccessfulPlayFromCurrentQuery() {
-        historyStore?.recordSuccessfulPlay(query: searchText)
+        historyStore.recordSuccessfulPlay(query: searchText)
     }
 
     // MARK: - Caching Helpers
@@ -514,7 +514,7 @@ class SearchViewModel {
             let effectiveQuery = effectiveSearchQuery(for: query, scope: scope)
             let results = try await youtube.music.search(effectiveQuery)
             searchCache.setMusicResults(results, for: query)
-            searchCacheHintStore?.recordMusicResults(query: query, results: results)
+            searchCacheHintStore.recordMusicResults(query: query, results: results)
             await MainActor.run {
                 if self.searchText == query, self.searchScope == scope { self.musicResults = results }
             }
@@ -533,7 +533,7 @@ class SearchViewModel {
             let cont = try await youtube.main.search(effectiveQuery)
             let mapped = mapSearchResults(from: cont.items)
             searchCache.setVideoResults(mapped, for: query)
-            searchCacheHintStore?.recordVideoResults(query: query, results: mapped)
+            searchCacheHintStore.recordVideoResults(query: query, results: mapped)
             await MainActor.run {
                 if self.searchText == query, self.searchScope == scope { self.videoResults = mapped }
             }
@@ -633,7 +633,7 @@ class SearchViewModel {
                 remote = try await youtube.main.getSearchSuggestions(query: effectiveSearchQuery(for: query, scope: .video))
             }
 
-            let local = historyStore?.topCandidates(prefix: query, limit: 20) ?? []
+            let local = historyStore.topCandidates(prefix: query, limit: 20)
             var candidates: [SuggestionCandidate] = []
 
             candidates.append(contentsOf: remote.map {
@@ -665,7 +665,7 @@ class SearchViewModel {
             }
         } catch {
             // Keep UI responsive even if suggestions endpoint fails.
-            suggestions = (historyStore?.topCandidates(prefix: query, limit: 8) ?? []).map { $0.query }
+            suggestions = historyStore.topCandidates(prefix: query, limit: 8).map { $0.query }
         }
     }
 
@@ -692,7 +692,7 @@ class SearchViewModel {
                 } else {
                     results = try await youtube.music.search(effectiveSearchQuery(for: normalizedTop, scope: scope))
                     searchCache.setMusicResults(results, for: normalizedTop)
-                    searchCacheHintStore?.recordMusicResults(query: normalizedTop, results: results)
+                    searchCacheHintStore.recordMusicResults(query: normalizedTop, results: results)
                 }
                 ids = Array(results.prefix(3).map { $0.videoId })
 
@@ -704,7 +704,7 @@ class SearchViewModel {
                     let continuation = try await youtube.main.search(effectiveSearchQuery(for: normalizedTop, scope: scope))
                     let mapped = mapSearchResults(from: continuation.items)
                     searchCache.setVideoResults(mapped, for: normalizedTop)
-                    searchCacheHintStore?.recordVideoResults(query: normalizedTop, results: mapped)
+                    searchCacheHintStore.recordVideoResults(query: normalizedTop, results: mapped)
                     results = mapped
                 }
                 ids = Array(results.compactMap { item -> String? in
@@ -757,8 +757,6 @@ class SearchViewModel {
     }
 
     private func prefetchFromPersistentHintsIfNeeded(for query: String) {
-        guard let searchCacheHintStore else { return }
-
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return }
 

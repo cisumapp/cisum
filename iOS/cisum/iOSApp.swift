@@ -29,6 +29,10 @@ struct iOSApp: App {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             dependencies.playerViewModel.handleScenePhaseChange(newPhase)
+            if newPhase != .active {
+                dependencies.prefetchSettings.flushPendingWrites()
+                PlaybackControlSettings.shared.flushPendingWrites()
+            }
             switch newPhase {
             case .active:
                 print("App became active")

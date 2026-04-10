@@ -83,6 +83,13 @@ final class PlayerViewModel {
         let artworkURL: URL?
     }
 
+    @Observable
+    @MainActor
+    final class PlaybackProgressState {
+        var duration: Double = 0.0
+        var currentTime: Double = 0.0
+    }
+
     private enum PlaybackQueueEntry {
         case song(YouTubeMusicSong)
         case video(YouTubeVideo)
@@ -126,6 +133,7 @@ final class PlayerViewModel {
     var syncedLyricsLines: [TimedLyricLine] = []
     var plainLyricsText: String?
     var lyricsAttribution: String?
+    var progressState = PlaybackProgressState()
 
     // Queue
     var queueSource: PlaybackQueueSource = .detached
@@ -162,6 +170,16 @@ final class PlayerViewModel {
         }
 
         return queuePreviewItems[queuePosition + 1]
+    }
+
+    var duration: Double {
+        get { progressState.duration }
+        set { progressState.duration = newValue }
+    }
+
+    var currentTime: Double {
+        get { progressState.currentTime }
+        set { progressState.currentTime = newValue }
     }
 
     var currentSyncedLyricIndex: Int? {
@@ -203,10 +221,6 @@ final class PlayerViewModel {
         }
     }
 
-    // Progress
-    var duration: Double = 0.0
-    var currentTime: Double = 0.0
-
     // Private
     private var timeObserver: Any?
     private var currentLoadTask: Task<Void, Never>?
@@ -229,7 +243,7 @@ final class PlayerViewModel {
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private let metadataCache: any VideoMetadataCaching
     private let itunes = iTunesKit()
-    private let mediaCacheStore: MediaCacheStore?
+    private let mediaCacheStore: MediaCacheStore
     private let settings: PrefetchSettings
 
 #if os(iOS)
@@ -279,7 +293,7 @@ final class PlayerViewModel {
         settings: PrefetchSettings,
         artworkVideoProcessor: ArtworkVideoProcessor,
         metadataCache: any VideoMetadataCaching,
-        mediaCacheStore: MediaCacheStore? = nil
+        mediaCacheStore: MediaCacheStore
     ) {
         self.youtube = youtube
         self.settings = settings
@@ -933,12 +947,11 @@ final class PlayerViewModel {
     }
 
     private func resolvePlaybackCandidates(forID id: String) async throws -> [PlaybackCandidate] {
-        if let mediaCacheStore,
-           let cachedCandidates = mediaCacheStore.playbackCandidates(
-                for: id,
-                maxAge: CachePolicy.playbackURLTTL
-           ),
-           !cachedCandidates.isEmpty {
+        if let cachedCandidates = mediaCacheStore.playbackCandidates(
+            for: id,
+            maxAge: CachePolicy.playbackURLTTL
+        ),
+        !cachedCandidates.isEmpty {
             logPlayback("Using cached playback candidates for id=\(id)")
             return cachedCandidates
         }
@@ -954,7 +967,7 @@ final class PlayerViewModel {
             throw YouTubeError.decipheringFailed(videoId: id)
         }
 
-        mediaCacheStore?.savePlaybackResolution(
+        mediaCacheStore.savePlaybackResolution(
             mediaID: id,
             candidates: candidates,
             validUntil: entry.validUntil
@@ -1257,7 +1270,7 @@ final class PlayerViewModel {
 
             do {
                 await self.metadataCache.remove(mediaID)
-                self.mediaCacheStore?.invalidatePlayback(for: mediaID)
+                self.mediaCacheStore.invalidatePlayback(for: mediaID)
                 let candidates = try await self.resolvePlaybackCandidates(forID: mediaID)
 
                 guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
@@ -1671,8 +1684,7 @@ final class PlayerViewModel {
     }
 
     private func loadPersistentArtworkIfAvailable(for mediaID: String) async -> CachedNowPlayingArtworkResource? {
-        guard let mediaCacheStore,
-              let cachedArtwork = await mediaCacheStore.cachedLocalArtworkData(for: mediaID),
+        guard let cachedArtwork = await mediaCacheStore.cachedLocalArtworkData(for: mediaID),
               let image = UIImage(data: cachedArtwork.data) else {
             return nil
         }
@@ -1685,7 +1697,6 @@ final class PlayerViewModel {
     }
 
     private func persistArtwork(_ artwork: CachedNowPlayingArtworkResource, mediaID: String) async {
-        guard let mediaCacheStore else { return }
         _ = await mediaCacheStore.saveArtworkData(
             artwork.data,
             mediaID: mediaID,
@@ -1715,7 +1726,7 @@ final class PlayerViewModel {
                 await Self.fetchArtworkResource(from: fallbackArtworkURL)
             }
             let highQualityTask = Task<CachedNowPlayingArtworkResource?, Never> {
-                if let cachedURL = self.mediaCacheStore?.cachedHighQualityArtworkURL(
+                if let cachedURL = self.mediaCacheStore.cachedHighQualityArtworkURL(
                     for: mediaID,
                     maxAge: CachePolicy.highQualityArtworkTTL
                 ) {
@@ -1729,7 +1740,7 @@ final class PlayerViewModel {
                     title: artworkTitle,
                     artist: artworkArtist
                 ) {
-                    self.mediaCacheStore?.saveHighQualityArtworkURL(highQualityURL, for: mediaID)
+                    self.mediaCacheStore.saveHighQualityArtworkURL(highQualityURL, for: mediaID)
                     return await Self.fetchArtworkResource(from: highQualityURL)
                 }
 
@@ -1784,7 +1795,7 @@ final class PlayerViewModel {
         )
         let localAlbumCacheKeys = [localAlbumArtistCacheKey, localAlbumOnlyCacheKey].compactMap { $0 }
 
-        if let cachedURL = mediaCacheStore?.cachedMotionArtworkSourceURL(
+        if let cachedURL = mediaCacheStore.cachedMotionArtworkSourceURL(
             for: mediaID,
             maxAge: CachePolicy.motionArtworkSourceTTL
         ) {
@@ -1799,12 +1810,12 @@ final class PlayerViewModel {
             )
         }
 
-        if let albumHit = mediaCacheStore?.cachedMotionArtworkSourceURL(
+        if let albumHit = mediaCacheStore.cachedMotionArtworkSourceURL(
             forAlbumKeys: localAlbumCacheKeys,
             maxAge: CachePolicy.motionArtworkSourceTTL
         ) {
             logAnimatedArtwork("Motion artwork source cache hit (album key=\(albumHit.albumKey)) for id=\(mediaID)")
-            mediaCacheStore?.saveMotionArtworkSourceURL(albumHit.url, for: mediaID)
+            mediaCacheStore.saveMotionArtworkSourceURL(albumHit.url, for: mediaID)
             return MotionArtworkSourceResolution(
                 sourceHLSURL: albumHit.url,
                 videoCacheID: motionArtworkVideoCacheID(
@@ -1823,7 +1834,7 @@ final class PlayerViewModel {
             return nil
         }
 
-        mediaCacheStore?.saveMotionArtworkSourceURL(resolution.sourceURL, for: mediaID)
+        mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, for: mediaID)
 
         var albumKeysToPersist = localAlbumCacheKeys
         let collectionCacheKey = motionArtworkCollectionCacheKey(collectionID: resolution.collectionID)
@@ -1834,7 +1845,7 @@ final class PlayerViewModel {
         if let catalogAlbumCacheKey {
             albumKeysToPersist.append(catalogAlbumCacheKey)
         }
-        mediaCacheStore?.saveMotionArtworkSourceURL(resolution.sourceURL, forAlbumKeys: albumKeysToPersist)
+        mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, forAlbumKeys: albumKeysToPersist)
 
         let selectedAlbumKey = catalogAlbumCacheKey
             ?? collectionCacheKey

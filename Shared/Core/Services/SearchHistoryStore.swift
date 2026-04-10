@@ -45,31 +45,22 @@ final class SearchHistoryStore {
         guard limit > 0 else { return [] }
 
         let normalizedPrefix = normalizedQuery(prefix)
-        let batchFetchLimit = max(limit * 5, 50)
+        let descriptor: FetchDescriptor<SearchHistoryEntry>
 
-        var batchDescriptor = FetchDescriptor<SearchHistoryEntry>(
-            sortBy: rankingSortDescriptors
-        )
-        batchDescriptor.fetchLimit = batchFetchLimit
-
-        let rankedBatch = (try? context.fetch(batchDescriptor)) ?? []
-        let filteredBatch = rankedBatch.filter { entry in
-            normalizedPrefix.isEmpty || entry.normalizedQuery.contains(normalizedPrefix)
+        if normalizedPrefix.isEmpty {
+            descriptor = FetchDescriptor<SearchHistoryEntry>(sortBy: rankingSortDescriptors)
+        } else {
+            descriptor = FetchDescriptor<SearchHistoryEntry>(
+                predicate: #Predicate<SearchHistoryEntry> { entry in
+                    entry.normalizedQuery.contains(normalizedPrefix)
+                },
+                sortBy: rankingSortDescriptors
+            )
         }
 
-        // Fast path: top-ranked batch already yielded enough matches.
-        if filteredBatch.count >= limit || rankedBatch.count < batchFetchLimit {
-            return Array(filteredBatch.prefix(limit))
-        }
-
-        // Fallback for rare prefixes that only appear in lower-ranked history.
-        let allDescriptor = FetchDescriptor<SearchHistoryEntry>(sortBy: rankingSortDescriptors)
-        let allEntries = (try? context.fetch(allDescriptor)) ?? []
-        let filteredAll = allEntries.filter { entry in
-            normalizedPrefix.isEmpty || entry.normalizedQuery.contains(normalizedPrefix)
-        }
-
-        return Array(filteredAll.prefix(limit))
+        var limitedDescriptor = descriptor
+        limitedDescriptor.fetchLimit = limit
+        return (try? context.fetch(limitedDescriptor)) ?? []
     }
 
     private func fetchEntry(for normalized: String) -> SearchHistoryEntry? {

@@ -33,37 +33,38 @@ final class PrefetchSettings {
     }
 
     private let defaults: UserDefaults
+    private let persistenceScheduler = DebouncedWorkScheduler(delay: .milliseconds(250))
 
     var adaptivePrefetchEnabled: Bool {
-        didSet { defaults.set(adaptivePrefetchEnabled, forKey: Keys.adaptiveEnabled) }
+        didSet { schedulePersistence() }
     }
 
     var prefetchModeOverride: PrefetchModeOverride {
-        didSet { defaults.set(prefetchModeOverride.rawValue, forKey: Keys.modeOverride) }
+        didSet { schedulePersistence() }
     }
 
     var wifiPrefetchCount: Int {
-        didSet { defaults.set(wifiPrefetchCount, forKey: Keys.wifiCount) }
+        didSet { schedulePersistence() }
     }
 
     var cellularPrefetchCount: Int {
-        didSet { defaults.set(cellularPrefetchCount, forKey: Keys.cellularCount) }
+        didSet { schedulePersistence() }
     }
 
     var wifiPrefetchConcurrency: Int {
-        didSet { defaults.set(wifiPrefetchConcurrency, forKey: Keys.wifiConcurrency) }
+        didSet { schedulePersistence() }
     }
 
     var cellularPrefetchConcurrency: Int {
-        didSet { defaults.set(cellularPrefetchConcurrency, forKey: Keys.cellularConcurrency) }
+        didSet { schedulePersistence() }
     }
 
     var metricsEnabled: Bool {
-        didSet { defaults.set(metricsEnabled, forKey: Keys.metricsEnabled) }
+        didSet { schedulePersistence() }
     }
 
     var suggestionPipelineEnabled: Bool {
-        didSet { defaults.set(suggestionPipelineEnabled, forKey: Keys.suggestionPipelineEnabled) }
+        didSet { schedulePersistence() }
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -79,5 +80,27 @@ final class PrefetchSettings {
         self.cellularPrefetchConcurrency = defaults.object(forKey: Keys.cellularConcurrency) as? Int ?? 1
         self.metricsEnabled = defaults.object(forKey: Keys.metricsEnabled) as? Bool ?? true
         self.suggestionPipelineEnabled = defaults.object(forKey: Keys.suggestionPipelineEnabled) as? Bool ?? true
+    }
+
+    func flushPendingWrites() {
+        persistenceScheduler.cancel()
+        persistToDefaults()
+    }
+
+    private func schedulePersistence() {
+        persistenceScheduler.schedule { [weak self] in
+            self?.persistToDefaults()
+        }
+    }
+
+    private func persistToDefaults() {
+        defaults.set(adaptivePrefetchEnabled, forKey: Keys.adaptiveEnabled)
+        defaults.set(prefetchModeOverride.rawValue, forKey: Keys.modeOverride)
+        defaults.set(wifiPrefetchCount, forKey: Keys.wifiCount)
+        defaults.set(cellularPrefetchCount, forKey: Keys.cellularCount)
+        defaults.set(wifiPrefetchConcurrency, forKey: Keys.wifiConcurrency)
+        defaults.set(cellularPrefetchConcurrency, forKey: Keys.cellularConcurrency)
+        defaults.set(metricsEnabled, forKey: Keys.metricsEnabled)
+        defaults.set(suggestionPipelineEnabled, forKey: Keys.suggestionPipelineEnabled)
     }
 }

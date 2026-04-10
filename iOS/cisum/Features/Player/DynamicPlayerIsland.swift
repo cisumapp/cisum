@@ -22,40 +22,17 @@ struct DynamicPlayerIsland: View {
 #endif
     
     var body: some View {
-//        Group {
-//            if #available(iOS 26.0, *) {
-                nowPlaying
-                    .frame(height: Constants.dynamicPlayerIslandHeight)
-                    .contentShape(.rect)
-                    .transformEffect(.identity)
-                    .onTapGesture {
-                        guard !isPlayerExpanded else { return }
-                        withAnimation(.playerExpandAnimation) {
-                            isPlayerExpanded = true
-                        }
-                    }
-//            } else {
-//                HStack(spacing: 12) {
-//                    artwork
-//                    
-//                    Text(playerViewModel.currentTitle)
-//                    
-//                    Spacer()
-//                    
-//                    togglePlayPause
-//                }
-//                .padding(.leading, 3)
-//                .padding(.trailing, 10)
-//                .frame(height: 44)
-//                .contentShape(.rect)
-//                .onTapGesture {
-//                    withAnimation(.playerExpandAnimation) {
-//                        isExpanded = true
-//                    }
-//                }
-//            }
-//        }
-        .enableInjection()
+        nowPlaying
+            .frame(height: Constants.dynamicPlayerIslandHeight)
+            .contentShape(.rect)
+            .transformEffect(.identity)
+            .onTapGesture {
+                guard !isPlayerExpanded else { return }
+                withAnimation(.playerExpandAnimation) {
+                    isPlayerExpanded = true
+                }
+            }
+            .enableInjection()
     }
     //#elseif os(macOS)
     //    @State private var isHovered: Bool = false
@@ -145,7 +122,7 @@ private extension DynamicPlayerIsland {
                 KFImage(playerViewModel.currentImageURL)
                     .downsampling(size: CGSize(width: 80, height: 80))
                     .resizable()
-                    .frame(width: 40, height: 40)
+                    .frame(width: 38, height: 38)
                     .aspectRatio(contentMode: .fit)
                     .clipShape(.circle)
             }
@@ -171,7 +148,7 @@ private extension DynamicPlayerIsland {
             .font(.title3)
             .fontWeight(.bold)
         }
-        .padding(.leading, 5)
+        .padding(.leading, 4)
         .padding(.trailing, 10)
     }
     

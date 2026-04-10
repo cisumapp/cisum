@@ -23,6 +23,10 @@ struct macOSApp: App {
                 .injectAppDependencies(dependencies)
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase != .active {
+                dependencies.prefetchSettings.flushPendingWrites()
+                PlaybackControlSettings.shared.flushPendingWrites()
+            }
             switch newPhase {
             case .active:
                 print("App became active")

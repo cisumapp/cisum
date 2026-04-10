@@ -8,7 +8,7 @@
 import SwiftUI
 
 private struct RouterEnvironmentKey: EnvironmentKey {
-    static let defaultValue: Router = Router.shared
+    static let defaultValue: Router = Router()
 }
 
 extension EnvironmentValues {

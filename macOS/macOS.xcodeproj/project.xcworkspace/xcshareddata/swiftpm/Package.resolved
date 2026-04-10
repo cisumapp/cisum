@@ -1,0 +1,69 @@
+{
+  "originHash" : "8f622ca7bd86c5def21561cff6106df456d83c477edb4dbe5a6c8e5c78889532",
+  "pins" : [
+    {
+      "identity" : "injectionnext",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnno1962/InjectionNext.git",
+      "state" : {
+        "revision" : "f257a3eae921caf3f46385380716bc825c20c793",
+        "version" : "1.5.4"
+      }
+    },
+    {
+      "identity" : "ituneskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://gitlab.com/atpugvaraa/ituneskit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "27df9b1798d18e248b5aa6e9dcaa5d94cbc3df23"
+      }
+    },
+    {
+      "identity" : "kingfisher",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/onevcat/Kingfisher.git",
+      "state" : {
+        "revision" : "c152c1915f60c51e4afa0752656993ee5b3c63db",
+        "version" : "8.8.1"
+      }
+    },
+    {
+      "identity" : "lyricskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cisumapp/LyricsKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "6613374410cafb7728171a91c241bc0b684f4c9d"
+      }
+    },
+    {
+      "identity" : "spotifysdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cisumapp/SpotifySDK.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "da0ed264c6d5283306efa17e161d2b4ed60af2c1"
+      }
+    },
+    {
+      "identity" : "tidalkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cisumapp/TidalKit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "047ae8dd56eca0517c3597f196d6803ef1fda64d"
+      }
+    },
+    {
+      "identity" : "youtubesdk",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/atpugvaraa/YouTubeSDK.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "fa9bd98bafe98cd8d0918d22382001d10cdbe375"
+      }
+    }
+  ],
+  "version" : 3
+}

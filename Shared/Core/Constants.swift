@@ -8,6 +8,10 @@
 import Foundation
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 public enum Constants {}
 
 public extension Constants {
@@ -17,9 +21,13 @@ public extension Constants {
     static let dynamicPlayerIslandHeight: CGFloat = 45
 
     static var safeAreaInsets: EdgeInsets {
+#if canImport(UIKit)
         MainActor.assumeIsolated {
             EdgeInsets(UIApplication.keyWindow?.safeAreaInsets ?? .zero)
         }
+#else
+        EdgeInsets()
+#endif
     }
 
     static func itemWidth(
@@ -33,6 +41,7 @@ public extension Constants {
     }
 }
 
+#if canImport(UIKit)
 public extension EdgeInsets {
     init(_ insets: UIEdgeInsets) {
         self.init(
@@ -43,6 +52,7 @@ public extension EdgeInsets {
         )
     }
 }
+#endif
 
 public extension EdgeInsets {
     static let rowInsets: EdgeInsets = .init(

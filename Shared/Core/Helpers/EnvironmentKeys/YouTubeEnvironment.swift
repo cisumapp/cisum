@@ -9,7 +9,7 @@ import SwiftUI
 import YouTubeSDK
 
 private struct YouTubeEnvironmentKey: EnvironmentKey {
-    static let defaultValue: YouTube = YouTube.shared
+    static let defaultValue: YouTube = YouTube()
 }
 
 extension EnvironmentValues {
