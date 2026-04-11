@@ -90,7 +90,6 @@ class SearchViewModel {
     private var prefetchTask: Task<Void, Never>?
     private var suggestionTask: Task<Void, Never>?
     private var lastCompletedQuery: String?
-    private var lastCompletedScope: SearchScope?
     private var suggestionCache: [String: [String]] = [:]
     private var lastSuggestionPrefetched: String?
     private var lastHintPrefetchedKey: String?
@@ -217,7 +216,6 @@ class SearchViewModel {
         }
 
         self.lastCompletedQuery = query
-        self.lastCompletedScope = searchScope
     }
 
     func items(for service: FederatedService) -> [FederatedSearchItem] {
@@ -613,33 +611,6 @@ class SearchViewModel {
         return subtitle
     }
 
-    private func normalizedRankingText(_ value: String) -> String {
-        let lowercased = value.lowercased()
-        let withoutPunctuation = lowercased.replacingOccurrences(
-            of: "[^a-z0-9\\s]",
-            with: " ",
-            options: .regularExpression
-        )
-
-        return withoutPunctuation
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func tokenSet(from value: String) -> Set<String> {
-        Set(value.split(separator: " ").map(String.init))
-    }
-
-    private func tokenOverlapScore(_ lhs: String, _ rhs: String) -> Double {
-        let lhsTokens = tokenSet(from: lhs)
-        let rhsTokens = tokenSet(from: rhs)
-        guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else { return 0 }
-
-        let overlapCount = Double(lhsTokens.intersection(rhsTokens).count)
-        let normalizer = Double(max(lhsTokens.count, rhsTokens.count))
-        return normalizer == 0 ? 0 : overlapCount / normalizer
-    }
-
     private func parseYouTubeViewCount(_ value: String) -> Double {
         let lowered = value
             .lowercased()
@@ -772,7 +743,7 @@ class SearchViewModel {
                     id: "yt-\(video.id)",
                     title: normalizedMusicDisplayTitle(video.title, artist: video.author),
                     subtitle: normalizedMusicDisplayArtist(video.author, title: video.title),
-                    artworkURL: normalizedThumbnailURL(from: video.thumbnailURL),
+                    artworkURL: normalizedArtworkURL(from: video.thumbnailURL),
                     durationSeconds: parseVideoDurationSeconds(video.lengthInSeconds),
                     isPlayable: true,
                     isExplicit: false,
@@ -875,16 +846,6 @@ class SearchViewModel {
         return Double(value)
     }
 
-    private func normalizedThumbnailURL(from string: String?) -> URL? {
-        guard var candidate = string?.trimmingCharacters(in: .whitespacesAndNewlines), !candidate.isEmpty else { return nil }
-        if candidate.hasPrefix("//") {
-            candidate = "https:" + candidate
-        } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
-            candidate = "https://" + candidate
-        }
-        return URL(string: candidate)
-    }
-
     private func inferCodecLabel(from url: URL) -> String {
         let ext = url.pathExtension.lowercased()
         if ext == "flac" { return "FLAC" }
@@ -972,12 +933,6 @@ class SearchViewModel {
         throw FederatedSearchError.noPlayableStream("Unable to resolve a playable Tidal stream for this track.")
     }
 
-    private func tidalArtworkURL(from coverID: String?) -> URL? {
-        guard let coverID, !coverID.isEmpty else { return nil }
-        let formatted = coverID.replacingOccurrences(of: "-", with: "/")
-        return URL(string: "https://resources.tidal.com/images/\(formatted)/320x320.jpg")
-    }
-
     private func tidalCodecLabel(for quality: MonochromeAudioQuality) -> String {
         switch quality {
         case .lossless, .hiResLossless:
@@ -1021,45 +976,6 @@ class SearchViewModel {
 
     public func recordSuccessfulPlayFromCurrentQuery() {
         historyStore.recordSuccessfulPlay(query: searchText)
-    }
-
-    // MARK: - Caching Helpers
-
-    private func refreshMusicResultsIfNeeded(for query: String) async {
-        await refreshMusicResultsIfNeeded(for: query, scope: searchScope)
-    }
-
-    private func refreshMusicResultsIfNeeded(for query: String, scope: SearchScope) async {
-        do {
-            let effectiveQuery = effectiveSearchQuery(for: query, scope: scope)
-            let results = try await youtube.music.search(effectiveQuery)
-            searchCache.setMusicResults(results, for: query)
-            searchCacheHintStore.recordMusicResults(query: query, results: results)
-            await MainActor.run {
-                if self.searchText == query, self.searchScope == scope { self.musicResults = results }
-            }
-        } catch {
-            // ignore background refresh errors
-        }
-    }
-
-    private func refreshVideoResultsIfNeeded(for query: String) async {
-        await refreshVideoResultsIfNeeded(for: query, scope: searchScope)
-    }
-
-    private func refreshVideoResultsIfNeeded(for query: String, scope: SearchScope) async {
-        do {
-            let effectiveQuery = effectiveSearchQuery(for: query, scope: scope)
-            let cont = try await youtube.main.search(effectiveQuery)
-            let mapped = mapSearchResults(from: cont.items)
-            searchCache.setVideoResults(mapped, for: query)
-            searchCacheHintStore.recordVideoResults(query: query, results: mapped)
-            await MainActor.run {
-                if self.searchText == query, self.searchScope == scope { self.videoResults = mapped }
-            }
-        } catch {
-            // ignore background refresh errors
-        }
     }
 
     // Prefetch metadata and resolved stream urls for top items.
@@ -1256,16 +1172,6 @@ class SearchViewModel {
         }
     }
 
-    private var currentPrefetchCount: Int {
-        guard settings.adaptivePrefetchEnabled else {
-            return max(1, settings.wifiPrefetchCount)
-        }
-        if networkMonitor.interface == .cellular || networkMonitor.isExpensive || networkMonitor.isConstrained {
-            return max(1, settings.cellularPrefetchCount)
-        }
-        return max(1, settings.wifiPrefetchCount)
-    }
-
     private var currentPrefetchConcurrency: Int {
         guard settings.adaptivePrefetchEnabled else {
             return max(1, settings.wifiPrefetchConcurrency)
@@ -1284,46 +1190,6 @@ class SearchViewModel {
             return .aggressiveWarmup
         }
         return .metadataOnly
-    }
-
-    private func prefetchFromPersistentHintsIfNeeded(for query: String) {
-        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalized.isEmpty else { return }
-
-        let key = "\(searchScope)-\(normalized)"
-        guard key != lastHintPrefetchedKey else { return }
-
-        let scope: SearchCacheHintStore.Scope = {
-            switch searchScope {
-            case .music: return .music
-            case .video: return .video
-            }
-        }()
-
-        let ids = searchCacheHintStore.cachedTopVideoIDs(
-            for: normalized,
-            scope: scope,
-            maxAge: CachePolicy.persistentHintMaxAge
-        )
-        guard !ids.isEmpty else { return }
-
-        lastHintPrefetchedKey = key
-
-        let youtube = self.youtube
-        let mode = effectivePrefetchMode
-        let metricsEnabled = settings.metricsEnabled
-        let concurrency = min(4, currentPrefetchConcurrency)
-
-        Task(priority: .utility) {
-            await self.metadataCache.prefetch(
-                ids: Array(ids.prefix(6)),
-                maxConcurrent: concurrency,
-                mode: mode,
-                metricsEnabled: metricsEnabled
-            ) { id in
-                try await youtube.main.video(id: id)
-            }
-        }
     }
 
     func loadMoreVideosIfNeeded(for item: YouTubeSearchResult) {

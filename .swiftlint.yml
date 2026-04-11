@@ -1,0 +1,33 @@
+included:
+  - iOS
+  - Shared
+  - macOS
+
+excluded:
+  - iOS/iOS.xcodeproj
+  - macOS/macOS.xcodeproj
+  - cisum.xcworkspace
+  - .build
+  - DerivedData
+  - "**/xcuserdata"
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - explicit_init
+  - first_where
+  - sorted_first_last
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 400
+  error: 800
+
+function_body_length:
+  warning: 80
+  error: 140

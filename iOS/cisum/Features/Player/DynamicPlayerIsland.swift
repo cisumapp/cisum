@@ -15,7 +15,6 @@ struct DynamicPlayerIsland: View {
     
     @Binding var isPlayerExpanded: Bool
     var namespace: Namespace.ID
-    //    @State var forwardAnimationTrigger: PlayerButtonTrigger = .one(bouncing: false)
     
 #if DEBUG
     @ObserveInjection var forceRedraw

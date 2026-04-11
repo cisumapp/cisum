@@ -49,24 +49,10 @@ extension AppDependencies {
         youtube: YouTube = YouTube(),
         router: Router = Router()
     ) -> AppDependencies {
-        let bootstrap = AppBootstrap.makeDependenciesOrFallback(youtube: youtube)
-
-        return AppDependencies(
-            youtube: youtube,
-            router: router,
-            modelContainer: bootstrap.modelContainer,
-            prefetchSettings: bootstrap.prefetchSettings,
-            networkMonitor: bootstrap.networkMonitor,
-            playbackControlSettings: bootstrap.playbackControlSettings,
-            streamingProviderSettings: bootstrap.streamingProviderSettings,
-            playlistLibraryStore: bootstrap.playlistLibraryStore,
-            playlistImportJobStore: bootstrap.playlistImportJobStore,
-            playerViewModel: bootstrap.playerViewModel,
-            searchViewModel: bootstrap.searchViewModel
-        )
+        AppBootstrap.makeDependenciesOrFallback(youtube: youtube, router: router)
     }
 
     static func preview() -> AppDependencies {
-        make(youtube: YouTube(), router: Router())
+        make()
     }
 }

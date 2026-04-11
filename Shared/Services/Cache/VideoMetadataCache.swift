@@ -48,7 +48,7 @@ actor VideoMetadataCache {
             video: video,
             resolvedURL: url,
             cachedAt: cachedAt,
-            validUntil: Self.resolveValidUntilDate(from: video, cachedAt: cachedAt),
+            validUntil: Self.resolveValidUntilDate(from: url, cachedAt: cachedAt),
             lastAccessed: cachedAt
         )
 
@@ -93,7 +93,7 @@ actor VideoMetadataCache {
                 video: video,
                 resolvedURL: url,
                 cachedAt: cachedAt,
-                validUntil: Self.resolveValidUntilDate(from: video, cachedAt: cachedAt),
+                validUntil: Self.resolveValidUntilDate(from: url, cachedAt: cachedAt),
                 lastAccessed: cachedAt
             )
         }
@@ -214,19 +214,6 @@ actor VideoMetadataCache {
     private static func resolveValidUntilDate(from url: URL, cachedAt: Date) -> Date {
         if let expirationDate = resolveURLExpiration(from: url) {
             return expirationDate.addingTimeInterval(-30)
-        }
-
-        return cachedAt.addingTimeInterval(defaultURLTTL)
-    }
-
-    private static func resolveValidUntilDate(from video: YouTubeVideo, cachedAt: Date) -> Date {
-        if let expiresInSeconds = video.streamingData?.expiresInSeconds,
-           let seconds = Double(expiresInSeconds) {
-            return cachedAt.addingTimeInterval(max(0, seconds - 30))
-        }
-
-        if let url = resolvePlayableURL(from: video) {
-            return resolveValidUntilDate(from: url, cachedAt: cachedAt)
         }
 
         return cachedAt.addingTimeInterval(defaultURLTTL)

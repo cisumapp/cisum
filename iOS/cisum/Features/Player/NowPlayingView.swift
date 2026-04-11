@@ -44,16 +44,16 @@ private extension NowPlayingView {
             .opacity(isPlayerExpanded ? 1 : 0)
             .frame(width: 40, height: 5)
             .offset(y: 10)
-//                .onTapGesture {
-//                    withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
-//                        /// Closing View
-//                        properties.isPlayerExpanded = false
-//                        /// Resetting Window to identity with Animation
-//                        properties.resetWindowWithAnimation()
+            .onTapGesture {
+//                withAnimation(.smooth(duration: 0.3, extraBounce: 0)) {
+//                    /// Closing View
+//                    isPlayerExpanded = false
+//                    /// Resetting Window to identity with Animation
+//                    resetWindowWithAnimation()
 //
-//                        properties.offsetY = 0
-//                    }
+//                    offsetY = 0
 //                }
+            }
     }
     
     @ViewBuilder

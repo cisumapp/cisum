@@ -37,6 +37,54 @@ nonisolated func musicVideoSearchQuery(_ query: String) -> String {
     return "\(trimmedQuery) (Official Music Video)"
 }
 
+nonisolated func normalizedRankingText(_ value: String) -> String {
+    let lowercased = value.lowercased()
+    let withoutPunctuation = lowercased.replacingOccurrences(
+        of: "[^a-z0-9\\s]",
+        with: " ",
+        options: .regularExpression
+    )
+
+    return withoutPunctuation
+        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+nonisolated func tokenSet(from value: String) -> Set<String> {
+    Set(normalizedRankingText(value).split(separator: " ").map(String.init))
+}
+
+nonisolated func tokenOverlapScore(_ lhs: String, _ rhs: String) -> Double {
+    let lhsTokens = tokenSet(from: lhs)
+    let rhsTokens = tokenSet(from: rhs)
+
+    guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else { return 0 }
+
+    let overlapCount = Double(lhsTokens.intersection(rhsTokens).count)
+    let normalizer = Double(max(lhsTokens.count, rhsTokens.count))
+    return normalizer == 0 ? 0 : overlapCount / normalizer
+}
+
+nonisolated func normalizedArtworkURL(from rawValue: String?) -> URL? {
+    guard var candidate = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), !candidate.isEmpty else {
+        return nil
+    }
+
+    if candidate.hasPrefix("//") {
+        candidate = "https:" + candidate
+    } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
+        candidate = "https://" + candidate
+    }
+
+    return URL(string: candidate)
+}
+
+nonisolated func tidalArtworkURL(from coverID: String?) -> URL? {
+    guard let coverID, !coverID.isEmpty else { return nil }
+    let formatted = coverID.replacingOccurrences(of: "-", with: "/")
+    return URL(string: "https://resources.tidal.com/images/\(formatted)/320x320.jpg")
+}
+
 nonisolated private func stripDuplicateArtistText(from title: String, artist: String) -> String {
     guard !title.isEmpty, !artist.isEmpty else { return title }
 
