@@ -46,6 +46,10 @@ struct ProfileButton: View {
         .smooth(duration: 0.2)
     }
 
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
 #if os(iOS)
@@ -81,6 +85,7 @@ struct ProfileButton: View {
             isClicked = false
             isHovered = false
         }
+        .enableInjection()
     }
 
     @ViewBuilder

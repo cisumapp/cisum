@@ -9,6 +9,7 @@
 import SwiftUI
 
 struct MusicProgressScrubber: View {
+    let mediaID: String?
     let currentTime: Double
     let duration: Double
     let onSeek: (Double) -> Void
@@ -20,11 +21,13 @@ struct MusicProgressScrubber: View {
     let onEditingChanged: (Bool) -> Void
     
     init(
+        mediaID: String?,
         currentTime: Double,
         duration: Double,
         onSeek: @escaping (Double) -> Void,
         onEditingChanged: @escaping (Bool) -> Void = { _ in }
     ) {
+        self.mediaID = mediaID
         self.currentTime = currentTime
         self.duration = duration
         self.onSeek = onSeek
@@ -54,6 +57,10 @@ struct MusicProgressScrubber: View {
         .frame(height: 35)
         .transformEffect(.identity)
         .onAppear {
+            syncDisplayState(animated: false)
+        }
+        .onChange(of: mediaID) { _, _ in
+            isEditing = false
             syncDisplayState(animated: false)
         }
         .onChange(of: currentTime) { _, _ in

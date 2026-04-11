@@ -52,7 +52,7 @@ struct ExpandablePlayer: View {
                     playerContent(size: size)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, isPlayerExpanded ? 0 : (isSearchFieldExpanded ? (isTabbarVisible ? safeArea.bottom + 18 : -12) : safeArea.bottom + 25))
-                        .padding(.horizontal, isPlayerExpanded ? 0 : (isTabbarVisible ? 20 : (isSearchFieldExpanded ? 20 : 10)))
+                        .padding(.horizontal, isPlayerExpanded ? 0 : (isTabbarVisible ? (isSearchFieldExpanded ? 30 : 20) : (isSearchFieldExpanded ? 20 : 10)))
                         .gesture(
                             PanGesture { newValue in
                                 handleGestureChange(value: newValue, viewSize: size)

@@ -16,17 +16,23 @@ enum SuggestionRanker {
         let ranked = candidates.map { candidate -> (String, Double) in
             let n = normalized(candidate.text)
             let jw = jaroWinkler(query, n)
+            let exactScore = n == query ? 1.0 : 0.0
+            let prefixScore = (!query.isEmpty && n.hasPrefix(query)) ? 1.0 : 0.0
+            let containsScore = (!query.isEmpty && n.contains(query)) ? 1.0 : 0.0
             let freqScore = min(1.0, Double(candidate.frequency) / 20.0)
             let playScore = min(1.0, Double(candidate.successfulPlays) / 10.0)
             let ageHours = max(0.0, now.timeIntervalSince(candidate.recency) / 3600.0)
             let recencyScore = exp(-ageHours / 72.0)
 
             let total =
-                (0.45 * jw) +
-                (0.20 * recencyScore) +
-                (0.20 * freqScore) +
-                (0.10 * playScore) +
-                (0.05 * candidate.sourceBoost)
+                (0.34 * jw) +
+                (0.18 * recencyScore) +
+                (0.16 * freqScore) +
+                (0.08 * playScore) +
+                (0.04 * candidate.sourceBoost) +
+                (0.08 * containsScore) +
+                (0.07 * prefixScore) +
+                (0.05 * exactScore)
             return (candidate.text, total)
         }
 
@@ -96,7 +102,7 @@ enum SuggestionRanker {
     }
 }
 
-private extension Array where Element == String {
+extension Array where Element == String {
     func uniquedPreservingOrder() -> [String] {
         var seen = Set<String>()
         return self.filter { seen.insert($0.lowercased()).inserted }

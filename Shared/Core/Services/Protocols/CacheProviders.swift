@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import YouTubeSDK
 
 protocol VideoMetadataCaching: Actor {
@@ -28,5 +29,25 @@ protocol SearchResultsCaching: AnyObject {
     func clear()
 }
 
+protocol PlaybackMetricsRecording: Actor {
+    func recordTapToPlay(durationMs: Double)
+}
+
+@MainActor
+protocol StreamingProviderSettingsReading: AnyObject {
+    var tidalPreferredQualityRawValue: String { get }
+}
+
+#if os(iOS)
+protocol ArtworkColorExtracting: Actor {
+    func dominantColor(from imageData: Data, cacheKey: String?) -> Color
+}
+#endif
+
 extension VideoMetadataCache: VideoMetadataCaching {}
 extension SearchResultsCache: SearchResultsCaching {}
+extension PlaybackMetricsStore: PlaybackMetricsRecording {}
+extension StreamingProviderSettings: StreamingProviderSettingsReading {}
+#if os(iOS)
+extension ArtworkDominantColorExtractor: ArtworkColorExtracting {}
+#endif

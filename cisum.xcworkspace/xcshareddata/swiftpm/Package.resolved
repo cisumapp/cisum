@@ -1,5 +1,5 @@
 {
-  "originHash" : "6e0d94fca5cb6c57ad7b486aca7a5c744c5d48d023d6a4a058899198a62dd6d4",
+  "originHash" : "9b2aa2ee895975ca35ae1c80ec3c3bd9685a173f651cda8f186d85b669ea7577",
   "pins" : [
     {
       "identity" : "ffmpeg-kit-spm",
@@ -15,14 +15,14 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/johnno1962/InjectionNext.git",
       "state" : {
-        "revision" : "a24d3d1451d1d2efd753474a3885c8a1df741a84",
-        "version" : "1.5.3"
+        "revision" : "f257a3eae921caf3f46385380716bc825c20c793",
+        "version" : "1.5.4"
       }
     },
     {
       "identity" : "ituneskit",
       "kind" : "remoteSourceControl",
-      "location" : "https://gitlab.com/atpugvaraa/ituneskit.git",
+      "location" : "https://github.com/cisumapp/ituneskit.git",
       "state" : {
         "branch" : "main",
         "revision" : "27df9b1798d18e248b5aa6e9dcaa5d94cbc3df23"
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
       "state" : {
-        "revision" : "c92b84898e34ab46ff0dad86c02a0acbe2d87008",
-        "version" : "8.8.0"
+        "revision" : "c152c1915f60c51e4afa0752656993ee5b3c63db",
+        "version" : "8.8.1"
       }
     },
     {
@@ -67,10 +67,10 @@
     {
       "identity" : "youtubesdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/atpugvaraa/YouTubeSDK.git",
+      "location" : "https://github.com/cisumapp/YouTubeSDK.git",
       "state" : {
         "branch" : "main",
-        "revision" : "1656a1cd65ca54c7bafd84cdebadd12f12dd5d5e"
+        "revision" : "30e7b1c54cb8747c3fc46743bc050e078e5358c1"
       }
     }
   ],

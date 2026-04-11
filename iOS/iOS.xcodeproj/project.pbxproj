@@ -10,7 +10,6 @@
 		77048F3C2F86922700C446B5 /* TidalKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F3B2F86922700C446B5 /* TidalKit */; };
 		77048F3F2F86929A00C446B5 /* SpotifySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F3E2F86929A00C446B5 /* SpotifySDK */; };
 		77048F492F8692D000C446B5 /* LyricsKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77048F4B2F8692D000C446B5 /* LyricsKit */; };
-		772039792F6AAB1200E85D4A /* YouTubeSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 772039782F6AAB1200E85D4A /* YouTubeSDK */; };
 		7720397F2F6AAB2F00E85D4A /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = 7720397E2F6AAB2F00E85D4A /* Kingfisher */; };
 		772039852F6AAB5100E85D4A /* InjectionNext in Frameworks */ = {isa = PBXBuildFile; productRef = 772039842F6AAB5100E85D4A /* InjectionNext */; };
 		7736DD082F6ECEB50077B88B /* iTunesKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7736DD072F6ECEB50077B88B /* iTunesKit */; };
@@ -25,12 +24,13 @@
 		7757860E2F7774DF005CB07D /* libswscale in Frameworks */ = {isa = PBXBuildFile; productRef = 7757860D2F7774DF005CB07D /* libswscale */; };
 		7757860F2F77778E005CB07D /* FFmpeg-Kit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 775785FF2F7774DF005CB07D /* FFmpeg-Kit */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		775786102F777791005CB07D /* FFmpeg in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 775785FD2F7774DF005CB07D /* FFmpeg */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		77676AFD2F89DEB500353FCB /* YouTubeSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 77676AFC2F89DEB500353FCB /* YouTubeSDK */; };
+		77676B062F89DFBC00353FCB /* iTunesKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77676B052F89DFBC00353FCB /* iTunesKit */; };
 		7767ACED2F8578C800C3BEBD /* TidalKit in Frameworks */ = {isa = PBXBuildFile; productRef = 7767ACEC2F8578C800C3BEBD /* TidalKit */; };
 		7767ACF02F8578D000C3BEBD /* SpotifySDK in Frameworks */ = {isa = PBXBuildFile; productRef = 7767ACEF2F8578D000C3BEBD /* SpotifySDK */; };
 		77C8BF5A2F6E36D200E7354F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF592F6E36D200E7354F /* WidgetKit.framework */; };
 		77C8BF5C2F6E36D200E7354F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF5B2F6E36D200E7354F /* SwiftUI.framework */; };
 		77C8BF6D2F6E36D200E7354F /* LyricsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 77C8BF572F6E36D200E7354F /* LyricsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		77D703412F781F9100358D03 /* iTunesKit in Frameworks */ = {isa = PBXBuildFile; productRef = 77D703402F781F9100358D03 /* iTunesKit */; };
 		A1B2C3D42F6F000100E7354F /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D52F6F000100E7354F /* XCTest.framework */; };
 /* End PBXBuildFile section */
 
@@ -135,6 +135,7 @@
 			files = (
 				77048F492F8692D000C446B5 /* LyricsKit in Frameworks */,
 				7767ACF02F8578D000C3BEBD /* SpotifySDK in Frameworks */,
+				77676AFD2F89DEB500353FCB /* YouTubeSDK in Frameworks */,
 				775786042F7774DF005CB07D /* libavdevice in Frameworks */,
 				77048F3F2F86929A00C446B5 /* SpotifySDK in Frameworks */,
 				7720397F2F6AAB2F00E85D4A /* Kingfisher in Frameworks */,
@@ -143,12 +144,11 @@
 				775786062F7774DF005CB07D /* libavfilter in Frameworks */,
 				775786002F7774DF005CB07D /* FFmpeg-Kit in Frameworks */,
 				7757860A2F7774DF005CB07D /* libavutil in Frameworks */,
-				77D703412F781F9100358D03 /* iTunesKit in Frameworks */,
+				77676B062F89DFBC00353FCB /* iTunesKit in Frameworks */,
 				775786082F7774DF005CB07D /* libavformat in Frameworks */,
 				7736DD082F6ECEB50077B88B /* iTunesKit in Frameworks */,
 				7757860E2F7774DF005CB07D /* libswscale in Frameworks */,
 				7757860C2F7774DF005CB07D /* libswresample in Frameworks */,
-				772039792F6AAB1200E85D4A /* YouTubeSDK in Frameworks */,
 				775786022F7774DF005CB07D /* libavcodec in Frameworks */,
 				7767ACED2F8578C800C3BEBD /* TidalKit in Frameworks */,
 				772039852F6AAB5100E85D4A /* InjectionNext in Frameworks */,
@@ -230,7 +230,6 @@
 			);
 			name = cisum;
 			packageProductDependencies = (
-				772039782F6AAB1200E85D4A /* YouTubeSDK */,
 				7720397E2F6AAB2F00E85D4A /* Kingfisher */,
 				772039842F6AAB5100E85D4A /* InjectionNext */,
 				7736DD072F6ECEB50077B88B /* iTunesKit */,
@@ -243,12 +242,13 @@
 				775786092F7774DF005CB07D /* libavutil */,
 				7757860B2F7774DF005CB07D /* libswresample */,
 				7757860D2F7774DF005CB07D /* libswscale */,
-				77D703402F781F9100358D03 /* iTunesKit */,
 				7767ACEC2F8578C800C3BEBD /* TidalKit */,
 				7767ACEF2F8578D000C3BEBD /* SpotifySDK */,
 				77048F3B2F86922700C446B5 /* TidalKit */,
 				77048F3E2F86929A00C446B5 /* SpotifySDK */,
 				77048F4B2F8692D000C446B5 /* LyricsKit */,
+				77676AFC2F89DEB500353FCB /* YouTubeSDK */,
+				77676B052F89DFBC00353FCB /* iTunesKit */,
 			);
 			productName = iOS;
 			productReference = 772039522F6AAAA700E85D4A /* cisum.app */;
@@ -327,14 +327,14 @@
 			mainGroup = 772039492F6AAAA700E85D4A;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				772039772F6AAB1200E85D4A /* XCRemoteSwiftPackageReference "YouTubeSDK" */,
 				7720397D2F6AAB2F00E85D4A /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				772039832F6AAB5100E85D4A /* XCRemoteSwiftPackageReference "InjectionNext" */,
 				775785FC2F7774DF005CB07D /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */,
-				77D7033F2F781F9100358D03 /* XCRemoteSwiftPackageReference "ituneskit" */,
 				77048F3A2F86922700C446B5 /* XCRemoteSwiftPackageReference "TidalKit" */,
 				77048F3D2F86929A00C446B5 /* XCRemoteSwiftPackageReference "SpotifySDK" */,
 				77048F4A2F8692D000C446B5 /* XCRemoteSwiftPackageReference "LyricsKit" */,
+				77676AFB2F89DEB500353FCB /* XCRemoteSwiftPackageReference "YouTubeSDK" */,
+				77676B042F89DFBC00353FCB /* XCRemoteSwiftPackageReference "ituneskit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 772039532F6AAAA700E85D4A /* Products */;
@@ -797,14 +797,6 @@
 				kind = branch;
 			};
 		};
-		772039772F6AAB1200E85D4A /* XCRemoteSwiftPackageReference "YouTubeSDK" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/atpugvaraa/YouTubeSDK.git";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
 		7720397D2F6AAB2F00E85D4A /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
@@ -829,9 +821,17 @@
 				kind = branch;
 			};
 		};
-		77D7033F2F781F9100358D03 /* XCRemoteSwiftPackageReference "ituneskit" */ = {
+		77676AFB2F89DEB500353FCB /* XCRemoteSwiftPackageReference "YouTubeSDK" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://gitlab.com/atpugvaraa/ituneskit.git";
+			repositoryURL = "https://github.com/cisumapp/YouTubeSDK.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		77676B042F89DFBC00353FCB /* XCRemoteSwiftPackageReference "ituneskit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/cisumapp/ituneskit.git";
 			requirement = {
 				branch = main;
 				kind = branch;
@@ -854,11 +854,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 77048F4A2F8692D000C446B5 /* XCRemoteSwiftPackageReference "LyricsKit" */;
 			productName = LyricsKit;
-		};
-		772039782F6AAB1200E85D4A /* YouTubeSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 772039772F6AAB1200E85D4A /* XCRemoteSwiftPackageReference "YouTubeSDK" */;
-			productName = YouTubeSDK;
 		};
 		7720397E2F6AAB2F00E85D4A /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -919,6 +914,16 @@
 			package = 775785FC2F7774DF005CB07D /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */;
 			productName = libswscale;
 		};
+		77676AFC2F89DEB500353FCB /* YouTubeSDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77676AFB2F89DEB500353FCB /* XCRemoteSwiftPackageReference "YouTubeSDK" */;
+			productName = YouTubeSDK;
+		};
+		77676B052F89DFBC00353FCB /* iTunesKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 77676B042F89DFBC00353FCB /* XCRemoteSwiftPackageReference "ituneskit" */;
+			productName = iTunesKit;
+		};
 		7767ACEC2F8578C800C3BEBD /* TidalKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TidalKit;
@@ -926,11 +931,6 @@
 		7767ACEF2F8578D000C3BEBD /* SpotifySDK */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SpotifySDK;
-		};
-		77D703402F781F9100358D03 /* iTunesKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 77D7033F2F781F9100358D03 /* XCRemoteSwiftPackageReference "ituneskit" */;
-			productName = iTunesKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

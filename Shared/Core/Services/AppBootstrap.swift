@@ -2,7 +2,7 @@
 //  AppBootstrap.swift
 //  cisum
 //
-//  Created by Codex on 28/03/26.
+//  Created by Aarav Gupta on 28/03/26.
 //
 
 import Foundation
@@ -57,6 +57,11 @@ enum AppBootstrap {
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
         let searchCache = SearchResultsCache.shared
+        let radioSessionStore = RadioSessionStore.shared
+        let playbackMetricsStore = PlaybackMetricsStore.shared
+    #if os(iOS)
+        let artworkColorExtractor = ArtworkDominantColorExtractor.shared
+    #endif
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -64,6 +69,31 @@ enum AppBootstrap {
         }
 
         restoreCookies(into: youtube)
+
+#if os(iOS)
+        let playerViewModel = PlayerViewModel(
+            youtube: youtube,
+            settings: prefetchSettings,
+            artworkVideoProcessor: artworkVideoProcessor,
+            metadataCache: metadataCache,
+            mediaCacheStore: mediaCacheStore,
+            playbackMetricsStore: playbackMetricsStore,
+            streamingProviderSettings: streamingProviderSettings,
+            radioSessionStore: radioSessionStore,
+            artworkColorExtractor: artworkColorExtractor
+        )
+#else
+        let playerViewModel = PlayerViewModel(
+            youtube: youtube,
+            settings: prefetchSettings,
+            artworkVideoProcessor: artworkVideoProcessor,
+            metadataCache: metadataCache,
+            mediaCacheStore: mediaCacheStore,
+            playbackMetricsStore: playbackMetricsStore,
+            streamingProviderSettings: streamingProviderSettings,
+            radioSessionStore: radioSessionStore
+        )
+#endif
 
         return AppBootstrapDependencies(
             modelContainer: modelContainer,
@@ -73,13 +103,7 @@ enum AppBootstrap {
             streamingProviderSettings: streamingProviderSettings,
             playlistLibraryStore: playlistLibraryStore,
             playlistImportJobStore: playlistImportJobStore,
-            playerViewModel: PlayerViewModel(
-                youtube: youtube,
-                settings: prefetchSettings,
-                artworkVideoProcessor: artworkVideoProcessor,
-                metadataCache: metadataCache,
-                mediaCacheStore: mediaCacheStore
-            ),
+            playerViewModel: playerViewModel,
             searchViewModel: SearchViewModel(
                 youtube: youtube,
                 settings: prefetchSettings,
@@ -128,6 +152,11 @@ enum AppBootstrap {
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
         let searchCache = SearchResultsCache.shared
+        let radioSessionStore = RadioSessionStore.shared
+        let playbackMetricsStore = PlaybackMetricsStore.shared
+    #if os(iOS)
+        let artworkColorExtractor = ArtworkDominantColorExtractor.shared
+    #endif
 
         Task { @MainActor in
             await mediaCacheStore.performMaintenance()
@@ -135,6 +164,31 @@ enum AppBootstrap {
         }
 
         restoreCookies(into: youtube)
+
+#if os(iOS)
+        let playerViewModel = PlayerViewModel(
+            youtube: youtube,
+            settings: prefetchSettings,
+            artworkVideoProcessor: artworkVideoProcessor,
+            metadataCache: metadataCache,
+            mediaCacheStore: mediaCacheStore,
+            playbackMetricsStore: playbackMetricsStore,
+            streamingProviderSettings: streamingProviderSettings,
+            radioSessionStore: radioSessionStore,
+            artworkColorExtractor: artworkColorExtractor
+        )
+#else
+        let playerViewModel = PlayerViewModel(
+            youtube: youtube,
+            settings: prefetchSettings,
+            artworkVideoProcessor: artworkVideoProcessor,
+            metadataCache: metadataCache,
+            mediaCacheStore: mediaCacheStore,
+            playbackMetricsStore: playbackMetricsStore,
+            streamingProviderSettings: streamingProviderSettings,
+            radioSessionStore: radioSessionStore
+        )
+#endif
 
         return AppBootstrapDependencies(
             modelContainer: modelContainer,
@@ -144,13 +198,7 @@ enum AppBootstrap {
             streamingProviderSettings: streamingProviderSettings,
             playlistLibraryStore: playlistLibraryStore,
             playlistImportJobStore: playlistImportJobStore,
-            playerViewModel: PlayerViewModel(
-                youtube: youtube,
-                settings: prefetchSettings,
-                artworkVideoProcessor: artworkVideoProcessor,
-                metadataCache: metadataCache,
-                mediaCacheStore: mediaCacheStore
-            ),
+            playerViewModel: playerViewModel,
             searchViewModel: SearchViewModel(
                 youtube: youtube,
                 settings: prefetchSettings,

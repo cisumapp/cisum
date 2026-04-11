@@ -1,5 +1,5 @@
 {
-  "originHash" : "f0db2567ea39ef744d3c3bc4a7297cc1ea8223d380e7b28df62caa0a997eb900",
+  "originHash" : "d258d4acf59fea625d105afe759599c4f88b375d587f36f9421b7c539ef4cb14",
   "pins" : [
     {
       "identity" : "ffmpeg-kit-spm",
@@ -20,6 +20,15 @@
       }
     },
     {
+      "identity" : "ituneskit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/cisumapp/ituneskit.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "27df9b1798d18e248b5aa6e9dcaa5d94cbc3df23"
+      }
+    },
+    {
       "identity" : "kingfisher",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
@@ -29,36 +38,36 @@
       }
     },
     {
-      "identity" : "lnpopupcontroller",
+      "identity" : "lyricskit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupController.git",
+      "location" : "https://github.com/cisumapp/LyricsKit.git",
       "state" : {
-        "revision" : "6f4bfa89a32cc7254599869b4bca8d2638e74671",
-        "version" : "4.4.1"
+        "branch" : "main",
+        "revision" : "6613374410cafb7728171a91c241bc0b684f4c9d"
       }
     },
     {
-      "identity" : "lnpopupui",
+      "identity" : "spotifysdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNPopupUI.git",
+      "location" : "https://github.com/cisumapp/SpotifySDK.git",
       "state" : {
-        "revision" : "715bf763ae4afcc4c1a9e3d720784713d6c58ac6",
-        "version" : "3.0.2"
+        "branch" : "main",
+        "revision" : "da0ed264c6d5283306efa17e161d2b4ed60af2c1"
       }
     },
     {
-      "identity" : "lnswiftuiutils",
+      "identity" : "tidalkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LeoNatan/LNSwiftUIUtils.git",
+      "location" : "https://github.com/cisumapp/TidalKit.git",
       "state" : {
-        "revision" : "181a95b992f84d99a14c562c86e8ebef3cbcdca9",
-        "version" : "1.1.5"
+        "branch" : "main",
+        "revision" : "047ae8dd56eca0517c3597f196d6803ef1fda64d"
       }
     },
     {
       "identity" : "youtubesdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/atpugvaraa/YouTubeSDK.git",
+      "location" : "https://github.com/cisumapp/YouTubeSDK.git",
       "state" : {
         "branch" : "main",
         "revision" : "3e6616b823a1c14388ddf49bd7fd294ae6624c61"

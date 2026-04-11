@@ -96,6 +96,16 @@ private extension NowPlayingView {
                         systemImage: "waveform"
                     )
                 }
+
+                if let hiResMessage = playerViewModel.hiResAvailabilityMessage {
+                    Text(hiResMessage)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.32), in: Capsule())
+                        .accessibilityLabel("Hi-Res available")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
@@ -106,8 +116,26 @@ private extension NowPlayingView {
                     Image(systemName: "star")
                 }
                 
-                Button {
-                    
+                Menu {
+                    Button {
+                        Task {
+                            await playerViewModel.checkForHiResVersion()
+                        }
+                    } label: {
+                        Label(
+                            playerViewModel.isCheckingHiResAvailability ? "Checking Hi-Res..." : "Check Hi-Res Availability",
+                            systemImage: "waveform.badge.magnifyingglass"
+                        )
+                    }
+                    .disabled(playerViewModel.isCheckingHiResAvailability || playerViewModel.currentVideoId == nil)
+
+                    if playerViewModel.canSwitchToHiResVersion {
+                        Button {
+                            playerViewModel.switchToHiResVersionIfAvailable()
+                        } label: {
+                            Label("Switch to Hi-Res", systemImage: "arrow.up.circle")
+                        }
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
@@ -129,6 +157,7 @@ private extension NowPlayingView {
             
             VStack {
                 MusicProgressScrubber(
+                    mediaID: playerViewModel.currentVideoId,
                     currentTime: playerViewModel.currentTime,
                     duration: playerViewModel.duration,
                     onSeek: { newTime in

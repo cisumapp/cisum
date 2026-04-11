@@ -74,14 +74,15 @@ enum PlaybackCandidateBuilder {
 
         if let preferredURL,
            !candidates.contains(where: { $0.url.absoluteString == preferredURL.absoluteString }) {
+            let inferredMimeType = inferMimeType(from: preferredURL)
             candidates.append(
                 PlaybackCandidate(
                     url: preferredURL,
                     streamKind: inferKind(for: preferredURL),
-                    mimeType: nil,
+                    mimeType: inferredMimeType,
                     itag: nil,
                     expiresAt: expiresAt,
-                    isCompatible: true
+                    isCompatible: isLikelyAVPlayerCompatible(mimeType: inferredMimeType, allowUnknown: false)
                 )
             )
         }
@@ -95,13 +96,15 @@ enum PlaybackCandidateBuilder {
 
         if let hlsURLString = entry.playbackHLSURLString,
            let hlsURL = URL(string: hlsURLString) {
+            let candidateExpiry = expiresAt
+                ?? resolveURLExpiration(from: hlsURL)?.addingTimeInterval(-expirySafetyMargin)
             candidates.append(
                 PlaybackCandidate(
                     url: hlsURL,
                     streamKind: .hls,
                     mimeType: "application/x-mpegURL",
                     itag: nil,
-                    expiresAt: expiresAt,
+                    expiresAt: candidateExpiry,
                     isCompatible: true
                 )
             )
@@ -109,29 +112,34 @@ enum PlaybackCandidateBuilder {
 
         if let muxedURLString = entry.playbackMuxedURLString,
            let muxedURL = URL(string: muxedURLString) {
+            let inferredMimeType = inferMimeType(from: muxedURL)
+            let candidateExpiry = expiresAt
+                ?? resolveURLExpiration(from: muxedURL)?.addingTimeInterval(-expirySafetyMargin)
             candidates.append(
                 PlaybackCandidate(
                     url: muxedURL,
                     streamKind: .muxed,
-                    mimeType: nil,
+                    mimeType: inferredMimeType,
                     itag: nil,
-                    expiresAt: expiresAt,
-                    isCompatible: true
+                    expiresAt: candidateExpiry,
+                    isCompatible: isLikelyAVPlayerCompatible(mimeType: inferredMimeType, allowUnknown: false)
                 )
             )
         }
 
         if let audioURLString = entry.playbackAudioURLString,
            let audioURL = URL(string: audioURLString) {
-            let mimeType = entry.playbackAudioMimeType
+            let mimeType = inferMimeType(from: audioURL, fallback: entry.playbackAudioMimeType)
+            let candidateExpiry = expiresAt
+                ?? resolveURLExpiration(from: audioURL)?.addingTimeInterval(-expirySafetyMargin)
             candidates.append(
                 PlaybackCandidate(
                     url: audioURL,
                     streamKind: .audio,
                     mimeType: mimeType,
                     itag: nil,
-                    expiresAt: expiresAt,
-                    isCompatible: isLikelyAVPlayerCompatible(mimeType: mimeType)
+                    expiresAt: candidateExpiry,
+                    isCompatible: isLikelyAVPlayerCompatible(mimeType: mimeType, allowUnknown: false)
                 )
             )
         }
@@ -139,14 +147,17 @@ enum PlaybackCandidateBuilder {
         if candidates.isEmpty,
            let preferredURLString = entry.playbackPreferredURLString,
            let preferredURL = URL(string: preferredURLString) {
+            let inferredMimeType = inferMimeType(from: preferredURL)
+            let candidateExpiry = expiresAt
+                ?? resolveURLExpiration(from: preferredURL)?.addingTimeInterval(-expirySafetyMargin)
             candidates.append(
                 PlaybackCandidate(
                     url: preferredURL,
                     streamKind: inferKind(for: preferredURL),
-                    mimeType: nil,
+                    mimeType: inferredMimeType,
                     itag: nil,
-                    expiresAt: expiresAt,
-                    isCompatible: true
+                    expiresAt: candidateExpiry,
+                    isCompatible: isLikelyAVPlayerCompatible(mimeType: inferredMimeType, allowUnknown: false)
                 )
             )
         }
@@ -168,9 +179,9 @@ enum PlaybackCandidateBuilder {
         return deduplicated.filter(\.isCompatible)
     }
 
-    private static func isLikelyAVPlayerCompatible(mimeType: String?) -> Bool {
+    private static func isLikelyAVPlayerCompatible(mimeType: String?, allowUnknown: Bool = true) -> Bool {
         guard let mimeType else {
-            return true
+            return allowUnknown
         }
 
         let normalized = mimeType.lowercased()
@@ -192,6 +203,37 @@ enum PlaybackCandidateBuilder {
             return .hls
         }
         return .muxed
+    }
+
+    private static func inferMimeType(from url: URL, fallback: String? = nil) -> String? {
+        if let fallback,
+           !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return fallback
+        }
+
+        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let queryItems = components.queryItems,
+           let rawMime = queryItems.first(where: { $0.name.caseInsensitiveCompare("mime") == .orderedSame })?.value {
+            let decodedMime = rawMime.removingPercentEncoding ?? rawMime
+            let trimmed = decodedMime.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "m3u8":
+            return "application/x-mpegURL"
+        case "m4a", "mp4":
+            return "audio/mp4"
+        case "mp3":
+            return "audio/mpeg"
+        case "webm":
+            return "audio/webm"
+        default:
+            return nil
+        }
     }
 
     private static func resolveValidUntil(from video: YouTubeVideo, referenceDate: Date) -> Date? {

@@ -12,6 +12,10 @@ import MediaPlayer
 import YouTubeSDK
 import iTunesKit
 
+#if canImport(TidalKit)
+import TidalKit
+#endif
+
 #if canImport(LyricsKit)
 import LyricsKit
 #endif
@@ -25,7 +29,9 @@ import UIKit
 final class PlayerViewModel {
 
     private enum CachePolicy {
-        static let playbackURLTTL: TimeInterval = 60 * 20
+        static let playbackURLTTL: TimeInterval = 60 * 2
+        static let playbackMinimumRemainingLifetime: TimeInterval = 60 * 3
+        static let preparedYouTubeMaxAge: TimeInterval = 75
         static let highQualityArtworkTTL: TimeInterval = 60 * 60 * 24 * 14
         static let motionArtworkSourceTTL: TimeInterval = 60 * 60 * 24
     }
@@ -33,6 +39,17 @@ final class PlayerViewModel {
     private enum Diagnostics {
         static let verbosePlaybackLogsEnabled = false
         static let verboseArtworkLogsEnabled = false
+    }
+
+    private enum PlaybackRecoveryPolicy {
+        static let maxAttemptsPerMediaID = 2
+    }
+
+    private enum RadioAutoplayPolicy {
+        static let queueLowWatermark = 5
+        static let maxSeedQueueTracks = 80
+        static let minCachedTracksWithoutContinuation = 8
+        static let minSeedTracksBeforePlaylistHydration = 16
     }
 
     enum ArtworkVideoProcessingStatus: Equatable {
@@ -46,6 +63,8 @@ final class PlayerViewModel {
         case detached
         case searchMusic
         case searchVideo
+        case searchExternal
+        case radioAutoplay
     }
 
     enum StreamingService: String {
@@ -90,9 +109,80 @@ final class PlayerViewModel {
         var currentTime: Double = 0.0
     }
 
+    private struct CachedRadioTrack: Sendable {
+        let videoID: String
+        let title: String
+        let artist: String
+        let albumName: String?
+        let thumbnailURL: URL?
+        let isExplicit: Bool
+
+        init(
+            videoID: String,
+            title: String,
+            artist: String,
+            albumName: String?,
+            thumbnailURL: URL?,
+            isExplicit: Bool
+        ) {
+            self.videoID = videoID
+            self.title = title
+            self.artist = artist
+            self.albumName = albumName
+            self.thumbnailURL = thumbnailURL
+            self.isExplicit = isExplicit
+        }
+
+        init(song: YouTubeMusicSong) {
+            self.videoID = song.videoId
+            self.title = song.title
+            self.artist = song.artistsDisplay
+            self.albumName = song.album
+            self.thumbnailURL = song.thumbnailURL
+            self.isExplicit = song.isExplicit
+        }
+
+        init?(cached: RadioSessionStore.CachedTrack) {
+            let normalizedVideoID = cached.videoID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedVideoID.isEmpty else { return nil }
+
+            self.videoID = normalizedVideoID
+            self.title = cached.title
+            self.artist = cached.artist
+            self.albumName = cached.albumName
+            self.thumbnailURL = cached.thumbnailURLString.flatMap { URL(string: $0) }
+            self.isExplicit = cached.isExplicit
+        }
+
+        var persisted: RadioSessionStore.CachedTrack {
+            RadioSessionStore.CachedTrack(
+                videoID: videoID,
+                title: title,
+                artist: artist,
+                albumName: albumName,
+                thumbnailURLString: thumbnailURL?.absoluteString,
+                isExplicit: isExplicit
+            )
+        }
+    }
+
+    struct ExternalQueueTrack {
+        let mediaID: String
+        let title: String
+        let artist: String
+        let artworkURL: URL?
+        let service: FederatedService
+        let isExplicit: Bool
+        let qualityLabelHint: String?
+        let codecLabelHint: String?
+        let resolvePayload: @MainActor () async throws -> ExternalStreamPayload
+    }
+
     private enum PlaybackQueueEntry {
         case song(YouTubeMusicSong)
         case video(YouTubeVideo)
+        case cachedRadio(CachedRadioTrack)
+        case external(ExternalQueueTrack)
 
         var mediaID: String {
             switch self {
@@ -100,6 +190,10 @@ final class PlayerViewModel {
                 song.videoId
             case .video(let video):
                 video.id
+            case .cachedRadio(let track):
+                track.videoID
+            case .external(let track):
+                track.mediaID
             }
         }
     }
@@ -107,6 +201,35 @@ final class PlayerViewModel {
     private struct MotionArtworkSourceResolution {
         let sourceHLSURL: URL
         let videoCacheID: String
+    }
+
+    private struct PreparedQueuePlayback {
+        let mediaID: String
+        let item: AVPlayerItem
+        let playbackCandidates: [PlaybackCandidate]
+        let preparedAt: Date
+        let title: String
+        let artist: String
+        let artworkURL: URL?
+        let streamingService: StreamingService
+        let qualityLabel: String
+        let codecLabel: String
+        let albumName: String?
+        let isExplicit: Bool
+        let durationHint: Int?
+    }
+
+    private struct TrackPresentationState {
+        let mediaID: String
+        let title: String
+        let artist: String
+        let albumName: String?
+        let artworkURL: URL?
+        let isExplicit: Bool
+        let streamingService: StreamingService
+        let qualityLabel: String
+        let codecLabel: String
+        let durationHint: Int?
     }
 
     // MARK: - State
@@ -129,6 +252,11 @@ final class PlayerViewModel {
     var currentStreamingServiceName: String = StreamingService.youtubeMusic.rawValue
     var currentAudioQualityLabel: String = "Adaptive"
     var currentAudioCodecLabel: String = "HLS"
+    var hiResAvailabilityMessage: String?
+    var isCheckingHiResAvailability: Bool = false
+    var canSwitchToHiResVersion: Bool {
+        pendingHiResPayload != nil
+    }
     var lyricsState: LyricsState = .idle
     var syncedLyricsLines: [TimedLyricLine] = []
     var plainLyricsText: String?
@@ -228,7 +356,7 @@ final class PlayerViewModel {
     private var artworkVideoTask: Task<Void, Never>?
     private var lyricsLoadTask: Task<Void, Never>?
     private var playbackRecoveryTask: Task<Void, Never>?
-    private var playbackRecoveryAttemptedIDs: Set<String> = []
+    private var playbackRecoveryAttemptCounts: [String: Int] = [:]
     private var playbackCandidates: [PlaybackCandidate] = []
     private var playbackCandidateIndex: Int = 0
     private var playbackCandidatesMediaID: String?
@@ -240,11 +368,18 @@ final class PlayerViewModel {
         }
     }
     private var currentItemStatusObservation: NSKeyValueObservation?
+    private var currentItemEndObserver: NSObjectProtocol?
     private let remoteCommandCenter = MPRemoteCommandCenter.shared()
     private let metadataCache: any VideoMetadataCaching
     private let itunes = iTunesKit()
     private let mediaCacheStore: MediaCacheStore
     private let settings: PrefetchSettings
+    private let playbackMetricsStore: any PlaybackMetricsRecording
+    private let streamingProviderSettings: any StreamingProviderSettingsReading
+    private let radioSessionStore: RadioSessionStore
+#if os(iOS)
+    private let artworkColorExtractor: any ArtworkColorExtracting
+#endif
 
 #if os(iOS)
     private struct NowPlayingState: Equatable {
@@ -288,20 +423,69 @@ final class PlayerViewModel {
         return queuePosition > 0
     }
 
+    private var radioSeedVideoID: String?
+    private var radioPlaylistID: String?
+    private var radioContinuationToken: String?
+    private var radioAutoplayTask: Task<Void, Never>?
+    private var radioContinuationTask: Task<Void, Never>?
+    private var isLoadingRadioContinuation = false
+    private var preparedNextPlayback: PreparedQueuePlayback?
+    private var nextPlaybackPreloadTask: Task<Void, Never>?
+    private var preloadingNextMediaID: String?
+    private var externalPayloadCache: [String: ExternalStreamPayload] = [:]
+    private var pendingHiResPayload: ExternalStreamPayload?
+
+#if os(iOS)
     init(
         youtube: YouTube,
         settings: PrefetchSettings,
         artworkVideoProcessor: ArtworkVideoProcessor,
         metadataCache: any VideoMetadataCaching,
-        mediaCacheStore: MediaCacheStore
+        mediaCacheStore: MediaCacheStore,
+        playbackMetricsStore: any PlaybackMetricsRecording,
+        streamingProviderSettings: any StreamingProviderSettingsReading,
+        radioSessionStore: RadioSessionStore,
+        artworkColorExtractor: any ArtworkColorExtracting
     ) {
         self.youtube = youtube
         self.settings = settings
         self.artworkVideoProcessor = artworkVideoProcessor
         self.metadataCache = metadataCache
         self.mediaCacheStore = mediaCacheStore
+        self.playbackMetricsStore = playbackMetricsStore
+        self.streamingProviderSettings = streamingProviderSettings
+        self.radioSessionStore = radioSessionStore
+        self.artworkColorExtractor = artworkColorExtractor
         self.player = AVPlayer()
 
+        finishInitialization()
+    }
+#else
+    init(
+        youtube: YouTube,
+        settings: PrefetchSettings,
+        artworkVideoProcessor: ArtworkVideoProcessor,
+        metadataCache: any VideoMetadataCaching,
+        mediaCacheStore: MediaCacheStore,
+        playbackMetricsStore: any PlaybackMetricsRecording,
+        streamingProviderSettings: any StreamingProviderSettingsReading,
+        radioSessionStore: RadioSessionStore
+    ) {
+        self.youtube = youtube
+        self.settings = settings
+        self.artworkVideoProcessor = artworkVideoProcessor
+        self.metadataCache = metadataCache
+        self.mediaCacheStore = mediaCacheStore
+        self.playbackMetricsStore = playbackMetricsStore
+        self.streamingProviderSettings = streamingProviderSettings
+        self.radioSessionStore = radioSessionStore
+        self.player = AVPlayer()
+
+        finishInitialization()
+    }
+#endif
+
+    private func finishInitialization() {
         configureAudioSession()
         configurePlayerForBackgroundPlayback()
         setupRemoteCommands()
@@ -316,9 +500,76 @@ final class PlayerViewModel {
         currentAccentColor = Color.dynamicAccent
     }
 
+    // MARK: - Playback Session State
+
+    private func preparePlaybackSession(for state: TrackPresentationState, preserveQueue: Bool) {
+        if !preserveQueue {
+            clearQueueContext()
+        }
+
+        resetHiResAvailabilityState()
+        applyTrackPresentation(state)
+        resetPlaybackRuntimeState(for: state.mediaID)
+        startTrackAncillaryWork(for: state)
+    }
+
+    private func applyTrackPresentation(_ state: TrackPresentationState) {
+        currentTitle = state.title
+        currentArtist = state.artist
+        currentAlbumNameHint = state.albumName
+        currentImageURL = state.artworkURL
+        isExplicit = state.isExplicit
+        currentStreamingServiceName = state.streamingService.rawValue
+        currentAudioQualityLabel = state.qualityLabel
+        currentAudioCodecLabel = state.codecLabel
+        pendingPlaybackFormatOverride = nil
+        currentVideoId = state.mediaID
+    }
+
+    private func resetPlaybackRuntimeState(for mediaID: String) {
+        playbackError = nil
+        currentTime = 0
+        duration = 0
+        resetPlaybackCandidates(for: mediaID)
+        resetPlaybackRecoveryState(for: mediaID)
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        resetArtworkVideoState()
+#if os(iOS)
+        artworkLoadTask?.cancel()
+        accentLoadTask?.cancel()
+        applyCachedArtworkIfAvailable(for: mediaID)
+#endif
+    }
+
+    private func startTrackAncillaryWork(for state: TrackPresentationState) {
+        startLyricsResolution(
+            mediaID: state.mediaID,
+            title: state.title,
+            artist: state.artist,
+            albumName: state.albumName,
+            durationHint: state.durationHint
+        )
+        updateNowPlayingMetadata(force: true)
+#if os(iOS)
+        loadNowPlayingArtwork(
+            for: state.mediaID,
+            title: state.title,
+            artist: state.artist,
+            fallbackURL: state.artworkURL
+        )
+#endif
+    }
+
     // MARK: - Loaders
 
     func load(song: YouTubeMusicSong, in queue: [YouTubeMusicSong], source: PlaybackQueueSource = .searchMusic) {
+        if source == .searchMusic {
+            // Search picks should transition into radio-backed playback so manual skip follows radio recommendations.
+            load(song: song, preserveQueue: false)
+            return
+        }
+
         let queueEntries = queue.map { PlaybackQueueEntry.song($0) }
         guard !queueEntries.isEmpty else {
             load(song: song)
@@ -335,9 +586,15 @@ final class PlayerViewModel {
         queueCount = queueEntries.count
         queueSource = source
         load(song: song, preserveQueue: true)
+        preloadNextQueueEntryIfNeeded()
     }
 
     func load(video: YouTubeVideo, in queue: [YouTubeVideo], source: PlaybackQueueSource = .searchVideo) {
+        if source == .searchVideo {
+            load(video: video, preserveQueue: false)
+            return
+        }
+
         let queueEntries = queue.map { PlaybackQueueEntry.video($0) }
         guard !queueEntries.isEmpty else {
             load(video: video)
@@ -354,91 +611,56 @@ final class PlayerViewModel {
         queueCount = queueEntries.count
         queueSource = source
         load(video: video, preserveQueue: true)
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    func load(external track: ExternalQueueTrack, in queue: [ExternalQueueTrack], source: PlaybackQueueSource = .searchExternal) {
+        if source == .searchExternal {
+            load(external: track, preserveQueue: false)
+            return
+        }
+
+        let queueEntries = queue.map { PlaybackQueueEntry.external($0) }
+        guard !queueEntries.isEmpty else {
+            load(external: track)
+            return
+        }
+
+        guard let selectedIndex = queueEntries.firstIndex(where: { $0.mediaID == track.mediaID }) else {
+            load(external: track)
+            return
+        }
+
+        playbackQueue = queueEntries
+        queuePosition = selectedIndex
+        queueCount = queueEntries.count
+        queueSource = source
+        load(external: track, preserveQueue: true)
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    func load(external track: ExternalQueueTrack, preserveQueue: Bool = false) {
+        loadExternalTrack(track, preserveQueue: preserveQueue)
     }
 
     func load(song: YouTubeMusicSong, preserveQueue: Bool = false) {
-        if !preserveQueue {
-            clearQueueContext()
-        }
-
-        let targetMediaID = song.videoId
-
-        let tapStartedAt = Date()
-        let displayTitle = normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
-        let displayArtist = normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)
-
-        currentTitle = displayTitle
-        currentArtist = displayArtist
-        currentAlbumNameHint = song.album
-        currentImageURL = song.thumbnailURL
-        isExplicit = song.isExplicit
-        currentStreamingServiceName = StreamingService.youtubeMusic.rawValue
-        currentAudioQualityLabel = "Resolving..."
-        currentAudioCodecLabel = "Resolving..."
-        pendingPlaybackFormatOverride = nil
-        currentVideoId = song.videoId
-        playbackError = nil
-        currentTime = 0
-        duration = 0
-        resetPlaybackCandidates(for: song.videoId)
-        playbackRecoveryAttemptedIDs.remove(song.videoId)
-        playbackRecoveryTask?.cancel()
-        playbackRecoveryTask = nil
-        resetArtworkVideoState()
-#if os(iOS)
-        artworkLoadTask?.cancel()
-        accentLoadTask?.cancel()
-        applyCachedArtworkIfAvailable(for: song.videoId)
-#endif
-        startLyricsResolution(
+        loadMusicTrack(
             mediaID: song.videoId,
-            title: displayTitle,
-            artist: displayArtist,
+            title: song.title,
+            artist: song.artistsDisplay,
             albumName: song.album,
-            durationHint: Self.lyricsDurationHint(from: song.duration)
+            thumbnailURL: song.thumbnailURL,
+            explicit: song.isExplicit,
+            durationHint: Self.lyricsDurationHint(from: song.duration),
+            preserveQueue: preserveQueue
         )
-        updateNowPlayingMetadata(force: true)
-#if os(iOS)
-        loadNowPlayingArtwork(for: song.videoId, title: displayTitle, artist: displayArtist, fallbackURL: song.thumbnailURL)
-#endif
 
-        currentLoadTask?.cancel()
-        currentLoadTask = Task {
-            if Task.isCancelled { return }
-
-            do {
-                let candidates = try await self.resolvePlaybackCandidates(forID: song.videoId)
-
-                if Task.isCancelled { return }
-                guard self.currentVideoId == targetMediaID else { return }
-
-                self.configurePlaybackCandidates(for: song.videoId, candidates: candidates)
-                self.playCurrentPlaybackCandidate()
-                self.startArtworkVideoProcessingIfNeeded(
-                    for: song.videoId,
-                    title: displayTitle,
-                    artist: displayArtist,
-                    albumName: song.album
-                )
-                self.logPlayback("Started playback for song id=\(song.videoId)")
-
-                if settings.metricsEnabled {
-                    let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
-                    await PlaybackMetricsStore.shared.recordTapToPlay(durationMs: elapsed)
-                }
-            } catch {
-                if error is CancellationError { return }
-                guard self.currentVideoId == targetMediaID else { return }
-                self.handlePlaybackFailure(error)
-            }
+        if !preserveQueue {
+            seedRadioQueue(from: song)
         }
     }
 
     func load(video: YouTubeVideo, preserveQueue: Bool = false) {
-        if !preserveQueue {
-            clearQueueContext()
-        }
-
         let targetMediaID = video.id
 
         let tapStartedAt = Date()
@@ -446,40 +668,19 @@ final class PlayerViewModel {
         let displayTitle = normalizedMusicDisplayTitle(video.title, artist: video.author)
         let displayArtist = normalizedMusicDisplayArtist(video.author, title: video.title)
 
-        currentTitle = displayTitle
-        currentArtist = displayArtist
-        currentAlbumNameHint = nil
-        currentImageURL = fallbackURL
-        isExplicit = false
-        currentStreamingServiceName = StreamingService.youtube.rawValue
-        currentAudioQualityLabel = "Resolving..."
-        currentAudioCodecLabel = "Resolving..."
-        pendingPlaybackFormatOverride = nil
-        currentVideoId = video.id
-        playbackError = nil
-        currentTime = 0
-        duration = 0
-        resetPlaybackCandidates(for: video.id)
-        playbackRecoveryAttemptedIDs.remove(video.id)
-        playbackRecoveryTask?.cancel()
-        playbackRecoveryTask = nil
-        resetArtworkVideoState()
-#if os(iOS)
-        artworkLoadTask?.cancel()
-        accentLoadTask?.cancel()
-        applyCachedArtworkIfAvailable(for: video.id)
-#endif
-        startLyricsResolution(
-            mediaID: video.id,
+        let presentation = TrackPresentationState(
+            mediaID: targetMediaID,
             title: displayTitle,
             artist: displayArtist,
             albumName: nil,
+            artworkURL: fallbackURL,
+            isExplicit: false,
+            streamingService: .youtube,
+            qualityLabel: "Resolving...",
+            codecLabel: "Resolving...",
             durationHint: Self.lyricsDurationHint(from: video.lengthInSeconds)
         )
-        updateNowPlayingMetadata(force: true)
-#if os(iOS)
-        loadNowPlayingArtwork(for: video.id, title: displayTitle, artist: displayArtist, fallbackURL: fallbackURL)
-#endif
+        preparePlaybackSession(for: presentation, preserveQueue: preserveQueue)
 
         currentLoadTask?.cancel()
         currentLoadTask = Task {
@@ -501,9 +702,155 @@ final class PlayerViewModel {
                 )
                 self.logPlayback("Started playback for video id=\(video.id)")
 
+                if !preserveQueue {
+                    self.seedRadioQueueForVideoTrack(
+                        video: video,
+                        expectedCurrentMediaID: targetMediaID
+                    )
+                }
+
+                self.preloadNextQueueEntryIfNeeded()
+
                 if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
-                    await PlaybackMetricsStore.shared.recordTapToPlay(durationMs: elapsed)
+                    await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                }
+            } catch {
+                if error is CancellationError { return }
+                guard self.currentVideoId == targetMediaID else { return }
+                self.handlePlaybackFailure(error)
+            }
+        }
+    }
+
+    private func loadMusicTrack(
+        mediaID: String,
+        title: String,
+        artist: String,
+        albumName: String?,
+        thumbnailURL: URL?,
+        explicit: Bool,
+        durationHint: Int?,
+        preserveQueue: Bool
+    ) {
+        let targetMediaID = mediaID
+
+        let tapStartedAt = Date()
+        let displayTitle = normalizedMusicDisplayTitle(title, artist: artist)
+        let displayArtist = normalizedMusicDisplayArtist(artist, title: title)
+
+        let presentation = TrackPresentationState(
+            mediaID: mediaID,
+            title: displayTitle,
+            artist: displayArtist,
+            albumName: albumName,
+            artworkURL: thumbnailURL,
+            isExplicit: explicit,
+            streamingService: .youtubeMusic,
+            qualityLabel: "Resolving...",
+            codecLabel: "Resolving...",
+            durationHint: durationHint
+        )
+        preparePlaybackSession(for: presentation, preserveQueue: preserveQueue)
+
+        currentLoadTask?.cancel()
+        currentLoadTask = Task {
+            if Task.isCancelled { return }
+
+            do {
+#if canImport(TidalKit)
+                let hiResPayload: ExternalStreamPayload?
+                do {
+                    if let cachedPayload = self.externalPayloadCache[mediaID],
+                       cachedPayload.service == .tidal {
+                        hiResPayload = cachedPayload
+                    } else {
+                        hiResPayload = try await self.resolveHiResTidalPayload(
+                            title: displayTitle,
+                            artist: displayArtist,
+                            excludingMediaID: mediaID
+                        )
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    hiResPayload = nil
+                }
+
+                if let hiResPayload {
+                    if Task.isCancelled { return }
+                    guard self.currentVideoId == targetMediaID else { return }
+
+                    self.externalPayloadCache[mediaID] = hiResPayload
+                    self.currentTitle = normalizedMusicDisplayTitle(hiResPayload.title, artist: hiResPayload.artist)
+                    self.currentArtist = normalizedMusicDisplayArtist(hiResPayload.artist, title: hiResPayload.title)
+                    self.currentImageURL = hiResPayload.artworkURL ?? thumbnailURL
+                    self.currentStreamingServiceName = StreamingService.tidal.rawValue
+                    self.currentAudioQualityLabel = hiResPayload.qualityLabel
+                    self.currentAudioCodecLabel = hiResPayload.codecLabel
+                    self.pendingPlaybackFormatOverride = (hiResPayload.qualityLabel, hiResPayload.codecLabel)
+
+                    let hiResCandidate = PlaybackCandidate(
+                        url: hiResPayload.streamURL,
+                        streamKind: .audio,
+                        mimeType: self.mimeTypeForCodecLabel(hiResPayload.codecLabel),
+                        itag: nil,
+                        expiresAt: nil,
+                        isCompatible: true
+                    )
+                    let youtubeFallbackCandidates = (try? await self.resolvePlaybackCandidates(forID: mediaID)) ?? []
+
+                    self.configurePlaybackCandidates(
+                        for: mediaID,
+                        candidates: [hiResCandidate] + youtubeFallbackCandidates
+                    )
+                    self.playCurrentPlaybackCandidate()
+                    self.startArtworkVideoProcessingIfNeeded(
+                        for: mediaID,
+                        title: self.currentTitle,
+                        artist: self.currentArtist,
+                        albumName: albumName
+                    )
+                    self.updateNowPlayingMetadata(force: true)
+#if os(iOS)
+                    self.loadNowPlayingArtwork(
+                        for: mediaID,
+                        title: self.currentTitle,
+                        artist: self.currentArtist,
+                        fallbackURL: self.currentImageURL
+                    )
+#endif
+                    self.logPlayback("Started prioritized Hi-Res playback for song id=\(mediaID)")
+                    self.preloadNextQueueEntryIfNeeded()
+
+                    if self.settings.metricsEnabled {
+                        let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
+                        await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    }
+
+                    return
+                }
+#endif
+
+                let candidates = try await self.resolvePlaybackCandidates(forID: mediaID)
+
+                if Task.isCancelled { return }
+                guard self.currentVideoId == targetMediaID else { return }
+
+                self.configurePlaybackCandidates(for: mediaID, candidates: candidates)
+                self.playCurrentPlaybackCandidate()
+                self.startArtworkVideoProcessingIfNeeded(
+                    for: mediaID,
+                    title: displayTitle,
+                    artist: displayArtist,
+                    albumName: albumName
+                )
+                self.logPlayback("Started playback for song id=\(mediaID)")
+                self.preloadNextQueueEntryIfNeeded()
+
+                if settings.metricsEnabled {
+                    let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
+                    await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
                 }
             } catch {
                 if error is CancellationError { return }
@@ -523,70 +870,30 @@ final class PlayerViewModel {
         qualityLabel: String,
         codecLabel: String
     ) {
-        clearQueueContext()
-
-        let normalizedMediaID = mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedMediaID.isEmpty else {
-            playbackError = "Invalid media identifier for external stream."
-            return
-        }
-
-        currentLoadTask?.cancel()
-        playbackRecoveryTask?.cancel()
-        playbackRecoveryTask = nil
-        resetArtworkVideoState()
-
-        currentTitle = normalizedMusicDisplayTitle(title, artist: artist)
-        currentArtist = normalizedMusicDisplayArtist(artist, title: title)
-        currentAlbumNameHint = nil
-        currentImageURL = artworkURL
-        isExplicit = false
-        currentStreamingServiceName = service.rawValue
-        currentAudioQualityLabel = qualityLabel
-        currentAudioCodecLabel = codecLabel
-        pendingPlaybackFormatOverride = (qualityLabel, codecLabel)
-        currentVideoId = normalizedMediaID
-        playbackError = nil
-        currentTime = 0
-        duration = 0
-        resetPlaybackCandidates(for: normalizedMediaID)
-        playbackRecoveryAttemptedIDs.remove(normalizedMediaID)
-
-#if os(iOS)
-        artworkLoadTask?.cancel()
-        accentLoadTask?.cancel()
-        applyCachedArtworkIfAvailable(for: normalizedMediaID)
-#endif
-
-    startLyricsResolution(
-        mediaID: normalizedMediaID,
-        title: currentTitle,
-        artist: currentArtist,
-        albumName: nil,
-        durationHint: nil
-    )
-
-        updateNowPlayingMetadata(force: true)
-#if os(iOS)
-        loadNowPlayingArtwork(
-            for: normalizedMediaID,
-            title: currentTitle,
-            artist: currentArtist,
-            fallbackURL: artworkURL
-        )
-#endif
-
-        let candidate = PlaybackCandidate(
-            url: streamURL,
-            streamKind: .audio,
-            mimeType: mimeTypeForCodecLabel(codecLabel),
-            itag: nil,
-            expiresAt: nil,
-            isCompatible: true
+        let immediateTrack = ExternalQueueTrack(
+            mediaID: mediaID,
+            title: title,
+            artist: artist,
+            artworkURL: artworkURL,
+            service: service,
+            isExplicit: false,
+            qualityLabelHint: qualityLabel,
+            codecLabelHint: codecLabel,
+            resolvePayload: {
+                ExternalStreamPayload(
+                    mediaID: mediaID,
+                    streamURL: streamURL,
+                    title: title,
+                    artist: artist,
+                    artworkURL: artworkURL,
+                    service: service,
+                    qualityLabel: qualityLabel,
+                    codecLabel: codecLabel
+                )
+            }
         )
 
-        configurePlaybackCandidates(for: normalizedMediaID, candidates: [candidate])
-        playCurrentPlaybackCandidate()
+        loadExternalTrack(immediateTrack, preserveQueue: false)
     }
 
     // MARK: - Controls
@@ -600,14 +907,7 @@ final class PlayerViewModel {
     }
 
     func skipToNext() {
-        guard hasNextTrackInQueue, let queuePosition else {
-            updateRemoteCommandState()
-            return
-        }
-
-        let nextIndex = queuePosition + 1
-        self.queuePosition = nextIndex
-        load(entry: playbackQueue[nextIndex])
+        advanceToNextQueueEntry(triggeredByPlaybackEnd: false)
     }
 
     func skipToPrevious() {
@@ -628,7 +928,59 @@ final class PlayerViewModel {
 
         let previousIndex = queuePosition - 1
         self.queuePosition = previousIndex
+        stopCurrentPlaybackForImmediateTransition()
         load(entry: playbackQueue[previousIndex])
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    private func advanceToNextQueueEntry(triggeredByPlaybackEnd: Bool) {
+        guard hasNextTrackInQueue, let queuePosition else {
+            isPlaying = false
+            updateNowPlayingPlaybackInfo(force: true)
+            updateRemoteCommandState()
+            return
+        }
+
+        let nextIndex = queuePosition + 1
+        guard playbackQueue.indices.contains(nextIndex) else {
+            updateRemoteCommandState()
+            return
+        }
+
+        let nextEntry = playbackQueue[nextIndex]
+        self.queuePosition = nextIndex
+
+        if let prepared = preparedNextPlayback, prepared.mediaID == nextEntry.mediaID {
+            preparedNextPlayback = nil
+            if shouldRefreshPreparedPlaybackBeforeUse(prepared) {
+                if !triggeredByPlaybackEnd {
+                    stopCurrentPlaybackForImmediateTransition()
+                }
+                load(entry: nextEntry)
+            } else {
+                playPreparedQueueEntry(prepared)
+            }
+        } else {
+            if !triggeredByPlaybackEnd {
+                stopCurrentPlaybackForImmediateTransition()
+            }
+            load(entry: nextEntry)
+        }
+
+        scheduleRadioContinuationIfNeeded()
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    private func stopCurrentPlaybackForImmediateTransition() {
+        currentLoadTask?.cancel()
+        player.pause()
+        player.replaceCurrentItem(with: nil)
+        removeCurrentItemEndObserver()
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        updateNowPlayingPlaybackInfo(force: true)
+        updateRemoteCommandState()
     }
 
     func seek(to seconds: Double) {
@@ -691,10 +1043,132 @@ final class PlayerViewModel {
             load(song: song, preserveQueue: true)
         case .video(let video):
             load(video: video, preserveQueue: true)
+        case .cachedRadio(let track):
+            loadMusicTrack(
+                mediaID: track.videoID,
+                title: track.title,
+                artist: track.artist,
+                albumName: track.albumName,
+                thumbnailURL: track.thumbnailURL,
+                explicit: track.isExplicit,
+                durationHint: nil,
+                preserveQueue: true
+            )
+        case .external(let track):
+            load(external: track, preserveQueue: true)
+        }
+    }
+
+    private func loadExternalTrack(_ track: ExternalQueueTrack, preserveQueue: Bool) {
+        let normalizedMediaID = track.mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedMediaID.isEmpty else {
+            playbackError = "Invalid media identifier for external stream."
+            return
+        }
+
+        let tapStartedAt = Date()
+
+        let displayTitle = normalizedMusicDisplayTitle(track.title, artist: track.artist)
+        let displayArtist = normalizedMusicDisplayArtist(track.artist, title: track.title)
+        let initialPresentation = TrackPresentationState(
+            mediaID: normalizedMediaID,
+            title: displayTitle,
+            artist: displayArtist,
+            albumName: nil,
+            artworkURL: track.artworkURL,
+            isExplicit: track.isExplicit,
+            streamingService: Self.streamingService(for: track.service),
+            qualityLabel: track.qualityLabelHint ?? "Resolving...",
+            codecLabel: track.codecLabelHint ?? "Resolving...",
+            durationHint: nil
+        )
+
+        currentLoadTask?.cancel()
+        preparePlaybackSession(for: initialPresentation, preserveQueue: preserveQueue)
+
+        currentLoadTask = Task {
+            if Task.isCancelled { return }
+
+            do {
+                let payload: ExternalStreamPayload
+                if let cachedPayload = self.externalPayloadCache[normalizedMediaID] {
+                    payload = cachedPayload
+                } else {
+                    payload = try await track.resolvePayload()
+                    self.externalPayloadCache[normalizedMediaID] = payload
+                }
+
+                if Task.isCancelled { return }
+                guard self.currentVideoId == normalizedMediaID else { return }
+
+                self.currentTitle = normalizedMusicDisplayTitle(payload.title, artist: payload.artist)
+                self.currentArtist = normalizedMusicDisplayArtist(payload.artist, title: payload.title)
+                self.currentImageURL = payload.artworkURL ?? track.artworkURL
+                self.currentStreamingServiceName = payload.service.rawValue
+                self.currentAudioQualityLabel = payload.qualityLabel
+                self.currentAudioCodecLabel = payload.codecLabel
+                self.pendingPlaybackFormatOverride = (payload.qualityLabel, payload.codecLabel)
+
+                let candidate = PlaybackCandidate(
+                    url: payload.streamURL,
+                    streamKind: .audio,
+                    mimeType: self.mimeTypeForCodecLabel(payload.codecLabel),
+                    itag: nil,
+                    expiresAt: nil,
+                    isCompatible: true
+                )
+
+                self.configurePlaybackCandidates(for: normalizedMediaID, candidates: [candidate])
+                self.playCurrentPlaybackCandidate()
+                self.startArtworkVideoProcessingIfNeeded(
+                    for: normalizedMediaID,
+                    title: self.currentTitle,
+                    artist: self.currentArtist,
+                    albumName: nil
+                )
+                self.updateNowPlayingMetadata(force: true)
+
+                if !preserveQueue {
+                    self.seedRadioQueueForExternalTrack(
+                        externalTrack: track,
+                        resolvedPayload: payload,
+                        expectedCurrentMediaID: normalizedMediaID
+                    )
+                }
+
+                self.preloadNextQueueEntryIfNeeded()
+
+#if os(iOS)
+                self.loadNowPlayingArtwork(
+                    for: normalizedMediaID,
+                    title: self.currentTitle,
+                    artist: self.currentArtist,
+                    fallbackURL: self.currentImageURL
+                )
+#endif
+
+                if self.settings.metricsEnabled {
+                    let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
+                    await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                }
+            } catch {
+                if error is CancellationError { return }
+                guard self.currentVideoId == normalizedMediaID else { return }
+                self.handlePlaybackFailure(error)
+            }
         }
     }
 
     private func clearQueueContext() {
+        clearRadioAutoplayState()
+        resetHiResAvailabilityState()
+        playbackRecoveryTask?.cancel()
+        playbackRecoveryTask = nil
+        playbackRecoveryAttemptCounts.removeAll(keepingCapacity: true)
+        nextPlaybackPreloadTask?.cancel()
+        nextPlaybackPreloadTask = nil
+        preparedNextPlayback = nil
+        externalPayloadCache.removeAll(keepingCapacity: true)
         playbackQueue = []
         queuePosition = nil
         queueCount = 0
@@ -718,6 +1192,20 @@ final class PlayerViewModel {
                 subtitle: normalizedMusicDisplayArtist(video.author, title: video.title),
                 artworkURL: Self.normalizedQueueArtworkURL(from: video.thumbnailURL)
             )
+        case .cachedRadio(let track):
+            return QueuePreviewItem(
+                id: track.videoID,
+                title: normalizedMusicDisplayTitle(track.title, artist: track.artist),
+                subtitle: normalizedMusicDisplayArtist(track.artist, title: track.title),
+                artworkURL: track.thumbnailURL
+            )
+        case .external(let track):
+            return QueuePreviewItem(
+                id: track.mediaID,
+                title: normalizedMusicDisplayTitle(track.title, artist: track.artist),
+                subtitle: normalizedMusicDisplayArtist(track.artist, title: track.title),
+                artworkURL: track.artworkURL
+            )
         }
     }
 
@@ -734,6 +1222,1166 @@ final class PlayerViewModel {
         }
 
         return URL(string: candidate)
+    }
+
+    private func seedRadioQueue(from seedSong: YouTubeMusicSong) {
+        let seedVideoID = seedSong.videoId
+        radioSeedVideoID = seedVideoID
+        radioAutoplayTask?.cancel()
+
+        radioAutoplayTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+
+            if let cachedSession,
+               self.shouldReuseCachedRadioSession(cachedSession),
+               self.currentVideoId == seedVideoID {
+                self.applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
+                self.scheduleRadioContinuationIfNeeded()
+                return
+            }
+
+            do {
+                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled, self.currentVideoId == seedVideoID else { return }
+
+                self.radioPlaylistID = radio.playlistId
+                self.radioContinuationToken = radio.continuationToken
+
+                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
+                guard !Task.isCancelled, self.currentVideoId == seedVideoID else { return }
+
+                self.applyRadioTracksToQueue(tracks, seedVideoID: seedVideoID)
+                self.scheduleRadioContinuationIfNeeded()
+            } catch {
+                guard !Task.isCancelled else { return }
+                if let cachedSession,
+                   self.currentVideoId == seedVideoID,
+                   !cachedSession.tracks.isEmpty {
+                    self.applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
+                    self.scheduleRadioContinuationIfNeeded()
+                }
+                self.logPlayback("Radio seed failed for id=\(seedVideoID): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func seedRadioQueueForExternalTrack(
+        externalTrack: ExternalQueueTrack,
+        resolvedPayload: ExternalStreamPayload,
+        expectedCurrentMediaID: String
+    ) {
+        guard resolvedPayload.service != .youtubeMusic else { return }
+
+        let title = normalizedMusicDisplayTitle(resolvedPayload.title, artist: resolvedPayload.artist)
+        let artist = normalizedMusicDisplayArtist(resolvedPayload.artist, title: resolvedPayload.title)
+        let query = radioSeedQuery(title: title, artist: artist)
+        guard !query.isEmpty else { return }
+
+        radioAutoplayTask?.cancel()
+        radioAutoplayTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard self.currentVideoId == expectedCurrentMediaID else { return }
+
+            do {
+                let searchResults = try await self.youtube.music.search(query)
+                guard !Task.isCancelled,
+                      self.currentVideoId == expectedCurrentMediaID,
+                      let seedSong = self.bestRadioSeedSong(
+                        from: searchResults,
+                        title: title,
+                        artist: artist
+                      ) else {
+                    return
+                }
+
+                let seedVideoID = seedSong.videoId
+                self.radioSeedVideoID = seedVideoID
+                let leadingEntry = PlaybackQueueEntry.external(externalTrack)
+                let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+
+                if let cachedSession,
+                   self.shouldReuseCachedRadioSession(cachedSession),
+                   self.currentVideoId == expectedCurrentMediaID {
+                    self.applyCachedRadioSession(
+                        cachedSession,
+                        fallbackSeed: seedSong,
+                        leadingEntry: leadingEntry,
+                        currentMediaID: expectedCurrentMediaID
+                    )
+                    self.scheduleRadioContinuationIfNeeded()
+                    return
+                }
+
+                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+
+                self.radioPlaylistID = radio.playlistId
+                self.radioContinuationToken = radio.continuationToken
+
+                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
+                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+
+                self.applyRadioTracksToQueue(
+                    tracks,
+                    seedVideoID: seedVideoID,
+                    leadingEntry: leadingEntry,
+                    currentMediaID: expectedCurrentMediaID
+                )
+                self.scheduleRadioContinuationIfNeeded()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.logPlayback("External radio seed failed for query=\(query): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func seedRadioQueueForVideoTrack(
+        video: YouTubeVideo,
+        expectedCurrentMediaID: String
+    ) {
+        let displayTitle = normalizedMusicDisplayTitle(video.title, artist: video.author)
+        let displayArtist = normalizedMusicDisplayArtist(video.author, title: video.title)
+        let query = radioSeedQuery(title: displayTitle, artist: displayArtist)
+        let leadingEntry = PlaybackQueueEntry.video(video)
+
+        radioAutoplayTask?.cancel()
+        radioAutoplayTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard self.currentVideoId == expectedCurrentMediaID else { return }
+
+            do {
+                let directRadio = try await self.youtube.music.getRadio(videoId: video.id)
+                guard !Task.isCancelled,
+                      self.currentVideoId == expectedCurrentMediaID else {
+                    return
+                }
+
+                var directTracks = self.buildRadioTracks(from: directRadio.items)
+                if !directTracks.isEmpty {
+                    self.radioSeedVideoID = video.id
+                    self.radioPlaylistID = directRadio.playlistId
+                    self.radioContinuationToken = directRadio.continuationToken
+
+                    directTracks = await self.hydrateSeedRadioTracksIfNeeded(
+                        directTracks,
+                        playlistID: self.radioPlaylistID
+                    )
+                    guard !Task.isCancelled,
+                          self.currentVideoId == expectedCurrentMediaID else {
+                        return
+                    }
+
+                    self.applyRadioTracksToQueue(
+                        directTracks,
+                        seedVideoID: video.id,
+                        leadingEntry: leadingEntry,
+                        currentMediaID: expectedCurrentMediaID
+                    )
+                    self.scheduleRadioContinuationIfNeeded()
+                    return
+                }
+            } catch {
+                self.logPlayback("Video direct radio seed failed for id=\(video.id): \(error.localizedDescription)")
+            }
+
+            guard !query.isEmpty else { return }
+
+            do {
+                let searchResults = try await self.youtube.music.search(query)
+                guard !Task.isCancelled,
+                      self.currentVideoId == expectedCurrentMediaID,
+                      let seedSong = self.bestRadioSeedSong(
+                        from: searchResults,
+                        title: displayTitle,
+                        artist: displayArtist
+                      ) else {
+                    return
+                }
+
+                let seedVideoID = seedSong.videoId
+                self.radioSeedVideoID = seedVideoID
+                let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+
+                if let cachedSession,
+                   self.shouldReuseCachedRadioSession(cachedSession),
+                   self.currentVideoId == expectedCurrentMediaID {
+                    self.applyCachedRadioSession(
+                        cachedSession,
+                        fallbackSeed: seedSong,
+                        leadingEntry: leadingEntry,
+                        currentMediaID: expectedCurrentMediaID
+                    )
+                    self.scheduleRadioContinuationIfNeeded()
+                    return
+                }
+
+                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled,
+                      self.currentVideoId == expectedCurrentMediaID else {
+                    return
+                }
+
+                self.radioPlaylistID = radio.playlistId
+                self.radioContinuationToken = radio.continuationToken
+
+                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
+                guard !Task.isCancelled,
+                      self.currentVideoId == expectedCurrentMediaID else {
+                    return
+                }
+
+                self.applyRadioTracksToQueue(
+                    tracks,
+                    seedVideoID: seedVideoID,
+                    leadingEntry: leadingEntry,
+                    currentMediaID: expectedCurrentMediaID
+                )
+                self.scheduleRadioContinuationIfNeeded()
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.logPlayback("Video metadata radio seed failed for query=\(query): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func radioSeedQuery(title: String, artist: String) -> String {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !normalizedTitle.isEmpty && !normalizedArtist.isEmpty {
+            return "\(normalizedTitle) \(normalizedArtist)"
+        }
+        if !normalizedTitle.isEmpty {
+            return normalizedTitle
+        }
+        return normalizedArtist
+    }
+
+    private func bestRadioSeedSong(from candidates: [YouTubeMusicSong], title: String, artist: String) -> YouTubeMusicSong? {
+        guard !candidates.isEmpty else { return nil }
+
+        let targetTitle = title.lowercased()
+        let targetArtist = artist.lowercased()
+
+        func similarity(_ lhs: String, _ rhs: String) -> Double {
+            let left = Set(lhs.split(separator: " ").map(String.init))
+            let right = Set(rhs.split(separator: " ").map(String.init))
+            guard !left.isEmpty, !right.isEmpty else { return 0 }
+            return Double(left.intersection(right).count) / Double(max(left.count, right.count))
+        }
+
+        return candidates.max { lhs, rhs in
+            let lhsTitle = normalizedMusicDisplayTitle(lhs.title, artist: lhs.artistsDisplay).lowercased()
+            let rhsTitle = normalizedMusicDisplayTitle(rhs.title, artist: rhs.artistsDisplay).lowercased()
+            let lhsArtist = normalizedMusicDisplayArtist(lhs.artistsDisplay, title: lhs.title).lowercased()
+            let rhsArtist = normalizedMusicDisplayArtist(rhs.artistsDisplay, title: rhs.title).lowercased()
+
+            let lhsScore = (0.7 * similarity(lhsTitle, targetTitle)) + (0.3 * similarity(lhsArtist, targetArtist))
+            let rhsScore = (0.7 * similarity(rhsTitle, targetTitle)) + (0.3 * similarity(rhsArtist, targetArtist))
+            return lhsScore < rhsScore
+        }
+    }
+
+    private func shouldReuseCachedRadioSession(_ session: RadioSessionStore.Session) -> Bool {
+        let validTrackCount = session.tracks.compactMap { CachedRadioTrack(cached: $0) }.count
+        if validTrackCount == 0 {
+            return false
+        }
+        return validTrackCount >= RadioAutoplayPolicy.minCachedTracksWithoutContinuation
+    }
+
+    private func hydrateSeedRadioTracksIfNeeded(
+        _ tracks: [CachedRadioTrack],
+        playlistID: String?
+    ) async -> [CachedRadioTrack] {
+        guard tracks.count < RadioAutoplayPolicy.minSeedTracksBeforePlaylistHydration else {
+            return tracks
+        }
+
+        guard let playlistID = playlistID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !playlistID.isEmpty else {
+            return tracks
+        }
+
+        do {
+            let queueItems = try await youtube.music.getQueue(playlistId: playlistID)
+            guard !queueItems.isEmpty else { return tracks }
+
+            var merged = tracks
+            var knownIDs = Set(merged.map(\.videoID))
+            for song in queueItems {
+                let track = CachedRadioTrack(song: song)
+                guard knownIDs.insert(track.videoID).inserted else { continue }
+                merged.append(track)
+                if merged.count >= RadioAutoplayPolicy.maxSeedQueueTracks {
+                    break
+                }
+            }
+
+            if merged.count > tracks.count {
+                logPlayback("Radio seed hydrated from playlist: +\(merged.count - tracks.count) track(s)")
+            }
+
+            return merged
+        } catch {
+            logPlayback("Radio seed hydration failed for playlistID=\(playlistID): \(error.localizedDescription)")
+            return tracks
+        }
+    }
+
+    private func clearRadioAutoplayState() {
+        radioAutoplayTask?.cancel()
+        radioAutoplayTask = nil
+        radioContinuationTask?.cancel()
+        radioContinuationTask = nil
+        radioSeedVideoID = nil
+        radioPlaylistID = nil
+        radioContinuationToken = nil
+        isLoadingRadioContinuation = false
+    }
+
+    private func applyCachedRadioSession(
+        _ session: RadioSessionStore.Session,
+        fallbackSeed: YouTubeMusicSong,
+        leadingEntry: PlaybackQueueEntry? = nil,
+        currentMediaID: String? = nil
+    ) {
+        var tracks = session.tracks.compactMap { CachedRadioTrack(cached: $0) }
+        let seedTrack = CachedRadioTrack(song: fallbackSeed)
+
+        if !tracks.contains(where: { $0.videoID == seedTrack.videoID }) {
+            tracks.insert(seedTrack, at: 0)
+        }
+
+        radioPlaylistID = session.playlistID
+        radioContinuationToken = session.continuationToken
+        applyRadioTracksToQueue(
+            Array(tracks.prefix(RadioAutoplayPolicy.maxSeedQueueTracks)),
+            seedVideoID: seedTrack.videoID,
+            leadingEntry: leadingEntry,
+            currentMediaID: currentMediaID
+        )
+    }
+
+    private func buildSeededRadioTracks(seedSong: YouTubeMusicSong, radioItems: [YouTubeMusicSong]) -> [CachedRadioTrack] {
+        var tracks: [CachedRadioTrack] = []
+        var seenIDs = Set<String>()
+
+        let seedTrack = CachedRadioTrack(song: seedSong)
+        if seenIDs.insert(seedTrack.videoID).inserted {
+            tracks.append(seedTrack)
+        }
+
+        for item in radioItems {
+            let track = CachedRadioTrack(song: item)
+            guard seenIDs.insert(track.videoID).inserted else { continue }
+            tracks.append(track)
+            if tracks.count >= RadioAutoplayPolicy.maxSeedQueueTracks {
+                break
+            }
+        }
+
+        return tracks
+    }
+
+    private func buildRadioTracks(from radioItems: [YouTubeMusicSong]) -> [CachedRadioTrack] {
+        var tracks: [CachedRadioTrack] = []
+        var seenIDs = Set<String>()
+
+        for item in radioItems {
+            let track = CachedRadioTrack(song: item)
+            guard seenIDs.insert(track.videoID).inserted else { continue }
+            tracks.append(track)
+            if tracks.count >= RadioAutoplayPolicy.maxSeedQueueTracks {
+                break
+            }
+        }
+
+        return tracks
+    }
+
+    private func applyRadioTracksToQueue(
+        _ tracks: [CachedRadioTrack],
+        seedVideoID: String,
+        leadingEntry: PlaybackQueueEntry? = nil,
+        currentMediaID: String? = nil
+    ) {
+        guard !tracks.isEmpty else { return }
+
+        var entries = tracks.map { PlaybackQueueEntry.cachedRadio($0) }
+        if let leadingEntry {
+            entries.removeAll { $0.mediaID == leadingEntry.mediaID }
+            entries.insert(leadingEntry, at: 0)
+        }
+
+        playbackQueue = entries
+        queueCount = entries.count
+        queueSource = .radioAutoplay
+
+        let playbackMediaID = currentMediaID ?? currentVideoId
+        if let playbackMediaID {
+            queuePosition = entries.firstIndex(where: { $0.mediaID == playbackMediaID }) ?? 0
+        } else {
+            queuePosition = 0
+        }
+
+        if radioSeedVideoID == nil {
+            radioSeedVideoID = seedVideoID
+        }
+
+        persistCurrentRadioSession()
+        updateRemoteCommandState()
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    private func scheduleRadioContinuationIfNeeded() {
+        guard queueSource == .radioAutoplay,
+              let queuePosition,
+              !isLoadingRadioContinuation,
+              let continuation = radioContinuationToken,
+              !continuation.isEmpty else {
+            return
+        }
+
+        let remainingItems = playbackQueue.count - queuePosition - 1
+        guard remainingItems <= RadioAutoplayPolicy.queueLowWatermark else {
+            return
+        }
+
+        isLoadingRadioContinuation = true
+        radioContinuationTask?.cancel()
+        radioContinuationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.isLoadingRadioContinuation = false
+            }
+
+            do {
+                let previousToken = self.radioContinuationToken
+                let page = try await self.youtube.music.getRadioContinuation(token: continuation)
+                guard !Task.isCancelled,
+                      self.queueSource == .radioAutoplay else {
+                    return
+                }
+
+                self.radioContinuationToken = page.continuationToken
+                if let playlistID = page.playlistId, !playlistID.isEmpty {
+                    self.radioPlaylistID = playlistID
+                }
+
+                let appended = self.appendRadioTracks(page.items.map(CachedRadioTrack.init(song:)))
+                if appended == 0 {
+                    let tokenChanged = previousToken != self.radioContinuationToken
+                    if !tokenChanged {
+                        await self.backfillRadioTracksFromPlaylistIfNeeded()
+                    }
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await self.backfillRadioTracksFromPlaylistIfNeeded()
+                self.logPlayback("Radio continuation failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    @discardableResult
+    private func appendRadioTracks(_ incoming: [CachedRadioTrack]) -> Int {
+        guard !incoming.isEmpty else { return 0 }
+
+        var knownIDs = Set(playbackQueue.map(\.mediaID))
+        var appended: [PlaybackQueueEntry] = []
+        for track in incoming {
+            guard knownIDs.insert(track.videoID).inserted else { continue }
+            appended.append(.cachedRadio(track))
+        }
+
+        guard !appended.isEmpty else { return 0 }
+
+        playbackQueue.append(contentsOf: appended)
+        queueCount = playbackQueue.count
+        persistCurrentRadioSession()
+        updateRemoteCommandState()
+        preloadNextQueueEntryIfNeeded()
+        return appended.count
+    }
+
+    private func backfillRadioTracksFromPlaylistIfNeeded() async {
+        guard queueSource == .radioAutoplay,
+              let playlistID = radioPlaylistID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !playlistID.isEmpty else {
+            return
+        }
+
+        do {
+            let queueItems = try await youtube.music.getQueue(playlistId: playlistID)
+            guard !queueItems.isEmpty else { return }
+
+            let appended = appendRadioTracks(queueItems.map(CachedRadioTrack.init(song:)))
+            if appended > 0 {
+                logPlayback("Radio playlist backfill appended \(appended) track(s)")
+            }
+        } catch {
+            logPlayback("Radio playlist backfill failed for playlistID=\(playlistID): \(error.localizedDescription)")
+        }
+    }
+
+    private func persistCurrentRadioSession() {
+        guard queueSource == .radioAutoplay,
+              let seedVideoID = radioSeedVideoID else {
+            return
+        }
+
+        let tracks = playbackQueue.compactMap { entry -> CachedRadioTrack? in
+            switch entry {
+            case .cachedRadio(let track):
+                return track
+            case .song(let song):
+                return CachedRadioTrack(song: song)
+            case .video:
+                return nil
+            case .external:
+                return nil
+            }
+        }
+
+        guard !tracks.isEmpty else { return }
+
+        radioSessionStore.save(
+            session: RadioSessionStore.Session(
+                seedVideoID: seedVideoID,
+                playlistID: radioPlaylistID,
+                continuationToken: radioContinuationToken,
+                tracks: tracks.map(\.persisted),
+                updatedAt: .now
+            )
+        )
+    }
+
+    private func preloadNextQueueEntryIfNeeded() {
+        guard let queuePosition else {
+            preparedNextPlayback = nil
+            nextPlaybackPreloadTask?.cancel()
+            nextPlaybackPreloadTask = nil
+            preloadingNextMediaID = nil
+            return
+        }
+
+        let nextIndex = queuePosition + 1
+        guard playbackQueue.indices.contains(nextIndex) else {
+            preparedNextPlayback = nil
+            nextPlaybackPreloadTask?.cancel()
+            nextPlaybackPreloadTask = nil
+            preloadingNextMediaID = nil
+            return
+        }
+
+        let nextEntry = playbackQueue[nextIndex]
+        if preparedNextPlayback?.mediaID == nextEntry.mediaID {
+            return
+        }
+
+        if preloadingNextMediaID == nextEntry.mediaID,
+           nextPlaybackPreloadTask != nil {
+            return
+        }
+
+        preparedNextPlayback = nil
+        nextPlaybackPreloadTask?.cancel()
+        preloadingNextMediaID = nextEntry.mediaID
+        nextPlaybackPreloadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.preloadingNextMediaID == nextEntry.mediaID {
+                    self.preloadingNextMediaID = nil
+                }
+            }
+
+            let prepared = await self.prepareQueuePlayback(for: nextEntry)
+            guard !Task.isCancelled,
+                  let prepared,
+                  let currentQueuePosition = self.queuePosition else {
+                return
+            }
+
+            let expectedIndex = currentQueuePosition + 1
+            guard self.playbackQueue.indices.contains(expectedIndex),
+                  self.playbackQueue[expectedIndex].mediaID == prepared.mediaID else {
+                return
+            }
+
+            self.preparedNextPlayback = prepared
+        }
+    }
+
+    private func prepareQueuePlayback(for entry: PlaybackQueueEntry) async -> PreparedQueuePlayback? {
+        do {
+            switch entry {
+            case .song(let song):
+#if canImport(TidalKit)
+                let cachedHiResPayload = externalPayloadCache[song.videoId].flatMap { payload -> ExternalStreamPayload? in
+                    guard payload.service == .tidal else { return nil }
+                    return payload
+                }
+
+                let hiResPayload: ExternalStreamPayload?
+                if let cachedHiResPayload {
+                    hiResPayload = cachedHiResPayload
+                } else {
+                    hiResPayload = try await resolveHiResTidalPayload(
+                        title: song.title,
+                        artist: song.artistsDisplay,
+                        excludingMediaID: song.videoId
+                    )
+                }
+
+                if let hiResPayload {
+                    externalPayloadCache[song.videoId] = hiResPayload
+                    logPlayback("Prepared Hi-Res preload variant for id=\(song.videoId)")
+
+                    let hiResCandidate = PlaybackCandidate(
+                        url: hiResPayload.streamURL,
+                        streamKind: .audio,
+                        mimeType: mimeTypeForCodecLabel(hiResPayload.codecLabel),
+                        itag: nil,
+                        expiresAt: nil,
+                        isCompatible: true
+                    )
+                    let youtubeFallbackCandidates = (try? await resolvePlaybackCandidates(forID: song.videoId)) ?? []
+
+                    let prepared = PreparedQueuePlayback(
+                        mediaID: song.videoId,
+                        item: makePlayerItem(for: hiResPayload.streamURL, service: .tidal),
+                        playbackCandidates: [hiResCandidate] + youtubeFallbackCandidates,
+                        preparedAt: .now,
+                        title: normalizedMusicDisplayTitle(hiResPayload.title, artist: hiResPayload.artist),
+                        artist: normalizedMusicDisplayArtist(hiResPayload.artist, title: hiResPayload.title),
+                        artworkURL: hiResPayload.artworkURL ?? song.thumbnailURL,
+                        streamingService: .tidal,
+                        qualityLabel: hiResPayload.qualityLabel,
+                        codecLabel: hiResPayload.codecLabel,
+                        albumName: song.album,
+                        isExplicit: song.isExplicit,
+                        durationHint: Self.lyricsDurationHint(from: song.duration)
+                    )
+                    debugQueuePreloadSelection(prepared, source: "tidal-hires")
+                    return prepared
+                }
+#endif
+
+                let candidates = try await resolvePlaybackCandidates(forID: song.videoId)
+                guard let candidate = candidates.first else { return nil }
+                let labels = playbackLabels(for: candidate)
+
+                let prepared = PreparedQueuePlayback(
+                    mediaID: song.videoId,
+                    item: makePlayerItem(for: candidate.url, service: .youtubeMusic),
+                    playbackCandidates: candidates,
+                    preparedAt: .now,
+                    title: normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay),
+                    artist: normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title),
+                    artworkURL: song.thumbnailURL,
+                    streamingService: .youtubeMusic,
+                    qualityLabel: labels.quality,
+                    codecLabel: labels.codec,
+                    albumName: song.album,
+                    isExplicit: song.isExplicit,
+                    durationHint: Self.lyricsDurationHint(from: song.duration)
+                )
+                debugQueuePreloadSelection(prepared, source: "youtube-fallback")
+                return prepared
+
+            case .cachedRadio(let track):
+#if canImport(TidalKit)
+                let cachedHiResPayload = externalPayloadCache[track.videoID].flatMap { payload -> ExternalStreamPayload? in
+                    guard payload.service == .tidal else { return nil }
+                    return payload
+                }
+
+                let hiResPayload: ExternalStreamPayload?
+                if let cachedHiResPayload {
+                    hiResPayload = cachedHiResPayload
+                } else {
+                    hiResPayload = try await resolveHiResTidalPayload(
+                        title: track.title,
+                        artist: track.artist,
+                        excludingMediaID: track.videoID
+                    )
+                }
+
+                if let hiResPayload {
+                    externalPayloadCache[track.videoID] = hiResPayload
+                    logPlayback("Prepared Hi-Res preload variant for radio id=\(track.videoID)")
+
+                    let hiResCandidate = PlaybackCandidate(
+                        url: hiResPayload.streamURL,
+                        streamKind: .audio,
+                        mimeType: mimeTypeForCodecLabel(hiResPayload.codecLabel),
+                        itag: nil,
+                        expiresAt: nil,
+                        isCompatible: true
+                    )
+                    let youtubeFallbackCandidates = (try? await resolvePlaybackCandidates(forID: track.videoID)) ?? []
+
+                    let prepared = PreparedQueuePlayback(
+                        mediaID: track.videoID,
+                        item: makePlayerItem(for: hiResPayload.streamURL, service: .tidal),
+                        playbackCandidates: [hiResCandidate] + youtubeFallbackCandidates,
+                        preparedAt: .now,
+                        title: normalizedMusicDisplayTitle(hiResPayload.title, artist: hiResPayload.artist),
+                        artist: normalizedMusicDisplayArtist(hiResPayload.artist, title: hiResPayload.title),
+                        artworkURL: hiResPayload.artworkURL ?? track.thumbnailURL,
+                        streamingService: .tidal,
+                        qualityLabel: hiResPayload.qualityLabel,
+                        codecLabel: hiResPayload.codecLabel,
+                        albumName: track.albumName,
+                        isExplicit: track.isExplicit,
+                        durationHint: nil
+                    )
+                    debugQueuePreloadSelection(prepared, source: "radio-tidal-hires")
+                    return prepared
+                }
+#endif
+
+                let candidates = try await resolvePlaybackCandidates(forID: track.videoID)
+                guard let candidate = candidates.first else { return nil }
+                let labels = playbackLabels(for: candidate)
+
+                let prepared = PreparedQueuePlayback(
+                    mediaID: track.videoID,
+                    item: makePlayerItem(for: candidate.url, service: .youtubeMusic),
+                    playbackCandidates: candidates,
+                    preparedAt: .now,
+                    title: normalizedMusicDisplayTitle(track.title, artist: track.artist),
+                    artist: normalizedMusicDisplayArtist(track.artist, title: track.title),
+                    artworkURL: track.thumbnailURL,
+                    streamingService: .youtubeMusic,
+                    qualityLabel: labels.quality,
+                    codecLabel: labels.codec,
+                    albumName: track.albumName,
+                    isExplicit: track.isExplicit,
+                    durationHint: nil
+                )
+                debugQueuePreloadSelection(prepared, source: "radio-youtube-fallback")
+                return prepared
+
+            case .video(let video):
+                let candidates = try await resolvePlaybackCandidates(forID: video.id)
+                guard let candidate = candidates.first else { return nil }
+                let labels = playbackLabels(for: candidate)
+
+                let prepared = PreparedQueuePlayback(
+                    mediaID: video.id,
+                    item: makePlayerItem(for: candidate.url, service: .youtube),
+                    playbackCandidates: candidates,
+                    preparedAt: .now,
+                    title: normalizedMusicDisplayTitle(video.title, artist: video.author),
+                    artist: normalizedMusicDisplayArtist(video.author, title: video.title),
+                    artworkURL: Self.normalizedQueueArtworkURL(from: video.thumbnailURL),
+                    streamingService: .youtube,
+                    qualityLabel: labels.quality,
+                    codecLabel: labels.codec,
+                    albumName: nil,
+                    isExplicit: false,
+                    durationHint: Self.lyricsDurationHint(from: video.lengthInSeconds)
+                )
+                debugQueuePreloadSelection(prepared, source: "youtube-video")
+                return prepared
+
+            case .external(let track):
+                let normalizedMediaID = track.mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalizedMediaID.isEmpty else { return nil }
+
+                let payload: ExternalStreamPayload
+                if let cachedPayload = externalPayloadCache[normalizedMediaID] {
+                    payload = cachedPayload
+                } else {
+                    payload = try await track.resolvePayload()
+                    externalPayloadCache[normalizedMediaID] = payload
+                }
+
+                let streamingService = Self.streamingService(for: payload.service)
+                let candidate = PlaybackCandidate(
+                    url: payload.streamURL,
+                    streamKind: .audio,
+                    mimeType: mimeTypeForCodecLabel(payload.codecLabel),
+                    itag: nil,
+                    expiresAt: nil,
+                    isCompatible: true
+                )
+                let prepared = PreparedQueuePlayback(
+                    mediaID: normalizedMediaID,
+                    item: makePlayerItem(for: payload.streamURL, service: streamingService),
+                    playbackCandidates: [candidate],
+                    preparedAt: .now,
+                    title: normalizedMusicDisplayTitle(payload.title, artist: payload.artist),
+                    artist: normalizedMusicDisplayArtist(payload.artist, title: payload.title),
+                    artworkURL: payload.artworkURL ?? track.artworkURL,
+                    streamingService: streamingService,
+                    qualityLabel: payload.qualityLabel,
+                    codecLabel: payload.codecLabel,
+                    albumName: nil,
+                    isExplicit: track.isExplicit,
+                    durationHint: nil
+                )
+                debugQueuePreloadSelection(prepared, source: "external-\(payload.service.rawValue)")
+                return prepared
+            }
+        } catch {
+            logPlayback("Queue preload failed for mediaID=\(entry.mediaID): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func shouldRefreshPreparedPlaybackBeforeUse(_ prepared: PreparedQueuePlayback) -> Bool {
+        guard prepared.streamingService == .youtube || prepared.streamingService == .youtubeMusic else {
+            return false
+        }
+
+        if Date().timeIntervalSince(prepared.preparedAt) >= CachePolicy.preparedYouTubeMaxAge {
+            return true
+        }
+
+        if prepared.playbackCandidates.contains(where: { $0.expiresAt == nil }) {
+            return true
+        }
+
+        if let earliestExpiry = prepared.playbackCandidates.compactMap(\.expiresAt).min(),
+           earliestExpiry.timeIntervalSinceNow <= CachePolicy.playbackMinimumRemainingLifetime {
+            return true
+        }
+
+        return false
+    }
+
+    private func debugQueuePreloadSelection(_ prepared: PreparedQueuePlayback, source: String) {
+#if DEBUG
+        print("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
+#endif
+    }
+
+    private func playPreparedQueueEntry(_ prepared: PreparedQueuePlayback) {
+        currentLoadTask?.cancel()
+
+        let presentation = TrackPresentationState(
+            mediaID: prepared.mediaID,
+            title: prepared.title,
+            artist: prepared.artist,
+            albumName: prepared.albumName,
+            artworkURL: prepared.artworkURL,
+            isExplicit: prepared.isExplicit,
+            streamingService: prepared.streamingService,
+            qualityLabel: prepared.qualityLabel,
+            codecLabel: prepared.codecLabel,
+            durationHint: prepared.durationHint
+        )
+        preparePlaybackSession(for: presentation, preserveQueue: true)
+
+        if prepared.playbackCandidates.isEmpty {
+            resetPlaybackCandidates(for: prepared.mediaID)
+        } else {
+            configurePlaybackCandidates(for: prepared.mediaID, candidates: prepared.playbackCandidates)
+        }
+
+        observeCurrentItemStatus(prepared.item)
+        observeCurrentItemEnd(prepared.item)
+        player.replaceCurrentItem(with: prepared.item)
+
+#if os(iOS)
+        if #available(iOS 14.0, *) {
+            player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        }
+#endif
+
+        player.seek(to: .zero)
+        isPlaying = true
+        player.play()
+
+        startArtworkVideoProcessingIfNeeded(
+            for: prepared.mediaID,
+            title: prepared.title,
+            artist: prepared.artist,
+            albumName: prepared.albumName
+        )
+
+        updateRemoteCommandState()
+        preloadNextQueueEntryIfNeeded()
+    }
+
+    func checkForHiResVersion() async {
+        guard !isCheckingHiResAvailability else {
+            return
+        }
+
+        guard let currentMediaID = currentVideoId else {
+            return
+        }
+
+        guard !currentMediaID.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        let title = normalizedMusicDisplayTitle(currentTitle, artist: currentArtist)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let artist = normalizedMusicDisplayArtist(currentArtist, title: currentTitle)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != "Not Playing" else {
+            return
+        }
+
+        let lookupMediaID = currentMediaID
+        isCheckingHiResAvailability = true
+        pendingHiResPayload = nil
+        hiResAvailabilityMessage = nil
+
+        defer {
+            isCheckingHiResAvailability = false
+        }
+
+#if canImport(TidalKit)
+        do {
+            let payload = try await resolveHiResTidalPayload(
+                title: title,
+                artist: artist,
+                excludingMediaID: lookupMediaID
+            )
+
+            guard lookupMediaID == currentVideoId else { return }
+
+            pendingHiResPayload = payload
+            if payload != nil {
+                hiResAvailabilityMessage = "Hi-Res available"
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard lookupMediaID == currentVideoId else { return }
+            playbackError = error.localizedDescription
+        }
+#else
+        playbackError = "TidalKit is not linked to this target."
+#endif
+    }
+
+    func switchToHiResVersionIfAvailable() {
+        guard let payload = pendingHiResPayload else { return }
+
+        loadExternalStream(
+            mediaID: payload.mediaID,
+            streamURL: payload.streamURL,
+            title: payload.title,
+            artist: payload.artist,
+            artworkURL: payload.artworkURL,
+            service: payload.service,
+            qualityLabel: payload.qualityLabel,
+            codecLabel: payload.codecLabel
+        )
+
+        pendingHiResPayload = nil
+        hiResAvailabilityMessage = nil
+    }
+
+    private func resetHiResAvailabilityState() {
+        pendingHiResPayload = nil
+        hiResAvailabilityMessage = nil
+        isCheckingHiResAvailability = false
+    }
+
+#if canImport(TidalKit)
+    private struct HiResLookupCandidate {
+        let id: Int
+        let title: String
+        let artistName: String
+        let artworkURL: URL?
+        let score: Double
+    }
+
+    private func resolveHiResTidalPayload(
+        title: String,
+        artist: String,
+        excludingMediaID: String
+    ) async throws -> ExternalStreamPayload? {
+        let query = [title, artist]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        guard !query.isEmpty else { return nil }
+
+        let normalizedTargetTitle = normalizedHiResLookupText(title)
+        let normalizedTargetArtist = normalizedHiResLookupText(artist)
+        let searchResults = try await Monochrome.shared.content.searchTracks(query: query)
+
+        let candidates = searchResults
+            .prefix(20)
+            .compactMap { track -> HiResLookupCandidate? in
+                let mediaID = "tidal-\(track.id)"
+                if mediaID == excludingMediaID {
+                    return nil
+                }
+
+                let normalizedCandidateTitle = normalizedHiResLookupText(track.title)
+                let normalizedCandidateArtist = normalizedHiResLookupText(track.artist?.name ?? "")
+
+                let titleScore = tokenOverlapRatio(
+                    lhs: normalizedCandidateTitle,
+                    rhs: normalizedTargetTitle
+                )
+                guard titleScore >= 0.45 else {
+                    return nil
+                }
+
+                let artistScore = tokenOverlapRatio(
+                    lhs: normalizedCandidateArtist,
+                    rhs: normalizedTargetArtist
+                )
+                let exactTitleBoost = normalizedCandidateTitle == normalizedTargetTitle ? 0.18 : 0
+                let score = (0.68 * titleScore) + (0.24 * artistScore) + exactTitleBoost
+
+                return HiResLookupCandidate(
+                    id: track.id,
+                    title: track.title,
+                    artistName: track.artist?.name ?? currentArtist,
+                    artworkURL: tidalArtworkURL(from: track.album?.cover),
+                    score: score
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.score > rhs.score
+            }
+
+        guard !candidates.isEmpty else {
+            return nil
+        }
+
+        let preferredQuality = MonochromeAudioQuality(
+            rawValue: streamingProviderSettings.tidalPreferredQualityRawValue
+        ) ?? .hiResLossless
+        let qualityOrder = hiResQualityFallbackOrder(preferred: preferredQuality)
+
+        for candidate in candidates.prefix(3) {
+            for quality in qualityOrder {
+                guard let urlString = try? await Monochrome.shared.content.fetchStreamURL(
+                    trackID: candidate.id,
+                    quality: quality
+                ),
+                let streamURL = URL(string: urlString) else {
+                    continue
+                }
+
+                return ExternalStreamPayload(
+                    mediaID: "tidal-\(candidate.id)",
+                    streamURL: streamURL,
+                    title: candidate.title,
+                    artist: candidate.artistName,
+                    artworkURL: candidate.artworkURL,
+                    service: .tidal,
+                    qualityLabel: quality.label,
+                    codecLabel: tidalCodecLabel(for: quality)
+                )
+            }
+        }
+
+        return nil
+    }
+
+    private func hiResQualityFallbackOrder(preferred: MonochromeAudioQuality) -> [MonochromeAudioQuality] {
+        let allowedQualities: Set<MonochromeAudioQuality> = [.hiResLossless, .lossless, .high]
+        let ordered = MonochromeAudioQuality.fallbackOrder(preferred: preferred)
+        return ordered.filter { allowedQualities.contains($0) }
+    }
+
+    private func normalizedHiResLookupText(_ value: String) -> String {
+        let lowercased = value.lowercased()
+        let stripped = lowercased.replacingOccurrences(
+            of: "[^a-z0-9\\s]",
+            with: " ",
+            options: .regularExpression
+        )
+
+        return stripped
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func tokenOverlapRatio(lhs: String, rhs: String) -> Double {
+        let lhsTokens = Set(lhs.split(separator: " ").map(String.init))
+        let rhsTokens = Set(rhs.split(separator: " ").map(String.init))
+
+        guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else { return 0 }
+
+        let overlapCount = Double(lhsTokens.intersection(rhsTokens).count)
+        let normalizer = Double(max(lhsTokens.count, rhsTokens.count))
+        guard normalizer > 0 else { return 0 }
+
+        return overlapCount / normalizer
+    }
+
+    private func tidalArtworkURL(from coverID: String?) -> URL? {
+        guard let coverID, !coverID.isEmpty else { return nil }
+        let formatted = coverID.replacingOccurrences(of: "-", with: "/")
+        return URL(string: "https://resources.tidal.com/images/\(formatted)/320x320.jpg")
+    }
+
+    private func tidalCodecLabel(for quality: MonochromeAudioQuality) -> String {
+        switch quality {
+        case .lossless, .hiResLossless:
+            return "FLAC"
+        case .high, .medium, .low:
+            return "AAC"
+        }
+    }
+#endif
+
+    private func playbackLabels(for candidate: PlaybackCandidate) -> (quality: String, codec: String) {
+        let qualityLabel: String
+        switch candidate.streamKind {
+        case .hls:
+            qualityLabel = "Adaptive"
+        case .muxed:
+            qualityLabel = "Muxed"
+        case .audio:
+            qualityLabel = "Direct Audio"
+        }
+
+        let codecLabel = codecLabel(for: candidate)
+        return (qualityLabel, codecLabel)
+    }
+
+    private func codecLabel(for candidate: PlaybackCandidate) -> String {
+        let mime = candidate.mimeType?.lowercased() ?? ""
+        if mime.contains("flac") {
+            return "FLAC"
+        }
+        if mime.contains("aac") || mime.contains("mp4a") || mime.contains("m4a") {
+            return "AAC"
+        }
+        if mime.contains("mpeg") || mime.contains("mp3") {
+            return "MP3"
+        }
+        if mime.contains("opus") {
+            return "Opus"
+        }
+        if candidate.streamKind == .hls {
+            return "HLS"
+        }
+        return "Unknown"
+    }
+
+    private static func streamingService(for federatedService: FederatedService) -> StreamingService {
+        switch federatedService {
+        case .youtube:
+            return .youtube
+        case .youtubeMusic:
+            return .youtubeMusic
+        case .tidal:
+            return .tidal
+        case .spotify:
+            return .spotify
+        }
     }
 
     private struct LyricsResolution {
@@ -952,8 +2600,18 @@ final class PlayerViewModel {
             maxAge: CachePolicy.playbackURLTTL
         ),
         !cachedCandidates.isEmpty {
-            logPlayback("Using cached playback candidates for id=\(id)")
-            return cachedCandidates
+            let hasUnknownExpiryCandidate = cachedCandidates.contains(where: { $0.expiresAt == nil })
+            if hasUnknownExpiryCandidate {
+                logPlayback("Cached playback candidates missing expiry for id=\(id); invalidating for refresh")
+                mediaCacheStore.invalidatePlayback(for: id)
+            } else if let earliestExpiry = cachedCandidates.compactMap(\.expiresAt).min(),
+                      earliestExpiry.timeIntervalSinceNow <= CachePolicy.playbackMinimumRemainingLifetime {
+                logPlayback("Cached playback candidates near expiry for id=\(id); invalidating for refresh")
+                mediaCacheStore.invalidatePlayback(for: id)
+            } else {
+                logPlayback("Using cached playback candidates for id=\(id)")
+                return cachedCandidates
+            }
         }
 
         let entry = try await resolvePlaybackEntry(forID: id)
@@ -979,6 +2637,7 @@ final class PlayerViewModel {
     private func playFromBeginning(url: URL) {
         let item = makePlayerItem(for: url)
         observeCurrentItemStatus(item)
+        observeCurrentItemEnd(item)
         player.replaceCurrentItem(with: item)
 
         #if os(iOS)
@@ -995,14 +2654,22 @@ final class PlayerViewModel {
 
         updateNowPlayingMetadata()
         updateRemoteCommandState()
+        preloadNextQueueEntryIfNeeded()
     }
 
-    private func makePlayerItem(for url: URL) -> AVPlayerItem {
-        let isYouTubeSource = currentStreamingServiceName == StreamingService.youtube.rawValue
-            || currentStreamingServiceName == StreamingService.youtubeMusic.rawValue
+    private func makePlayerItem(for url: URL, service: StreamingService? = nil) -> AVPlayerItem {
+        let resolvedService: StreamingService
+        if let service {
+            resolvedService = service
+        } else {
+            resolvedService = StreamingService(rawValue: currentStreamingServiceName) ?? .youtubeMusic
+        }
+
+        let isYouTubeSource = resolvedService == .youtube || resolvedService == .youtubeMusic
 
         let asset: AVURLAsset
-        if isYouTubeSource {
+        if isYouTubeSource,
+           shouldInjectYouTubeHeaders(for: url) {
             let headers: [String: String] = [
                 "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
                 "Referer": "https://www.youtube.com/",
@@ -1018,6 +2685,21 @@ final class PlayerViewModel {
         }
 
         return AVPlayerItem(asset: asset)
+    }
+
+    private func shouldInjectYouTubeHeaders(for url: URL) -> Bool {
+        guard let host = url.host?.lowercased(),
+              !host.isEmpty else {
+            return false
+        }
+
+        if host.contains("googlevideo.com") || host.contains("googleusercontent.com") {
+            return false
+        }
+
+        return host.contains("youtube.com")
+            || host.contains("youtu.be")
+            || host.contains("youtubei.googleapis.com")
     }
 
     private func mimeTypeForCodecLabel(_ codecLabel: String) -> String? {
@@ -1082,6 +2764,15 @@ final class PlayerViewModel {
         playbackCandidatesMediaID = mediaID
         playbackCandidates = []
         playbackCandidateIndex = 0
+    }
+
+    private func resetPlaybackRecoveryState(for mediaID: String) {
+        playbackRecoveryAttemptCounts.removeValue(forKey: mediaID)
+    }
+
+    private var supportsYouTubeCandidateRecovery: Bool {
+        currentStreamingServiceName == StreamingService.youtube.rawValue
+            || currentStreamingServiceName == StreamingService.youtubeMusic.rawValue
     }
 
     private func playCurrentPlaybackCandidate() {
@@ -1234,14 +2925,27 @@ final class PlayerViewModel {
                     self.updateNowPlayingPlaybackInfo(force: true)
                     self.updateRemoteCommandState()
                 case .failed:
-                    let errorMessage = item.error?.localizedDescription ?? "unknown error"
+                    let nsError = item.error as NSError?
+                    let errorMessage = nsError?.localizedDescription ?? "unknown error"
+                    let statusCode = Self.latestErrorStatusCode(for: item)
+                    let errorCode = nsError?.code
+                    let errorDomain = nsError?.domain
                     print("❌ PlayerViewModel: AVPlayerItem failed: \(errorMessage)")
 
                     if self.attemptNextPlaybackCandidateIfAvailable(errorMessage: errorMessage) {
                         return
                     }
 
-                    if self.handlePlaybackPermissionFailureIfNeeded(errorMessage: errorMessage) {
+                    if self.handlePlaybackPermissionFailureIfNeeded(
+                        errorMessage: errorMessage,
+                        statusCode: statusCode,
+                        errorDomain: errorDomain,
+                        errorCode: errorCode
+                    ) {
+                        return
+                    }
+
+                    if self.advanceQueueAfterUnrecoverableFailure(errorMessage: errorMessage) {
                         return
                     }
 
@@ -1258,12 +2962,66 @@ final class PlayerViewModel {
         }
     }
 
-    private func handlePlaybackPermissionFailureIfNeeded(errorMessage: String) -> Bool {
-        guard let mediaID = currentVideoId else { return false }
-        guard shouldAttemptPlaybackRecovery(for: errorMessage) else { return false }
-        guard !playbackRecoveryAttemptedIDs.contains(mediaID) else { return false }
+    private static func latestErrorStatusCode(for item: AVPlayerItem) -> Int? {
+        guard let events = item.errorLog()?.events else {
+            return nil
+        }
 
-        playbackRecoveryAttemptedIDs.insert(mediaID)
+        for event in events.reversed() {
+            let statusCode = Int(event.errorStatusCode)
+            if statusCode != 0 {
+                return statusCode
+            }
+        }
+
+        return nil
+    }
+
+    private func observeCurrentItemEnd(_ item: AVPlayerItem) {
+        removeCurrentItemEndObserver()
+        currentItemEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.advanceToNextQueueEntry(triggeredByPlaybackEnd: true)
+            }
+        }
+    }
+
+    private func removeCurrentItemEndObserver() {
+        if let currentItemEndObserver {
+            NotificationCenter.default.removeObserver(currentItemEndObserver)
+            self.currentItemEndObserver = nil
+        }
+    }
+
+    private func handlePlaybackPermissionFailureIfNeeded(
+        errorMessage: String,
+        statusCode: Int?,
+        errorDomain: String?,
+        errorCode: Int?
+    ) -> Bool {
+        guard let mediaID = currentVideoId else { return false }
+        guard supportsYouTubeCandidateRecovery else { return false }
+
+        guard shouldAttemptPlaybackRecovery(
+            for: errorMessage,
+            statusCode: statusCode,
+            errorDomain: errorDomain,
+            errorCode: errorCode
+        ) else {
+            return false
+        }
+
+        let currentAttemptCount = playbackRecoveryAttemptCounts[mediaID, default: 0]
+        guard currentAttemptCount < PlaybackRecoveryPolicy.maxAttemptsPerMediaID else {
+            return false
+        }
+
+        playbackRecoveryAttemptCounts[mediaID] = currentAttemptCount + 1
         playbackRecoveryTask?.cancel()
         playbackRecoveryTask = Task { [weak self] in
             guard let self else { return }
@@ -1276,7 +3034,9 @@ final class PlayerViewModel {
                 guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
                 self.configurePlaybackCandidates(for: mediaID, candidates: candidates)
                 self.playCurrentPlaybackCandidate()
-                self.logPlayback("Recovered playback with refreshed stream URL for id=\(mediaID)")
+                self.logPlayback(
+                    "Recovered playback with refreshed stream URL for id=\(mediaID), attempt=\(currentAttemptCount + 1), status=\(statusCode.map(String.init) ?? "n/a")"
+                )
             } catch {
                 guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
                 self.isPlaying = false
@@ -1290,14 +3050,62 @@ final class PlayerViewModel {
         return true
     }
 
-    private func shouldAttemptPlaybackRecovery(for errorMessage: String) -> Bool {
+    private func shouldAttemptPlaybackRecovery(
+        for errorMessage: String,
+        statusCode: Int?,
+        errorDomain: String?,
+        errorCode: Int?
+    ) -> Bool {
+        if let statusCode {
+            if statusCode == 401 || statusCode == 403 || statusCode == 404 || statusCode == 410 || statusCode == 429 {
+                return true
+            }
+
+            if statusCode >= 500 {
+                return true
+            }
+        }
+
+        if let errorDomain,
+           let errorCode,
+           errorDomain == NSURLErrorDomain {
+            let recoverableCodes: Set<Int> = [-1100, -1102, -1011, -1009, -1005, -1004, -1003, -1001]
+            if recoverableCodes.contains(errorCode) {
+                return true
+            }
+        }
+
+        if let errorDomain,
+           let errorCode,
+           errorDomain == AVFoundationErrorDomain {
+            let recoverableCodes: Set<Int> = [-11800, -11819, -11850, -11867]
+            if recoverableCodes.contains(errorCode) {
+                return true
+            }
+        }
+
         let normalized = errorMessage.lowercased()
         return normalized.contains("permission")
             || normalized.contains("forbidden")
             || normalized.contains("403")
             || normalized.contains("not authorized")
-            || normalized.contains("unknown error")
-            || normalized.contains("failed")
+            || normalized.contains("access denied")
+            || normalized.contains("expired")
+            || normalized.contains("signature")
+            || normalized.contains("token")
+            || normalized == "unknown error"
+            || normalized.contains("failed to load")
+            || normalized.contains("could not be loaded")
+    }
+
+    private func advanceQueueAfterUnrecoverableFailure(errorMessage: String) -> Bool {
+        guard hasNextTrackInQueue else {
+            return false
+        }
+
+        logPlayback("Advancing queue after unrecoverable failure: \(errorMessage)")
+        advanceToNextQueueEntry(triggeredByPlaybackEnd: true)
+        return true
     }
 
     private func handlePlaybackFailure(_ error: Error) {
@@ -1665,7 +3473,7 @@ final class PlayerViewModel {
         accentLoadTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let extractedAccent = await ArtworkDominantColorExtractor.shared.dominantColor(
+            let extractedAccent = await artworkColorExtractor.dominantColor(
                 from: artworkData,
                 cacheKey: artworkURL.absoluteString
             )

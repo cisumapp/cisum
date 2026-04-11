@@ -24,6 +24,21 @@ class SearchViewModel {
         static let persistentHintMaxAge: TimeInterval = 60 * 60 * 24 * 7
     }
 
+    private enum UnifiedTopResultsPolicy {
+        static let limit: Int = 5
+        static let services: [FederatedService] = [.tidal, .youtubeMusic, .youtube]
+        static let maxPerService: [FederatedService: Int] = [
+            .tidal: 2,
+            .youtubeMusic: 3,
+            .youtube: 3
+        ]
+    }
+
+    private enum YouMightLikePolicy {
+        static let limit: Int = 8
+        static let services: [FederatedService] = [.youtubeMusic, .youtube]
+    }
+
     private let youtube: YouTube
     private let settings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor
@@ -65,6 +80,8 @@ class SearchViewModel {
     var musicResults: [YouTubeMusicSong] = []
     var videoResults: [YouTubeSearchResult] = []
     var federatedSections: [FederatedSearchSection] = FederatedSearchSection.defaultSections
+    var unifiedTopResults: [FederatedSearchItem] = []
+    var youMightLikeResults: [FederatedSearchItem] = []
     var suggestions: [String] = []
     var state: SearchState = .idle
     
@@ -122,6 +139,8 @@ class SearchViewModel {
             self.musicResults = []
             self.videoResults = []
             self.federatedSections = FederatedSearchSection.defaultSections
+            self.unifiedTopResults = []
+            self.youMightLikeResults = []
             self.suggestions = []
             self.state = .idle
             self.lastHintPrefetchedKey = nil
@@ -151,6 +170,8 @@ class SearchViewModel {
             self.musicResults = []
             self.videoResults = []
             self.federatedSections = FederatedSearchSection.defaultSections
+            self.unifiedTopResults = []
+            self.youMightLikeResults = []
             self.state = .idle
             return
         }
@@ -163,6 +184,8 @@ class SearchViewModel {
         self.state = .loading
 
         resetFederatedSections(state: .loading)
+        unifiedTopResults = []
+        youMightLikeResults = []
         historyStore.recordSearch(query: query)
 
         let effectiveVideoQuery = effectiveSearchQuery(for: query, scope: .video)
@@ -170,19 +193,23 @@ class SearchViewModel {
         async let youtubeMusicTask = fetchYouTubeMusicSectionItems(query: query)
         async let youtubeTask = fetchYouTubeSectionItems(query: effectiveVideoQuery)
         async let tidalTask = fetchTidalSectionItems(query: query)
-        async let spotifyTask = fetchSpotifySectionItems(query: query)
 
         let youtubeMusicResult = await youtubeMusicTask
         let youtubeResult = await youtubeTask
         let tidalResult = await tidalTask
-        let spotifyResult = await spotifyTask
 
         applyFederatedSearchResult(youtubeMusicResult, for: .youtubeMusic)
         applyFederatedSearchResult(youtubeResult, for: .youtube)
         applyFederatedSearchResult(tidalResult, for: .tidal)
-        applyFederatedSearchResult(spotifyResult, for: .spotify)
+        setSectionState(.idle, for: .spotify)
 
-        let hasResults = federatedSections.contains { !$0.items.isEmpty }
+        unifiedTopResults = buildUnifiedTopResults(for: query)
+        youMightLikeResults = buildYouMightLikeResults(
+            for: query,
+            excludingIDs: Set(unifiedTopResults.map(\ .id))
+        )
+
+        let hasResults = !unifiedTopResults.isEmpty || !youMightLikeResults.isEmpty
         if hasResults {
             state = .success
         } else {
@@ -254,13 +281,439 @@ class SearchViewModel {
         }
     }
 
+    private func setSectionState(_ state: FederatedSectionState, for service: FederatedService) {
+        guard let index = federatedSections.firstIndex(where: { $0.service == service }) else { return }
+        federatedSections[index].state = state
+        federatedSections[index].items = []
+    }
+
     private func firstSectionErrorMessage() -> String? {
-        for section in federatedSections {
+        for service in UnifiedTopResultsPolicy.services {
+            guard let section = federatedSections.first(where: { $0.service == service }) else {
+                continue
+            }
+
             if case .error(let message) = section.state {
                 return message
             }
         }
         return nil
+    }
+
+    private struct UnifiedRankingContext {
+        let normalizedQuery: String
+        let youtubeArtistSignals: [String: Double]
+        let dominantArtist: String?
+        let queryHasArtistHint: Bool
+    }
+
+    private func buildUnifiedTopResults(for query: String) -> [FederatedSearchItem] {
+        let candidates = UnifiedTopResultsPolicy.services.flatMap { items(for: $0) }
+        guard !candidates.isEmpty else { return [] }
+
+        let context = makeUnifiedRankingContext(for: query)
+        var groupedCandidates: [String: [(item: FederatedSearchItem, score: Double)]] = [:]
+
+        for item in candidates {
+            let key = unifiedResultDedupKey(for: item)
+            let score = unifiedResultScore(for: item, context: context)
+            groupedCandidates[key, default: []].append((item: item, score: score))
+        }
+
+        let rankedGroups: [(item: FederatedSearchItem, score: Double)] = groupedCandidates.values.compactMap { group in
+            guard let representative = group.max(by: { $0.score < $1.score }) else {
+                return nil
+            }
+
+            let distinctServiceCount = Set(group.map { $0.item.service }).count
+            let consensusBoost = consensusConfidenceBoost(forDistinctServiceCount: distinctServiceCount)
+            return (item: representative.item, score: representative.score + consensusBoost)
+        }
+        .sorted { lhs, rhs in
+            if lhs.score == rhs.score {
+                return providerPriority(for: lhs.item.service) < providerPriority(for: rhs.item.service)
+            }
+            return lhs.score > rhs.score
+        }
+
+        return enforceServiceDiversity(
+            on: rankedGroups.map { $0.item },
+            limit: UnifiedTopResultsPolicy.limit,
+            queryHasArtistHint: context.queryHasArtistHint
+        )
+    }
+
+    private func buildYouMightLikeResults(for query: String, excludingIDs: Set<String>) -> [FederatedSearchItem] {
+        let candidates = YouMightLikePolicy.services
+            .flatMap { items(for: $0) }
+            .filter { !excludingIDs.contains($0.id) }
+        guard !candidates.isEmpty else { return [] }
+
+        let normalizedQuery = normalizedRankingText(query)
+        let anchorTitle = normalizedRankingText(unifiedTopResults.first?.title ?? "")
+        let anchorArtist = normalizedRankingText(primaryArtistName(from: unifiedTopResults.first?.subtitle ?? ""))
+
+        let ranked = candidates.enumerated().map { index, item in
+            let itemTitle = normalizedRankingText(item.title)
+            let itemArtist = normalizedRankingText(primaryArtistName(from: item.subtitle))
+
+            let querySimilarity = tokenOverlapScore(itemTitle, normalizedQuery)
+            let anchorSimilarity = max(
+                tokenOverlapScore(itemTitle, anchorTitle),
+                tokenOverlapScore(itemArtist, anchorArtist)
+            )
+            let serviceBoost = item.service == .youtubeMusic ? 0.08 : 0.05
+            let positionBoost = max(0.0, 0.12 - (Double(index) * 0.02))
+            let score = (0.58 * querySimilarity) + (0.30 * anchorSimilarity) + serviceBoost + positionBoost
+
+            return (item: item, score: score)
+        }
+        .sorted { lhs, rhs in
+            if lhs.score == rhs.score {
+                return providerPriority(for: lhs.item.service) < providerPriority(for: rhs.item.service)
+            }
+            return lhs.score > rhs.score
+        }
+        .map { $0.item }
+
+        let deduplicated = dedupeByMetadataPreservingOrder(ranked)
+        return Array(deduplicated.prefix(YouMightLikePolicy.limit))
+    }
+
+    private func dedupeByMetadataPreservingOrder(_ items: [FederatedSearchItem]) -> [FederatedSearchItem] {
+        var seen = Set<String>()
+        var deduped: [FederatedSearchItem] = []
+
+        for item in items {
+            let key = unifiedResultDedupKey(for: item)
+            if seen.insert(key).inserted {
+                deduped.append(item)
+            }
+        }
+
+        return deduped
+    }
+
+    private func makeUnifiedRankingContext(for query: String) -> UnifiedRankingContext {
+        let normalizedQuery = normalizedRankingText(query)
+        let youtubeArtistSignals = buildYouTubeArtistSignals()
+        let dominantArtist = youtubeArtistSignals
+            .max(by: { lhs, rhs in lhs.value < rhs.value })?
+            .key
+        let queryHasArtistHint = queryContainsArtistHint(
+            normalizedQuery,
+            candidateArtists: Array(youtubeArtistSignals.keys)
+        )
+
+        return UnifiedRankingContext(
+            normalizedQuery: normalizedQuery,
+            youtubeArtistSignals: youtubeArtistSignals,
+            dominantArtist: dominantArtist,
+            queryHasArtistHint: queryHasArtistHint
+        )
+    }
+
+    private func buildYouTubeArtistSignals() -> [String: Double] {
+        var signals: [String: Double] = [:]
+
+        for (index, item) in items(for: .youtube).enumerated() {
+            guard case .youtubeVideo(let video) = item.payload else { continue }
+
+            let artist = normalizedRankingText(normalizedMusicDisplayArtist(video.author, title: video.title))
+            guard !artist.isEmpty else { continue }
+
+            let viewCount = parseYouTubeViewCount(video.viewCount)
+            let positionWeight = max(0.30, 1.0 - (Double(index) * 0.16))
+            let viewWeight = log10(max(10.0, viewCount + 10.0))
+            let totalWeight = positionWeight + (viewWeight * 0.22)
+
+            signals[artist, default: 0] += totalWeight
+        }
+
+        for (index, item) in items(for: .youtubeMusic).enumerated() {
+            let artist = normalizedRankingText(primaryArtistName(from: item.subtitle))
+            guard !artist.isEmpty else { continue }
+
+            let weight = max(0.20, 0.55 - (Double(index) * 0.10))
+            signals[artist, default: 0] += weight
+        }
+
+        return signals
+    }
+
+    private func queryContainsArtistHint(_ normalizedQuery: String, candidateArtists: [String]) -> Bool {
+        if normalizedQuery.contains(" by ") {
+            return true
+        }
+
+        let queryTokens = tokenSet(from: normalizedQuery)
+        guard queryTokens.count >= 3 else { return false }
+
+        for artist in candidateArtists {
+            let artistTokenSet = Set(tokenSet(from: artist).filter { $0.count > 2 })
+            guard !artistTokenSet.isEmpty else { continue }
+
+            let overlap = Double(queryTokens.intersection(artistTokenSet).count) / Double(artistTokenSet.count)
+            if overlap >= 0.67 {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func unifiedResultScore(for item: FederatedSearchItem, context: UnifiedRankingContext) -> Double {
+        let searchableText = normalizedRankingText("\(item.title) \(primaryArtistName(from: item.subtitle))")
+        let queryTokens = tokenSet(from: context.normalizedQuery)
+        let itemTokens = tokenSet(from: searchableText)
+
+        let overlap: Double
+        if queryTokens.isEmpty {
+            overlap = 0
+        } else {
+            overlap = Double(queryTokens.intersection(itemTokens).count) / Double(queryTokens.count)
+        }
+
+        let containsBoost = (!context.normalizedQuery.isEmpty && searchableText.contains(context.normalizedQuery)) ? 0.16 : 0
+        let prefixBoost = (!context.normalizedQuery.isEmpty && searchableText.hasPrefix(context.normalizedQuery)) ? 0.06 : 0
+        let providerBoost = providerConfidenceBoost(for: item.service, queryHasArtistHint: context.queryHasArtistHint)
+        let qualityBoost = qualityConfidenceBoost(for: item)
+        let playabilityBoost = item.isPlayable ? 0.03 : -0.12
+
+        let artistAlignment = itemArtistAlignmentScore(for: item, dominantArtist: context.dominantArtist)
+        let artistBoost = inferredArtistBoost(
+            for: item.service,
+            alignment: artistAlignment,
+            hasDominantArtist: context.dominantArtist != nil,
+            queryHasArtistHint: context.queryHasArtistHint
+        )
+
+        return (0.68 * overlap)
+            + containsBoost
+            + prefixBoost
+            + providerBoost
+            + qualityBoost
+            + playabilityBoost
+            + artistBoost
+    }
+
+    private func itemArtistAlignmentScore(for item: FederatedSearchItem, dominantArtist: String?) -> Double {
+        guard let dominantArtist, !dominantArtist.isEmpty else { return 0 }
+        let itemArtist = normalizedRankingText(primaryArtistName(from: item.subtitle))
+        guard !itemArtist.isEmpty else { return 0 }
+        return tokenOverlapScore(itemArtist, dominantArtist)
+    }
+
+    private func inferredArtistBoost(
+        for service: FederatedService,
+        alignment: Double,
+        hasDominantArtist: Bool,
+        queryHasArtistHint: Bool
+    ) -> Double {
+        guard hasDominantArtist else { return 0 }
+
+        switch service {
+        case .tidal:
+            if queryHasArtistHint {
+                if alignment >= 0.75 { return 0.20 }
+                if alignment >= 0.45 { return 0.10 }
+                return -0.05
+            }
+
+            if alignment >= 0.75 { return 0.12 }
+            if alignment >= 0.45 { return 0.04 }
+            return -0.16
+
+        case .youtubeMusic:
+            if alignment >= 0.75 { return 0.08 }
+            if alignment >= 0.45 { return 0.04 }
+            return 0
+
+        case .youtube:
+            if alignment >= 0.75 { return 0.06 }
+            if alignment >= 0.45 { return 0.03 }
+            return 0
+
+        case .spotify:
+            return 0
+        }
+    }
+
+    private func consensusConfidenceBoost(forDistinctServiceCount count: Int) -> Double {
+        switch count {
+        case 3...:
+            return 0.10
+        case 2:
+            return 0.06
+        default:
+            return 0
+        }
+    }
+
+    private func enforceServiceDiversity(
+        on rankedItems: [FederatedSearchItem],
+        limit: Int,
+        queryHasArtistHint: Bool
+    ) -> [FederatedSearchItem] {
+        guard limit > 0 else { return [] }
+
+        var selected: [FederatedSearchItem] = []
+        var selectedIDs = Set<String>()
+        var serviceCounts: [FederatedService: Int] = [:]
+
+        for item in rankedItems {
+            let cap: Int
+            if item.service == .tidal {
+                cap = queryHasArtistHint ? (UnifiedTopResultsPolicy.maxPerService[item.service] ?? 2) : 1
+            } else {
+                cap = UnifiedTopResultsPolicy.maxPerService[item.service] ?? limit
+            }
+
+            if serviceCounts[item.service, default: 0] >= cap {
+                continue
+            }
+
+            if selectedIDs.insert(item.id).inserted {
+                selected.append(item)
+                serviceCounts[item.service, default: 0] += 1
+            }
+
+            if selected.count == limit {
+                return selected
+            }
+        }
+
+        if selected.count < limit {
+            for item in rankedItems {
+                guard selectedIDs.insert(item.id).inserted else { continue }
+                selected.append(item)
+                if selected.count == limit {
+                    break
+                }
+            }
+        }
+
+        return selected
+    }
+
+    private func unifiedResultDedupKey(for item: FederatedSearchItem) -> String {
+        let title = normalizedRankingText(item.title)
+        let artist = normalizedRankingText(primaryArtistName(from: item.subtitle))
+        return "\(title)|\(artist)"
+    }
+
+    private func primaryArtistName(from subtitle: String) -> String {
+        if let first = subtitle.split(separator: "•").first {
+            let artist = String(first).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !artist.isEmpty {
+                return artist
+            }
+        }
+
+        return subtitle
+    }
+
+    private func normalizedRankingText(_ value: String) -> String {
+        let lowercased = value.lowercased()
+        let withoutPunctuation = lowercased.replacingOccurrences(
+            of: "[^a-z0-9\\s]",
+            with: " ",
+            options: .regularExpression
+        )
+
+        return withoutPunctuation
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func tokenSet(from value: String) -> Set<String> {
+        Set(value.split(separator: " ").map(String.init))
+    }
+
+    private func tokenOverlapScore(_ lhs: String, _ rhs: String) -> Double {
+        let lhsTokens = tokenSet(from: lhs)
+        let rhsTokens = tokenSet(from: rhs)
+        guard !lhsTokens.isEmpty, !rhsTokens.isEmpty else { return 0 }
+
+        let overlapCount = Double(lhsTokens.intersection(rhsTokens).count)
+        let normalizer = Double(max(lhsTokens.count, rhsTokens.count))
+        return normalizer == 0 ? 0 : overlapCount / normalizer
+    }
+
+    private func parseYouTubeViewCount(_ value: String) -> Double {
+        let lowered = value
+            .lowercased()
+            .replacingOccurrences(of: ",", with: "")
+
+        if let compactRange = lowered.range(of: "([0-9]+(?:\\.[0-9]+)?)\\s*([kmb])", options: .regularExpression) {
+            let compact = String(lowered[compactRange])
+            let numericPart = compact.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
+            guard let number = Double(numericPart) else { return 0 }
+
+            if compact.contains("b") { return number * 1_000_000_000 }
+            if compact.contains("m") { return number * 1_000_000 }
+            if compact.contains("k") { return number * 1_000 }
+            return number
+        }
+
+        if let numberRange = lowered.range(of: "[0-9]+(?:\\.[0-9]+)?", options: .regularExpression),
+           let number = Double(lowered[numberRange]) {
+            if lowered.contains("billion") { return number * 1_000_000_000 }
+            if lowered.contains("million") { return number * 1_000_000 }
+            if lowered.contains("thousand") { return number * 1_000 }
+            return number
+        }
+
+        return 0
+    }
+
+    private func providerPriority(for service: FederatedService) -> Int {
+        switch service {
+        case .tidal:
+            return 0
+        case .youtubeMusic:
+            return 1
+        case .youtube:
+            return 2
+        case .spotify:
+            return 3
+        }
+    }
+
+    private func providerConfidenceBoost(for service: FederatedService, queryHasArtistHint: Bool) -> Double {
+        switch service {
+        case .tidal:
+            return queryHasArtistHint ? 0.08 : 0.00
+        case .youtubeMusic:
+            return queryHasArtistHint ? 0.03 : 0.04
+        case .youtube:
+            return queryHasArtistHint ? 0.02 : 0.03
+        case .spotify:
+            return 0
+        }
+    }
+
+    private func qualityConfidenceBoost(for item: FederatedSearchItem) -> Double {
+        let quality = normalizedRankingText(item.audioQualityLabel ?? "")
+        let codec = normalizedRankingText(item.audioCodecLabel ?? "")
+
+        var boost: Double = 0
+
+        if quality.contains("hi res") {
+            boost += 0.06
+        } else if quality.contains("lossless") {
+            boost += 0.05
+        } else if quality.contains("high") {
+            boost += 0.02
+        }
+
+        if codec == "flac" {
+            boost += 0.02
+        } else if codec == "aac" {
+            boost += 0.005
+        }
+
+        return boost
     }
 
     private func fetchYouTubeMusicSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
@@ -282,6 +735,9 @@ class SearchViewModel {
                     artworkURL: song.thumbnailURL,
                     durationSeconds: song.duration,
                     isPlayable: true,
+                    isExplicit: song.isExplicit,
+                    audioQualityLabel: nil,
+                    audioCodecLabel: nil,
                     payload: .youtubeMusic(song)
                 )
             }
@@ -319,6 +775,9 @@ class SearchViewModel {
                     artworkURL: normalizedThumbnailURL(from: video.thumbnailURL),
                     durationSeconds: parseVideoDurationSeconds(video.lengthInSeconds),
                     isPlayable: true,
+                    isExplicit: false,
+                    audioQualityLabel: nil,
+                    audioCodecLabel: nil,
                     payload: .youtubeVideo(video)
                 )
             }
@@ -353,6 +812,9 @@ class SearchViewModel {
                     artworkURL: track.artworkURL,
                     durationSeconds: track.durationSeconds,
                     isPlayable: true,
+                    isExplicit: false,
+                    audioQualityLabel: tidalSearchQualityBadgeLabel(from: track.audioQuality),
+                    audioCodecLabel: tidalSearchCodecBadgeLabel(from: track.audioQuality),
                     payload: .tidal(track)
                 )
             }
@@ -383,14 +845,18 @@ class SearchViewModel {
                 )
             }
 
-            let items = topTracks.map { track in
-                FederatedSearchItem(
+            let items: [FederatedSearchItem] = topTracks.map { track in
+                let codecLabel = inferCodecLabelIfKnown(from: track.previewURL)
+                return FederatedSearchItem(
                     id: "spotify-\(track.id)",
                     title: track.title,
                     subtitle: "\(track.artistName) • \(track.albumName ?? "Spotify")",
                     artworkURL: track.artworkURL,
                     durationSeconds: track.durationSeconds,
                     isPlayable: track.previewURL != nil,
+                    isExplicit: false,
+                    audioQualityLabel: track.previewURL != nil ? "Preview" : nil,
+                    audioCodecLabel: codecLabel,
                     payload: .spotify(track)
                 )
             }
@@ -426,6 +892,60 @@ class SearchViewModel {
         if ext == "aac" || ext == "m4a" || ext == "mp4" { return "AAC" }
         if ext == "mp3" { return "MP3" }
         return "Unknown"
+    }
+
+    private func inferCodecLabelIfKnown(from url: URL?) -> String? {
+        guard let url else { return nil }
+        let label = inferCodecLabel(from: url)
+        return label == "Unknown" ? nil : label
+    }
+
+    private func tidalSearchQualityBadgeLabel(from rawValue: String?) -> String? {
+        guard let quality = normalizedTidalQualityToken(from: rawValue) else {
+            return nil
+        }
+
+        switch quality {
+        case "HI_RES_LOSSLESS", "HI_RES":
+            return "Hi-Res"
+        case "LOSSLESS":
+            return "Lossless"
+        case "HIGH":
+            return "High"
+        case "MEDIUM":
+            return "Medium"
+        case "LOW":
+            return "Low"
+        case "DOLBY_ATMOS":
+            return "Dolby Atmos"
+        case "SONY_360RA", "360RA":
+            return "360 Reality Audio"
+        default:
+            return nil
+        }
+    }
+
+    private func tidalSearchCodecBadgeLabel(from rawValue: String?) -> String? {
+        guard let quality = normalizedTidalQualityToken(from: rawValue) else {
+            return nil
+        }
+
+        switch quality {
+        case "HI_RES_LOSSLESS", "HI_RES", "LOSSLESS":
+            return "FLAC"
+        case "HIGH", "MEDIUM", "LOW":
+            return "AAC"
+        default:
+            return nil
+        }
+    }
+
+    private func normalizedTidalQualityToken(from rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let normalized = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        return normalized.isEmpty ? nil : normalized
     }
 
 #if canImport(TidalKit)
@@ -630,7 +1150,17 @@ class SearchViewModel {
             case .music:
                 remote = try await youtube.music.getSearchSuggestions(query: query)
             case .video:
-                remote = try await youtube.main.getSearchSuggestions(query: effectiveSearchQuery(for: query, scope: .video))
+                async let youtubeSuggestionsTask = youtube.main.getSearchSuggestions(query: query)
+                async let musicSuggestionsTask = youtube.music.getSearchSuggestions(query: query)
+
+                let youtubeSuggestions = (try? await youtubeSuggestionsTask) ?? []
+                let musicSuggestions = (try? await musicSuggestionsTask) ?? []
+                var seenSuggestionKeys = Set<String>()
+                remote = (youtubeSuggestions + musicSuggestions).filter { suggestion in
+                    let key = suggestion.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    guard !key.isEmpty else { return false }
+                    return seenSuggestionKeys.insert(key).inserted
+                }
             }
 
             let local = historyStore.topCandidates(prefix: query, limit: 20)
@@ -974,7 +1504,23 @@ struct FederatedSearchItem: Identifiable {
     let artworkURL: URL?
     let durationSeconds: TimeInterval?
     let isPlayable: Bool
+    let isExplicit: Bool
+    let audioQualityLabel: String?
+    let audioCodecLabel: String?
     let payload: FederatedSearchPayload
+
+    var service: FederatedService {
+        switch payload {
+        case .youtubeVideo:
+            return .youtube
+        case .youtubeMusic:
+            return .youtubeMusic
+        case .tidal:
+            return .tidal
+        case .spotify:
+            return .spotify
+        }
+    }
 }
 
 struct ExternalStreamPayload {
