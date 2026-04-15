@@ -55,3 +55,38 @@ final class Router {
         tabPaths[tab] = path
     }
 }
+
+struct RouterViewModifier: ViewModifier {
+    @Environment(\.router) private var router
+    
+    private func routeView(to route: Routes) -> some View {
+        Group {
+            switch route {
+            case .profile:
+                ProfileView()
+            case .settings:
+                SettingsView()
+            case .playlistDetail(let playlistID):
+                PlaylistDetailView(playlistID: playlistID)
+            }
+        }
+    }
+
+    #if DEBUG
+    @ObserveInjection var forceRedraw
+    #endif
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: Routes.self) { newRoute in
+                routeView(to: newRoute)
+            }
+        .enableInjection()
+    }
+}
+
+extension View {
+    func usingRouter() -> some View {
+        modifier(RouterViewModifier())
+    }
+}

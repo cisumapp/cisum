@@ -11,7 +11,7 @@ struct ProfileButton: View {
     @Environment(\.router) private var router
     
     @State var isClicked: Bool = false
-    @State private var isHovered: Bool = false
+    @State private var isHovering: Bool = false
     @Namespace private var namespace
 
     private enum Layout {
@@ -62,28 +62,21 @@ struct ProfileButton: View {
                     }
             }
 #endif
-
             menuSurface
-                .padding()
-                .onTapGesture {
-                    toggleMenu()
-                }
         }
 #if os(macOS)
-        .onHover { hovering in
-            guard hovering != isHovered else { return }
+        .onHover { isHovering in
             withAnimation(hoverAnimation) {
-                isHovered = hovering
+                self.isHovering = isHovering
             }
         }
-        .scaleEffect(isHovered ? Layout.hoverScale : 1, anchor: .topTrailing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 #else
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 #endif
         .onDisappear {
             isClicked = false
-            isHovered = false
+            isHovering = false
         }
         .enableInjection()
     }
@@ -91,13 +84,13 @@ struct ProfileButton: View {
     @ViewBuilder
     private var menuSurface: some View {
         if #available(macOS 26.0, iOS 26.0, *) {
-            if !isClicked {
+            if !isClicked || !isHovering {
                 collapsedGlass
             } else {
                 expandedGlass
             }
         } else {
-            if !isClicked {
+            if !isClicked || !isHovering {
                 fallbackCollapsedGlass
             } else {
                 fallbackExpandedGlass

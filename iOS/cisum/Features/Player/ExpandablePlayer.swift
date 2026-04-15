@@ -283,10 +283,3 @@ private struct ProgressTracker: View, @preconcurrency Animatable {
         .enableInjection()
     }
 }
-
-extension Animation {
-    static let playerExpandAnimationDuration: TimeInterval = 0.3
-    static var playerExpandAnimation: Animation {
-        .smooth(duration: playerExpandAnimationDuration, extraBounce: 0)
-    }
-}

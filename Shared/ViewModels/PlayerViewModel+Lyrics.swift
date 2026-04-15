@@ -26,7 +26,7 @@ extension PlayerViewModel {
         }
     }
 
-    private var currentSyncedLyricIndex: Int? {
+    var currentSyncedLyricIndex: Int? {
         guard !self.syncedLyricsLines.isEmpty else { return nil }
 
         let playbackTime = max(self.currentTime, 0)

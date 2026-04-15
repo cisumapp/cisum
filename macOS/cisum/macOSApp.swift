@@ -12,16 +12,34 @@ struct macOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var dependencies: AppDependencies
+    @State private var searchOverlay: SearchOverlayController
     
     init() {
         _dependencies = State(initialValue: AppDependencies.make())
+        _searchOverlay = State(initialValue: SearchOverlayController())
     }
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .injectAppDependencies(dependencies)
+            appContent
         }
+        .commands {
+            CommandMenu("Search") {
+                Button("Focus Search Overlay") {
+                    searchOverlay.present()
+                }
+                .keyboardShortcut("k", modifiers: [.command])
+
+                Button("Search Globally") {
+                    searchOverlay.switchToGlobalScope(carryCurrentQuery: true)
+                    searchOverlay.present()
+                }
+                .keyboardShortcut(.return, modifiers: [.command])
+            }
+        }
+        .defaultSize(width: 1080, height: 840)
+        .defaultPosition(.center)
+        .windowStyle(.hiddenTitleBar)
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase != .active {
                 dependencies.prefetchSettings.flushPendingWrites()
@@ -43,6 +61,72 @@ struct macOSApp: App {
             SettingsView()
                 .injectSettingsDependencies(dependencies)
         }
+    }
+
+    @ViewBuilder
+    private var appContent: some View {
+        ContentView()
+            .injectAppDependencies(dependencies)
+            .environment(searchOverlay)
+            .tint(dependencies.playerViewModel.currentAccentColor)
+            .background {
+                if #available(macOS 26.0, *) {
+                    Rectangle()
+                        .glassEffect(.regular, in: .rect(cornerRadius: 26))
+                } else {
+                    Rectangle()
+                        .fill(.ultraThinMaterial.opacity(0.9))
+                }
+            }
+            .clipShape(.rect(cornerRadius: 26, style: .continuous))
+            .removeWindowDecorations()
+    }
+}
+
+extension View {
+    func removeWindowDecorations() -> some View {
+        self
+            .background(WindowModifier())
+    }
+}
+
+struct WindowModifier: NSViewRepresentable {
+    func makeNSView(context: Context) -> some NSView {
+        let view = NSView()
+        
+        DispatchQueue.main.async {
+            configureWindow(for: view)
+        }
+        
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSViewType, context: Context) {
+        DispatchQueue.main.async {
+            configureWindow(for: nsView)
+        }
+    }
+
+    private func configureWindow(for view: NSView) {
+        guard let window = view.window else { return }
+
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        window.standardWindowButton(.closeButton)?.isHidden = true
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        window.standardWindowButton(.zoomButton)?.isHidden = true
+
+        window.backgroundColor = .clear
+        window.styleMask = [.borderless, .resizable, .fullSizeContentView]
+        window.isOpaque = false
+        window.hasShadow = true
+        window.isMovableByWindowBackground = false
+
+        guard let contentView = window.contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.masksToBounds = true
+        contentView.layer?.cornerCurve = .continuous
     }
 }
 

@@ -9,7 +9,6 @@ import Kingfisher
 import SwiftUI
 
 struct DynamicPlayerIsland: View {
-#if os(iOS)
     @Environment(PlayerViewModel.self) private var playerViewModel
     
     
@@ -33,84 +32,6 @@ struct DynamicPlayerIsland: View {
             }
             .enableInjection()
     }
-    //#elseif os(macOS)
-    //    @State private var isHovered: Bool = false
-    //    @Namespace private var namespace
-    //
-    //    #if DEBUG
-    //    @ObserveInjection var forceRedraw
-    //    #endif
-    //
-    //    var body: some View {
-    //        ZStack {
-    //            if isHovered {
-    //                if #available(macOS 26.0, *) {
-    //                    RoundedRectangle(cornerRadius: 24)
-    //                        .fill(.clear)
-    //                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
-    //                        .matchedGeometryEffect(id: "GLASS", in: namespace)
-    //                        .frame(height: 180)
-    //                        .overlay {
-    //                            VStack {
-    //                                HStack {
-    //                                    RoundedRectangle(cornerRadius: 12)
-    //                                        .matchedGeometryEffect(id: "Artwork", in: namespace)
-    //                                        .frame(width: 74, height: 74)
-    //                                    VStack(alignment: .leading) {
-    //                                        Text("Now Playing")
-    //                                            .font(.title3)
-    //                                            .fontWeight(.semibold)
-    //                                        Text("Artist")
-    //                                            .font(.subheadline)
-    //                                            .foregroundStyle(.secondary)
-    //                                    }
-    //                                    Spacer()
-    //                                }
-    //                                .padding()
-    //
-    //                                Spacer()
-    //
-    //                                HStack {
-    //                                    Image(systemName: "backward.fill")
-    //                                    Image(systemName: "play.fill")
-    //                                    Image(systemName: "forward.fill")
-    //                                }
-    //                                .font(.title)
-    //                                .padding()
-    //                            }
-    //                        }
-    //                }
-    //            } else {
-    //                if #available(macOS 26.0, *) {
-    //                    RoundedRectangle(cornerRadius: 40)
-    //                        .fill(.secondary.opacity(0.06))
-    //                        .glassEffect(.regular)
-    //                        .matchedGeometryEffect(id: "GLASS", in: namespace)
-    //                        .frame(height: 70)
-    //                        .overlay {
-    //                            HStack {
-    //                                Circle()
-    //                                    .matchedGeometryEffect(id: "Artwork", in: namespace)
-    //                                    .frame(width: 44, height: 44)
-    //                                Text("Now Playing")
-    //                                    .fontWeight(.semibold)
-    //                                Spacer()
-    //                            }
-    //                            .padding(12)
-    //                        }
-    //                }
-    //            }
-    //        }
-    //        .padding()
-    //        .onHover { hovering in
-    //            withAnimation(.bouncy) {
-    //                isHovered = hovering
-    //            }
-    //        }
-    //        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    //        .enableInjection()
-    //    }
-#endif
 }
 
 private extension DynamicPlayerIsland {
