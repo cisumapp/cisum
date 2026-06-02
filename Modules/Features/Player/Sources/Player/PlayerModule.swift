@@ -1,10 +1,10 @@
+import Models
 import SwiftUI
-import Services
 
 @MainActor
 public struct PlayerDependencies {
     public let viewModel: any PlayerViewModelInterface
-    
+
     public init(viewModel: any PlayerViewModelInterface) {
         self.viewModel = viewModel
     }
@@ -27,11 +27,11 @@ public final class PlayerModule {
     }
 
     public func expandablePlayer(show: Binding<Bool>, isExpanded: Binding<Bool>, collapsedFrame: CGRect) -> some View {
-#if os(iOS)
+        #if os(iOS)
         ExpandablePlayer(show: show, isPlayerExpanded: isExpanded, collapsedFrame: collapsedFrame)
-#else
+        #else
         EmptyView()
-#endif
+        #endif
     }
 
     public var accentColor: Color {
@@ -42,7 +42,7 @@ public final class PlayerModule {
         viewModel.currentVideoId
     }
 
-    public func handleScenePhaseChange(_ phase: ScenePhase) {
+    public func handleScenePhaseChange(_: ScenePhase) {
         // ViewModel handles scene phase if needed, or we can expose it via interface
     }
 }

@@ -1,24 +1,25 @@
-import SwiftUI
-import Search
-import Player
+import Aesthetics
 import Combine
-import DesignSystem
+import Player
+import Search
+import SwiftUI
 import Utilities
-import Services
-
+#if os(iOS)
+import UIKit
+#endif
 #if canImport(SpotifySDK)
 import SpotifySDK
 #endif
 
 public struct RootView: View {
     public let cisum: cisumModule
-    
+
     @Environment(\.modelContext) private var modelContext
     let navigationState: NavigationState
 
     @Environment(ServicesContainer.self) private var container
 
-#if os(iOS)
+    #if os(iOS)
     @State private var isScrollingDown = false
     @State private var storedOffset: CGFloat = 0
     @State var scrollPhase: ScrollPhases = .idle
@@ -26,10 +27,14 @@ public struct RootView: View {
     @Namespace private var playerAnimationNamespace
     @State private var showProfile = false
     @State private var showSettings = false
-#else
-    private var searchOverlay: SearchOverlayController { container.app.searchOverlayController }
+    @State private var appOrientation = AppOrientation(UIDevice.current.orientation)
+    #else
+    private var searchOverlay: SearchOverlayController {
+        container.app.searchOverlayController
+    }
+
     @Environment(\.isDynamicPlayerExpanded) private var isDynamicPlayerExpanded
-#endif
+    #endif
 
     public init(module: cisumModule) {
         self.cisum = module
@@ -37,65 +42,77 @@ public struct RootView: View {
     }
 
     public var body: some View {
-#if os(iOS)
+        #if os(iOS)
         @Bindable var presentation = container.app.playerPresentationController
         @Bindable var nav = navigationState
-        
+
         iOSTabView(
             selection: selectedTabBinding,
             expandMiniPlayer: $presentation.isExpanded,
             playerAnimationNamespace: playerAnimationNamespace,
             searchText: cisum.searchText,
-            playerContent: cisum.expandablePlayer(
+            playerContent: AnyView(cisum.applyEnvironment(to: cisum.expandablePlayer(
                 show: .constant(true),
                 isExpanded: $presentation.isExpanded,
                 collapsedFrame: .zero
-            ),
+            ))),
             accentColor: cisum.playerAccentColor
         ) {
             Tab("Home", systemImage: "house.fill", value: TabItem.home) {
-                tabRoot(for: .home) {
+                cisum.applyEnvironment(to: tabRoot(for: .home) {
                     cisum.homeView
-                }
+                })
             }
 
             Tab("Discover", systemImage: "globe", value: TabItem.discover) {
-                tabRoot(for: .discover) {
+                cisum.applyEnvironment(to: tabRoot(for: .discover) {
                     cisum.discoverView
-                }
+                })
             }
 
             Tab("Library", systemImage: "music.note.list", value: TabItem.library) {
-                tabRoot(for: .library) {
+                cisum.applyEnvironment(to: tabRoot(for: .library) {
                     cisum.libraryView
-                }
+                })
             }
 
             Tab("Search", systemImage: "magnifyingglass", value: TabItem.search, role: .search) {
-                tabRoot(for: .search) {
+                cisum.applyEnvironment(to: tabRoot(for: .search) {
                     cisum.searchView
-                }
+                })
             }
         } onSearchSubmit: {
             cisum.performSearch()
         }
         .tabbarBottomViewAccessory {
-            cisum.miniPlayer(
+            cisum.applyEnvironment(to: cisum.miniPlayer(
                 isExpanded: $presentation.isExpanded,
                 namespace: playerAnimationNamespace
-            )
+            ))
         }
         .tabbarVisibility(tabBarVisibility)
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)
         .systemVolumeController(cisum.systemVolumeController, showsSystemVolumeHUD: false)
+        .appOrientation(appOrientation)
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            updateAppOrientation()
+        }
+        .task {
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            updateAppOrientation()
+        }
         .onChange(of: navigationState.selectedTab) { _, _ in
             if tabBarVisibility != .visible {
                 tabBarVisibility = .visible
             }
         }
         .usingRouter(cisum.router)
-        .background { spotifyBackgroundRefresh }
-#else
+        .background {
+            Color.cisumBg
+                .ignoresSafeArea()
+            spotifyBackgroundRefresh
+        }
+        #else
         tabSurface
             .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
                 searchOverlay.updateContext(newContext)
@@ -124,9 +141,9 @@ public struct RootView: View {
             .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
             .ignoresSafeArea()
             .usingRouter(cisum.router)
-#endif
+        #endif
     }
-    
+
     @ViewBuilder
     private var spotifyBackgroundRefresh: some View {
         #if canImport(SpotifySDK)
@@ -147,16 +164,10 @@ public struct RootView: View {
             cisum.router.navigate(to: .settings)
         case .plugins:
             cisum.router.navigate(to: .plugins)
-        case .home:
-            cisum.router.navigate(to: .home)
-        case .library:
-            cisum.router.navigate(to: .library)
-        case .recents:
-            cisum.router.navigate(to: .library)
         }
     }
 
-#if os(iOS)
+    #if os(iOS)
     private var selectedTabBinding: Binding<TabItem> {
         Binding(
             get: { cisum.navigationState.selectedTab },
@@ -176,8 +187,14 @@ public struct RootView: View {
         container.app.playerPresentationController.toggle()
     }
 
-    @ViewBuilder
-    private func tabRoot<Content: View>(for tab: TabItem, @ViewBuilder content: () -> Content) -> some View {
+    private func updateAppOrientation() {
+        let nextOrientation = AppOrientation(UIDevice.current.orientation)
+        if nextOrientation != .unknown, nextOrientation != .flat {
+            appOrientation = nextOrientation
+        }
+    }
+
+    private func tabRoot(for tab: TabItem, @ViewBuilder content: () -> some View) -> some View {
         NavigationStack(path: navigationState.binding(for: tab)) {
             content()
                 .ignoresSafeArea()
@@ -190,11 +207,11 @@ public struct RootView: View {
                         cisum.settingsView
                     case .plugins:
                         cisum.pluginsView
-                    case .playlist(let id):
+                    case let .playlist(id):
                         cisum.playlistDetailView(for: id)
-                    case .artist(let id):
+                    case let .artist(id):
                         cisum.artistDetailView(for: id)
-                    case .album(let id):
+                    case let .album(id):
                         cisum.albumDetailView(for: id)
                     case .login:
                         cisum.loginView
@@ -204,6 +221,8 @@ public struct RootView: View {
                         #else
                         EmptyView()
                         #endif
+                    case .youtubeLogin:
+                        cisum.youtubeLoginView
                     case .home:
                         cisum.homeView
                     case .search:
@@ -217,12 +236,12 @@ public struct RootView: View {
                 .onScrollOffsetChange { oldValue, newValue in
                     let scrollingDown = oldValue < newValue
 
-                    if self.isScrollingDown != scrollingDown {
+                    if isScrollingDown != scrollingDown {
                         let adjustedOffset = newValue - (tabBarVisibility == .hidden ? 20 : 0)
                         if storedOffset != adjustedOffset {
                             storedOffset = adjustedOffset
                         }
-                        self.isScrollingDown = scrollingDown
+                        isScrollingDown = scrollingDown
                     }
 
                     let diff = newValue - storedOffset
@@ -245,7 +264,7 @@ public struct RootView: View {
                 }
         }
     }
-#else
+    #else
     @ViewBuilder
     private var backgroundFill: some View {
         if #available(macOS 26.0, *) {
@@ -258,7 +277,6 @@ public struct RootView: View {
         }
     }
 
-    @ViewBuilder
     private var tabSurface: some View {
         tabRoot(for: navigationState.selectedTab) {
             selectedTabContent
@@ -283,8 +301,7 @@ public struct RootView: View {
         }
     }
 
-    @ViewBuilder
-    private func tabRoot<Content: View>(for tab: TabItem, @ViewBuilder content: () -> Content) -> some View {
+    private func tabRoot(for tab: TabItem, @ViewBuilder content: () -> some View) -> some View {
         NavigationStack(path: navigationState.binding(for: tab)) {
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -296,11 +313,11 @@ public struct RootView: View {
                         cisum.settingsView
                     case .plugins:
                         cisum.pluginsView
-                    case .playlist(let id):
+                    case let .playlist(id):
                         cisum.playlistDetailView(for: id)
-                    case .artist(let id):
+                    case let .artist(id):
                         cisum.artistDetailView(for: id)
-                    case .album(let id):
+                    case let .album(id):
                         cisum.albumDetailView(for: id)
                     case .login:
                         cisum.loginView
@@ -310,6 +327,8 @@ public struct RootView: View {
                         #else
                         EmptyView()
                         #endif
+                    case .youtubeLogin:
+                        cisum.youtubeLoginView
                     case .home:
                         cisum.homeView
                     case .search:
@@ -322,5 +341,5 @@ public struct RootView: View {
                 }
         }
     }
-#endif
+    #endif
 }

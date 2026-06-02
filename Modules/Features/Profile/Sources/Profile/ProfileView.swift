@@ -5,71 +5,56 @@
 //  Created by Aarav Gupta on 15/03/26.
 //
 
+import Aesthetics
+import Authentication
+import ProviderSDK
 import SwiftUI
+import Utilities
 import YouTubeSDK
-import DesignSystem
-import Services
-
 #if canImport(SpotifySDK)
+import Plugins
 import SpotifySDK
 #endif
 
 public struct ProfileView: View {
     public init() {}
 
-    @Environment(ProviderServices.self) private var providerServices
-    @Environment(PlaybackServices.self) private var playbackServices
-    @Environment(UserServices.self) private var userServices
+    @Environment(\.youtube) private var youtube
+    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(AuthService.self) private var authService
+    @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
+    @Environment(AnalyticsService.self) private var analyticsService
     @Environment(\.router) private var router
-    
-    private var youtube: YouTube { providerServices.youtube }
-    private var streamingProviderSettings: StreamingProviderSettings { playbackServices.streamingProviderSettings }
-    private var spotifyCoordinator: SpotifySessionCoordinator { userServices.spotifySessionCoordinator }
 
-    @State private var showOAuthSheet: Bool = false
+    @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
+    @Environment(LastFMSettings.self) private var lastFMSettings
+    @Environment(\.lastFMScrobbler) private var lastFMScrobbler
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var hasOAuthSession: Bool = false
     @State private var isSigningOutSpotify: Bool = false
     @State private var isSigningOutcisum: Bool = false
+    @State private var isConnectingApple: Bool = false
+    @State private var isConnectingGoogle: Bool = false
+    @State private var isConnectingLastFM: Bool = false
+    @State private var pendingFlowId: String?
 
     public var body: some View {
         ZStack {
-            Color.black
-            
+            Color.cisumBg
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     profileHeader
 
                     cisumAccountCard
 
-                    spotifyProfileCard
+                    linkedAccountsSection
 
                     profileStatusCard
-
-                    Button {
-                        showOAuthSheet = true
-                    } label: {
-                        Label(
-                            hasOAuthSession ? "Reconnect Google Account" : "Login with Google",
-                            systemImage: "person.badge.key"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-
-                    if hasOAuthSession {
-                        Button(role: .destructive) {
-                            Task {
-                                await YouTubeOAuthClient.logout()
-                                refreshSessionState()
-                            }
-                        } label: {
-                            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
-                    }
+                    
+                    supportSection
 
                     Text(
                         "This profile screen is intentionally lightweight for now and will be expanded in a later pass."
@@ -80,21 +65,36 @@ public struct ProfileView: View {
                 .padding()
             }
             .safeAreaPadding(.top, 80)
+            .contentMargins(.bottom, 140)
         }
+        .background(Color.cisumBg)
         .ignoresSafeArea()
-        .sheet(isPresented: $showOAuthSheet) {
-            YouTubeOAuthDeviceFlowView { _ in
-                Task { @MainActor in
-                    _ = await youtube.ensureAccessToken()
-                    refreshSessionState()
-                    showOAuthSheet = false
-                }
-            } onCancel: {
-                showOAuthSheet = false
-            }
-        }
         .onAppear {
             refreshSessionState()
+        }
+        .task {
+            await refreshLastFMStatus()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                Task {
+                    await refreshLastFMStatus()
+
+                    if let flowId = pendingFlowId {
+                        do {
+                            if let scrobbler = lastFMScrobbler {
+                                let result = try await scrobbler.completeConnection(flowId: flowId)
+                                if result.connected {
+                                    lastFMSettings.updateConnectionStatus(connected: true, username: result.lastfmUsername)
+                                    pendingFlowId = nil
+                                }
+                            }
+                        } catch {
+                            // Flow may have expired or not been completed yet
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -113,15 +113,15 @@ public struct ProfileView: View {
     private var cisumAccountCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 12) {
-                Image(systemName: userServices.authService.isAuthenticated ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
+                Image(systemName: authService.isAuthenticated ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
                     .font(.title2)
-                    .foregroundStyle(userServices.authService.isAuthenticated ? .blue : .secondary)
+                    .foregroundStyle(authService.isAuthenticated ? .blue : .secondary)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("cisum Account")
+                    Text("@\(authService.user?.username ?? "guest")")
                         .font(.headline)
-                    if userServices.authService.isAuthenticated {
-                        Text(userServices.authService.user?.emailAddresses.first?.emailAddress ?? "Signed In")
+                    if authService.isAuthenticated {
+                        Text(authService.user?.emailAddresses.first?.emailAddress ?? "Signed In")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -134,7 +134,7 @@ public struct ProfileView: View {
 
                 Spacer()
 
-                if userServices.authService.isAuthenticated {
+                if authService.isAuthenticated {
                     Text("Connected")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8)
@@ -156,8 +156,8 @@ public struct ProfileView: View {
             Divider()
 
             VStack(spacing: 12) {
-                if userServices.authService.isAuthenticated {
-                    if let fullName = userServices.authService.user?.fullName, !fullName.isEmpty {
+                if authService.isAuthenticated {
+                    if let fullName = authService.user?.fullName, !fullName.isEmpty {
                         HStack {
                             Text("Name")
                                 .font(.subheadline)
@@ -171,8 +171,8 @@ public struct ProfileView: View {
                     Button(role: .destructive) {
                         Task {
                             isSigningOutcisum = true
-                            await userServices.authService.signOut()
-                            userServices.analyticsService.reset()
+                            await authService.signOut()
+                            analyticsService.reset()
                             isSigningOutcisum = false
                         }
                     } label: {
@@ -215,6 +215,286 @@ public struct ProfileView: View {
         )
     }
 
+    // MARK: - Linked Accounts
+
+    private var isAppleConnected: Bool {
+        authService.user?.verifiedExternalAccounts.contains(where: { $0.provider.lowercased().contains("apple") }) == true
+    }
+
+    private var isGoogleConnected: Bool {
+        authService.user?.verifiedExternalAccounts.contains(where: { $0.provider.lowercased().contains("google") }) == true
+    }
+
+    private var linkedAccountsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Linked Accounts")
+                .font(.headline)
+                .padding(.horizontal, 14)
+                .padding(.top, 14)
+
+            Divider()
+
+            VStack(spacing: 16) {
+                if authService.isAuthenticated {
+                    // Apple
+                    HStack {
+                        Image(systemName: "applelogo")
+                            .font(.title3)
+                            .frame(width: 24)
+                        Text("Apple")
+                        Spacer()
+                        if isAppleConnected {
+                            Text("Connected")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.green)
+                        } else {
+                            Button {
+                                Task {
+                                    isConnectingApple = true
+                                    _ = await authService.connectAppleAccount()
+                                    isConnectingApple = false
+                                }
+                            } label: {
+                                if isConnectingApple {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text("Connect")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isConnectingApple)
+                        }
+                    }
+
+                    Divider()
+
+                    // Google
+                    HStack {
+                        Image("googlelogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .frame(width: 24)
+                        
+                        Text("Google")
+                        Spacer()
+                        if isGoogleConnected {
+                            Text("Connected")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.green)
+                        } else {
+                            Button {
+                                Task {
+                                    isConnectingGoogle = true
+                                    _ = await authService.connectGoogleAccount()
+                                    isConnectingGoogle = false
+                                }
+                            } label: {
+                                if isConnectingGoogle {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text("Connect")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isConnectingGoogle)
+                        }
+                    }
+                    
+                    Divider()
+                }
+                
+                // YouTube
+                HStack {
+                    Image(systemName: "play.rectangle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.red)
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("YouTube")
+                        if hasOAuthSession {
+                            Text("Connected")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if hasOAuthSession {
+                        Button(role: .destructive) {
+                            Task {
+                                await YouTubeOAuthClient.logout()
+                                refreshSessionState()
+                            }
+                        } label: {
+                            Text("Disconnect")
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button {
+                            router.navigate(to: .youtubeLogin)
+                        } label: {
+                            Text("Connect")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                
+                Divider()
+                
+                // Spotify
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "music.note")
+                            .font(.title3)
+                            .foregroundStyle(.green)
+                            .frame(width: 24)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Spotify")
+                            if spotifyCoordinator.hasSession {
+                                Text(spotifyCoordinator.accountDescriptor)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if spotifyCoordinator.hasSession {
+                            Button(role: .destructive) {
+                                Task {
+                                    isSigningOutSpotify = true
+                                    await spotifyCoordinator.signOut()
+                                    isSigningOutSpotify = false
+                                }
+                            } label: {
+                                if isSigningOutSpotify {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Text("Disconnect")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(isSigningOutSpotify)
+                        } else {
+                            #if os(iOS) && canImport(SpotifySDK)
+                            Button {
+                                router.navigate(to: .spotifyLogin)
+                            } label: {
+                                Text("Connect")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(spotifyCoordinator.isRestoringSession)
+                            #else
+                            Text("Unavailable")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            #endif
+                        }
+                    }
+                    
+                    #if os(iOS) && canImport(SpotifySDK)
+                    if !spotifyCoordinator.hasSession {
+                        Toggle(
+                            "Use Anonymous Fallback",
+                            isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
+                        )
+                        .font(.subheadline)
+                    }
+                    #endif
+                }
+                
+                Divider()
+                
+                // Last.fm
+//                VStack(spacing: 12) {
+//                    HStack {
+//                        Image(systemName: "waveform")
+//                            .font(.title3)
+//                            .foregroundStyle(.red)
+//                            .frame(width: 24)
+//                        
+//                        VStack(alignment: .leading, spacing: 2) {
+//                            Text("Last.fm")
+//                            if lastFMSettings.isConnected {
+//                                Text(lastFMSettings.lastfmUsername ?? "Connected")
+//                                    .font(.caption2)
+//                                    .foregroundStyle(.secondary)
+//                                    .lineLimit(1)
+//                            }
+//                        }
+//                        Spacer()
+//                        if lastFMSettings.isConnected {
+//                            Button(role: .destructive) {
+//                                Task {
+//                                    do {
+//                                        try await lastFMScrobbler?.disconnect()
+//                                        lastFMSettings.clearConnection()
+//                                    } catch { }
+//                                }
+//                            } label: {
+//                                Text("Disconnect")
+//                            }
+//                            .buttonStyle(.bordered)
+//                        } else {
+//                            if authService.isAuthenticated {
+//                                Button {
+//                                    Task {
+//                                        isConnectingLastFM = true
+//                                        defer { isConnectingLastFM = false }
+//                                        do {
+//                                            if let scrobbler = lastFMScrobbler {
+//                                                Utilities.Logger.log("Starting LastFM connection flow...")
+//                                                let flow = try await scrobbler.startConnection()
+//                                                pendingFlowId = flow.flowId
+//                                                Utilities.Logger.log("Got flow ID: \(flow.flowId), URL: \(flow.authorizeUrl)")
+//                                                if let url = URL(string: flow.authorizeUrl) {
+//                                                    openURL(url)
+//                                                } else {
+//                                                    Utilities.Logger.error("Failed to create URL from: \(flow.authorizeUrl)")
+//                                                }
+//                                            } else {
+//                                                Utilities.Logger.error("lastFMScrobbler is nil in Environment!")
+//                                            }
+//                                        } catch {
+//                                            Utilities.Logger.error("Last.fm Connect Error: \(error)")
+//                                        }
+//                                    }
+//                                } label: {
+//                                    if isConnectingLastFM {
+//                                        ProgressView().controlSize(.small)
+//                                    } else {
+//                                        Text("Connect")
+//                                    }
+//                                }
+//                                .buttonStyle(.bordered)
+//                                .disabled(isConnectingLastFM)
+//                            } else {
+//                                Text("Sign in to connect")
+//                                    .font(.caption)
+//                                    .foregroundStyle(.secondary)
+//                            }
+//                        }
+//                    }
+//                    
+//                    if lastFMSettings.isConnected {
+//                        Toggle("Enable Scrobbling", isOn: Bindable(lastFMSettings).enabled)
+//                            .font(.subheadline)
+//                        Toggle("Save Local Listening History", isOn: Bindable(lastFMSettings).localHistoryEnabled)
+//                            .font(.subheadline)
+//                    }
+//                }
+                
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+    }
+
     private var profileStatusCard: some View {
         HStack(spacing: 12) {
             Image(
@@ -244,6 +524,48 @@ public struct ProfileView: View {
         )
     }
 
+    private var supportSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Support & Diagnostics")
+                .font(.headline)
+                .padding(.bottom, -8)
+
+            ShareLink(
+                item: Logger.getLogFileURL(),
+                subject: Text("App Diagnostics"),
+                message: Text("Here are the logs from my session:")
+            ) {
+                HStack {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .foregroundStyle(.blue)
+                        .frame(width: 24)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Share App Logs")
+                            .foregroundStyle(.primary)
+                        Text("Send crash and error logs for debugging")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.cisumSurface.opacity(0.92))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
+                        }
+                )
+            }
+        }
+    }
+
     private func refreshSessionState() {
         Task {
             let hasToken = await YouTubeOAuthClient().hasValidToken()
@@ -253,115 +575,20 @@ public struct ProfileView: View {
         }
     }
 
-    // MARK: - Spotify Section
-
-    private var spotifyProfileCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: "music.note")
-                    .font(.title2)
-                    .foregroundStyle(spotifyCoordinator.hasSession ? .green : .secondary)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Spotify")
-                        .font(.headline)
-                    Text(
-                        spotifyCoordinator.hasSession
-                            ? spotifyCoordinator.accountDescriptor : "Not Signed In"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-
-                Spacer()
-
-                Text(spotifyCoordinator.sessionStatusLabel)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        spotifyCoordinator.hasSession
-                            ? Color.green.opacity(0.15)
-                            : Color.secondary.opacity(0.1),
-                        in: Capsule()
-                    )
-                    .foregroundStyle(
-                        spotifyCoordinator.hasSession ? .green : .secondary
-                    )
+    private func refreshLastFMStatus() async {
+        do {
+            if let scrobbler = lastFMScrobbler {
+                let status = try await scrobbler.checkConnectionStatus()
+                lastFMSettings.updateConnectionStatus(connected: status.connected, username: status.lastfmUsername)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-
-            Divider()
-
-            VStack(spacing: 12) {
-                if spotifyCoordinator.hasSession {
-                    Button(role: .destructive) {
-                        Task {
-                            isSigningOutSpotify = true
-                            await spotifyCoordinator.signOut()
-                            isSigningOutSpotify = false
-                        }
-                    } label: {
-                        HStack {
-                            Text("Disconnect Spotify")
-                            if isSigningOutSpotify {
-                                Spacer()
-                                ProgressView().controlSize(.small)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .disabled(isSigningOutSpotify)
-                } else {
-                    #if os(iOS) && canImport(SpotifySDK)
-                        Button {
-                            router.navigate(to: .spotifyLogin)
-                        } label: {
-                            Label("Connect with Spotify", systemImage: "person.badge.key")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(spotifyCoordinator.isRestoringSession)
-
-                        if let error = spotifyCoordinator.lastErrorMessage {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-
-                        Toggle(
-                            "Use Anonymous Fallback",
-                            isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
-                        )
-                        Text(
-                            "When enabled, Spotify search uses a temporary public session. Some results may be limited."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    #else
-                        Text("Spotify is unavailable on this platform.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    #endif
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+        } catch {
+            // Unauthenticated or network error
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
     }
 }
 
 #if DEBUG
-    #Preview {
-        ProfileView()
-    }
+#Preview {
+    ProfileView()
+}
 #endif

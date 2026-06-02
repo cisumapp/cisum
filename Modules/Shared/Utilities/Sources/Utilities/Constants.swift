@@ -21,13 +21,13 @@ public enum AppConstants {
     public static let showThresholds: CGFloat = -20
 
     public static var safeAreaInsets: EdgeInsets {
-#if canImport(UIKit)
+        #if canImport(UIKit)
         MainActor.assumeIsolated {
             EdgeInsets(UIApplication.shared.keyWindow?.safeAreaInsets ?? .zero)
         }
-#else
+        #else
         EdgeInsets()
-#endif
+        #endif
     }
 
     public static func itemWidth(

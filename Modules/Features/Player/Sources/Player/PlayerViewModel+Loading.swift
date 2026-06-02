@@ -5,19 +5,21 @@
 
 import Foundation
 import Models
-import Services
 import ProviderSDK
+import Utilities
 import YouTubeSDK
 
-extension PlayerViewModel {
+private let loadingLog = CisumLog.playback
+private let loadingSP  = CisumSignpost.playback
 
+public extension PlayerViewModel {
     // MARK: - Loaders
 
-    public func load(external track: ExternalQueueTrack, preserveQueue: Bool = false) {
+    func load(external track: ExternalQueueTrack, preserveQueue: Bool = false) {
         loadExternalTrack(track, preserveQueue: preserveQueue)
     }
 
-    public func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int = 0) {
+    func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int = 0) {
         guard !tracks.isEmpty else { return }
         let entries = tracks.map { PlaybackQueueEntry.external($0) }
         playbackQueue = entries
@@ -29,7 +31,7 @@ extension PlayerViewModel {
         }
     }
 
-    public func load(song: YouTubeMusicSong, preserveQueue: Bool = false) {
+    func load(song: YouTubeMusicSong, preserveQueue: Bool = false) {
         // Patch 3: Skip if we are already actively loading this exact track.
         if song.videoId == loadingMediaID, isLoading { return }
 
@@ -49,12 +51,17 @@ extension PlayerViewModel {
         }
     }
 
-    public func load(video: YouTubeVideo, preserveQueue: Bool = false) {
+    func load(video: YouTubeVideo, preserveQueue: Bool = false) {
         // Patch 3
         if video.id == loadingMediaID, isLoading { return }
         let targetMediaID = video.id
 
         let tapStartedAt = Date()
+        let tapToPlaySpid = loadingSP.begin("tap-to-play", "kind=video id=\(targetMediaID)")
+        
+        pendingPlaybackTelemetryType = "tap-to-play"
+        pendingPlaybackTelemetryStartedAt = tapStartedAt
+        
         let fallbackURL = normalizedArtworkURL(from: video.thumbnailURL)
         let displayTitle = normalizedMusicDisplayTitle(video.title, artist: video.author)
         let displayArtist = normalizedMusicDisplayArtist(video.author, title: video.title)
@@ -85,52 +92,66 @@ extension PlayerViewModel {
         loadingMediaID = targetMediaID
         currentLoadTask?.cancel()
         currentLoadTask = Task { [weak self] in
-            guard let self = self else { return }
-            defer { if self.loadingMediaID == targetMediaID { self.isLoading = false } }
+            guard let self else { return }
+            defer {
+                if self.loadingMediaID == targetMediaID { self.isLoading = false }
+                loadingSP.end("tap-to-play", state: tapToPlaySpid, "kind=video id=\(targetMediaID)")
+            }
             if Task.isCancelled { return }
 
             do {
-                let candidates = try await self.resolvePlaybackCandidates(
+                let representation = TrackRepresentation(
+                    providerID: "youtube",
+                    providerTrackID: video.id,
+                    title: displayTitle,
+                    artist: displayArtist,
+                    artworkURL: fallbackURL
+                )
+                let candidates = try await resolvePlaybackCandidates(
                     forID: video.id,
                     title: video.title ?? "",
-                    artist: video.author ?? ""
+                    artist: video.author ?? "",
+                    representations: [representation]
                 )
 
                 if Task.isCancelled { return }
-                guard self.currentVideoId == targetMediaID else { return }
+                guard currentVideoId == targetMediaID else { return }
 
-                self.configurePlaybackCandidates(for: video.id, candidates: candidates)
-                self.playCurrentPlaybackCandidate()
-                self.startArtworkVideoProcessingIfNeeded(
+                loadingLog.info("Candidates resolved id=\(targetMediaID, privacy: .public) count=\(candidates.count)")
+                configurePlaybackCandidates(for: video.id, candidates: candidates)
+                playCurrentPlaybackCandidate()
+                startArtworkVideoProcessingIfNeeded(
                     for: video.id,
                     title: displayTitle,
                     artist: displayArtist,
                     albumName: nil
                 )
-                self.logPlayback("Started playback for video id=\(video.id)")
+                logPlayback("Started playback for video id=\(video.id)")
 
                 if !preserveQueue {
-                    self.seedRadioQueueForVideoTrack(
+                    seedRadioQueueForVideoTrack(
                         video: video,
                         expectedCurrentMediaID: targetMediaID
                     )
                 }
 
-                self.preloadNextQueueEntryIfNeeded()
+                loadingSP.event("preload-next", "trigger=video id=\(targetMediaID)")
+                preloadNextQueueEntryIfNeeded()
 
-                if self.settings.metricsEnabled {
+                if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
-                    await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    loadingLog.info("tap-to-play latency=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms id=\(targetMediaID, privacy: .public)")
                 }
             } catch {
                 if error is CancellationError { return }
-                guard self.currentVideoId == targetMediaID else { return }
-                self.handlePlaybackFailure(error)
+                guard currentVideoId == targetMediaID else { return }
+                handlePlaybackFailure(error)
             }
         }
     }
 
-    public func load(resolvedPlaybackSession session: ResolvedPlaybackSession, preserveQueue: Bool = false) {
+    func load(resolvedPlaybackSession session: ResolvedPlaybackSession, preserveQueue: Bool = false) {
         let track = session.playableTrack.track
         let title = track.title
         let artist = track.artists.map(\.name).joined(separator: ", ")
@@ -141,7 +162,7 @@ extension PlayerViewModel {
             track.hydrationState.contains(.artworkResolved) ? "artworkResolved" : nil,
             track.hydrationState.contains(.streamResolved) ? "streamResolved" : nil,
             track.hydrationState.contains(.lyricsResolved) ? "lyricsResolved" : nil
-        ].compactMap { $0 }
+        ].compactMap(\.self)
         let representationKey = track.activeRepresentationKey.map { "\($0.providerID):\($0.providerTrackID)" }
 
         let presentation = TrackPresentationState(
@@ -167,7 +188,8 @@ extension PlayerViewModel {
                         mimeType: session.stream.metadata["mimeType"],
                         itag: nil,
                         expiresAt: session.stream.expiresAt,
-                        isCompatible: activeCandidate.isLocal
+                        isCompatible: activeCandidate.isLocal,
+                        providerID: session.stream.provider
                     )
                 ]
             )
@@ -181,14 +203,15 @@ extension PlayerViewModel {
             mimeType: session.stream.metadata["mimeType"] ?? session.stream.codec.formatDescription,
             itag: nil,
             expiresAt: session.stream.expiresAt,
-            isCompatible: true
+            isCompatible: true,
+            providerID: session.stream.provider
         )
 
         configurePlaybackCandidates(for: track.id.value, candidates: [localCandidate])
         playCurrentPlaybackCandidate()
     }
 
-    func loadMusicTrack(
+    internal func loadMusicTrack(
         mediaID: String,
         title: String,
         artist: String,
@@ -201,6 +224,11 @@ extension PlayerViewModel {
         let targetMediaID = mediaID
 
         let tapStartedAt = Date()
+        let tapToPlaySpid = loadingSP.begin("tap-to-play", "kind=song id=\(targetMediaID)")
+        
+        pendingPlaybackTelemetryType = "tap-to-play"
+        pendingPlaybackTelemetryStartedAt = tapStartedAt
+        
         let displayTitle = normalizedMusicDisplayTitle(title, artist: artist)
         let displayArtist = normalizedMusicDisplayArtist(artist, title: title)
 
@@ -230,47 +258,61 @@ extension PlayerViewModel {
         loadingMediaID = targetMediaID
         currentLoadTask?.cancel()
         currentLoadTask = Task { [weak self] in
-            guard let self = self else { return }
-            defer { if self.loadingMediaID == targetMediaID { self.isLoading = false } }
+            guard let self else { return }
+            defer {
+                if self.loadingMediaID == targetMediaID { self.isLoading = false }
+                loadingSP.end("tap-to-play", state: tapToPlaySpid, "kind=song id=\(targetMediaID)")
+            }
             if Task.isCancelled { return }
 
             do {
+                let representation = TrackRepresentation(
+                    providerID: "youtubeMusic",
+                    providerTrackID: mediaID,
+                    title: displayTitle,
+                    artist: displayArtist,
+                    album: albumName,
+                    artworkURL: thumbnailURL
+                )
                 // Resolve YouTube candidates and start playback immediately.
-                let youtubeCandidates = try await self.resolvePlaybackCandidates(
+                let youtubeCandidates = try await resolvePlaybackCandidates(
                     forID: mediaID,
                     title: title,
-                    artist: artist
+                    artist: artist,
+                    representations: [representation]
                 )
 
                 if Task.isCancelled { return }
-                guard self.currentVideoId == targetMediaID else { return }
+                guard currentVideoId == targetMediaID else { return }
 
-                self.configurePlaybackCandidates(for: mediaID, candidates: youtubeCandidates)
-                self.playCurrentPlaybackCandidate()
-                self.startArtworkVideoProcessingIfNeeded(
+                loadingLog.info("Candidates resolved id=\(targetMediaID, privacy: .public) count=\(youtubeCandidates.count)")
+                configurePlaybackCandidates(for: mediaID, candidates: youtubeCandidates)
+                playCurrentPlaybackCandidate()
+                startArtworkVideoProcessingIfNeeded(
                     for: mediaID,
-                    title: self.currentTitle,
-                    artist: self.currentArtist,
+                    title: currentTitle,
+                    artist: currentArtist,
                     albumName: albumName
                 )
-                self.logPlayback("Started playback for song id=\(mediaID)")
-                self.preloadNextQueueEntryIfNeeded()
+                logPlayback("Started playback for song id=\(mediaID)")
+                loadingSP.event("preload-next", "trigger=song id=\(targetMediaID)")
+                preloadNextQueueEntryIfNeeded()
 
-                if self.settings.metricsEnabled {
+                if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
-                    await self.playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    loadingLog.info("tap-to-play latency=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms id=\(targetMediaID, privacy: .public)")
                 }
 
             } catch {
                 if error is CancellationError { return }
-                guard self.currentVideoId == targetMediaID else { return }
-                self.handlePlaybackFailure(error)
+                guard currentVideoId == targetMediaID else { return }
+                handlePlaybackFailure(error)
             }
         }
     }
 
-
-    public func loadExternalStream(
+    func loadExternalStream(
         mediaID: String,
         streamURL: URL,
         title: String,
@@ -305,5 +347,4 @@ extension PlayerViewModel {
 
         loadExternalTrack(immediateTrack, preserveQueue: false)
     }
-
 }

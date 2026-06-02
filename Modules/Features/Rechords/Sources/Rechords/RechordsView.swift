@@ -14,11 +14,11 @@ struct RechordsView: View {
 
     let duration: Double = 1
     @State private var shimmerPhase: CGFloat = -1
-    
-    private static let backgroundColor = Color(red: 32/255, green: 34/255, blue: 46/255)
-    private static let patches = Color(red: 40/255, green: 43/255, blue: 58/255)
-    private static let highlights = Color(red: 162/255, green: 133/255, blue: 80/255)
-    private static let textHighlights = Color(red: 185/255, green: 152/255, blue: 90/255)
+
+    private static let backgroundColor = Color(red: 32 / 255, green: 34 / 255, blue: 46 / 255)
+    private static let patches = Color(red: 40 / 255, green: 43 / 255, blue: 58 / 255)
+    private static let highlights = Color(red: 162 / 255, green: 133 / 255, blue: 80 / 255)
+    private static let textHighlights = Color(red: 185 / 255, green: 152 / 255, blue: 90 / 255)
 
     private static let fontsReady: Bool = {
         FontRegistration.registerFonts()
@@ -34,27 +34,27 @@ struct RechordsView: View {
     var body: some View {
         ZStack {
             RechordsView.backgroundColor
-            
+
             RechordsView.gradient
-            
+
             grainOverlay
-            
+
             VStack(alignment: .center, spacing: -6) {
                 Text("cisum")
                     .font(.largeTitle)
                     .fontWidth(.expanded)
                     .fontWeight(.semibold)
-                
+
                 HStack(spacing: 0) {
                     Image(systemName: "star.fill")
-                    
+
                     // "Re" — no shimmer
                     ForEach(Array(rechords.prefix(2).enumerated()), id: \.offset) { index, letter in
                         Text(String(letter))
                             .font(notoSerifItalic(size: 40, weight: weights[index]))
                             .frame(width: letterWidths[index])
                     }
-                    
+
                     // "chords" — with shimmer
                     HStack(spacing: 0) {
                         ForEach(Array(rechords.dropFirst(2).enumerated()), id: \.offset) { index, letter in
@@ -88,7 +88,7 @@ struct RechordsView: View {
                             chordsLetters()
                         }
                     }
-                    
+
                     Image(systemName: "star.fill")
                         .padding(.leading, 2)
                 }
@@ -105,7 +105,7 @@ struct RechordsView: View {
         }
         .ignoresSafeArea()
     }
-    
+
     private static let gradient = LinearGradient(
         colors: [
             .clear,
@@ -126,8 +126,7 @@ struct RechordsView: View {
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
-    
-    @ViewBuilder
+
     private func chordsLetters() -> some View {
         ForEach(Array(rechords.dropFirst(2).enumerated()), id: \.offset) { index, letter in
             let actualIndex = index + 2
@@ -137,15 +136,15 @@ struct RechordsView: View {
                 .offset(x: letter == "d" ? -1.5 : 0)
         }
     }
-    
+
     private var grainOverlay: some View {
         Canvas { context, size in
             var rng = SeededGenerator(seed: 42)
-            for _ in 0..<3000 {
-                let x = CGFloat.random(in: 0...size.width, using: &rng)
-                let y = CGFloat.random(in: 0...size.height, using: &rng)
-                let opacity = Double.random(in: 0.03...0.08, using: &rng)
-                let dotSize = CGFloat.random(in: 0.5...1.5, using: &rng)
+            for _ in 0 ..< 3000 {
+                let x = CGFloat.random(in: 0 ... size.width, using: &rng)
+                let y = CGFloat.random(in: 0 ... size.height, using: &rng)
+                let opacity = Double.random(in: 0.03 ... 0.08, using: &rng)
+                let dotSize = CGFloat.random(in: 0.5 ... 1.5, using: &rng)
                 context.fill(
                     Path(ellipseIn: CGRect(x: x, y: y, width: dotSize, height: dotSize)),
                     with: .color(.white.opacity(opacity))
@@ -158,9 +157,9 @@ struct RechordsView: View {
     }
 
     func startWave() async {
-        let staggerDelay: Double = 0.2
-        let expandDuration: Double = 1.2
-        let contractDuration: Double = 0.8
+        let staggerDelay = 0.2
+        let expandDuration = 1.2
+        let contractDuration = 0.8
 
         for i in rechords.indices {
             withAnimation(.easeInOut(duration: expandDuration).delay(Double(i) * staggerDelay)) {
@@ -194,14 +193,16 @@ struct RechordsView: View {
 
 struct SeededGenerator: RandomNumberGenerator {
     var state: UInt64
-    
-    init(seed: UInt64) { state = seed }
-    
+
+    init(seed: UInt64) {
+        self.state = seed
+    }
+
     mutating func next() -> UInt64 {
-        state &+= 0x9e3779b97f4a7c15
+        state &+= 0x9E37_79B9_7F4A_7C15
         var z = state
-        z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
-        z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)
     }
 }

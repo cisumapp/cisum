@@ -9,10 +9,12 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+
 typealias PlatformFont = UIFont
 typealias PlatformFontDescriptor = UIFontDescriptor
 #else
 import AppKit
+
 typealias PlatformFont = NSFont
 typealias PlatformFontDescriptor = NSFontDescriptor
 #endif
@@ -23,8 +25,8 @@ public func notoSerifItalic(size: CGFloat, weight: CGFloat = 200, width: CGFloat
     let descriptor = PlatformFontDescriptor(fontAttributes: [
         .name: "NotoSerif-Italic",
         kCTFontVariationAttribute as PlatformFontDescriptor.AttributeName: [
-            2003265652: weight,  // wght: 100–900
-            2003072104: width    // wdth: 62.5–100
+            2_003_265_652: weight, // wght: 100–900
+            2_003_072_104: width // wdth: 62.5–100
         ]
     ])
 

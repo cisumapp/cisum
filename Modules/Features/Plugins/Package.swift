@@ -16,17 +16,26 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(path: "../../Shared/Services"),
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK")
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../../Shared/Networking"),
+        .package(path: "../Authentication"),
+        .package(path: "../../Shared/Caching"),
+        .package(path: "../Player")
     ],
     targets: [
         .target(
             name: "Plugins",
             dependencies: [
-                .product(name: "Services", package: "Services"),
                 .product(name: "ProviderSDK", package: "ProviderSDK"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK")
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "Networking", package: "Networking"),
+                .product(name: "Authentication", package: "Authentication"),
+                .product(name: "Caching", package: "Caching"),
+                .product(name: "Player", package: "Player")
+            ],
+            resources: [
+                .process("Resources")
             ]
         )
     ],

@@ -5,30 +5,47 @@
 //  Created by Aarav Gupta on 15/03/26.
 //
 
+import Aesthetics
 import Kingfisher
-import Services
+import Models
+import Player
 import SwiftUI
-import YouTubeSDK
+import Tracks
 import Utilities
-import DesignSystem
+import YouTubeSDK
 
 public struct DiscoverView: View {
-    @Environment(ProviderServices.self) private var providerServices
-    private var youtube: YouTube { providerServices.youtube }
+    @Environment(\.youtube) private var youtubeOptional
+    private var youtube: YouTube {
+        youtubeOptional ?? YouTube.shared
+    }
 
     public init() {}
 
-    @State private var sections: [DiscoverSection] = []
+    @State private var sections: [DiscoverSection] = DiscoverCache.load()?.sections ?? []
     @State private var isLoading: Bool = false
-    @State private var didLoadInitialSections: Bool = false
+    @State private var didLoadInitialSections: Bool = DiscoverCache.load() != nil
     @State private var errorMessage: String?
+    @State private var scrollOffset: CGFloat = 0
 
     public var body: some View {
-        ScrollView {
+        NavigationBarView(
+            title: "Discover",
+            scrollOffset: $scrollOffset,
+            customActions: [
+                ProfileMenuCustomAction(title: "Change Region") {
+                    // TODO: Implement Region Change
+                    print("Change Region selected")
+                }
+            ]
+        ) {
+            content
+        }
+    }
+    
+    var content: some View {
             LazyVStack(alignment: .leading, spacing: 24) {
-                header
-
-                if isLoading && sections.isEmpty {
+                if isLoading, sections.isEmpty {
                     ProgressView("Loading Charts...")
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -54,7 +71,6 @@ public struct DiscoverView: View {
             }
             .padding(.horizontal)
             .padding(.bottom, 120)
-        }
         .contentMargins(.top, 140)
         .task {
             if !didLoadInitialSections {
@@ -64,24 +80,12 @@ public struct DiscoverView: View {
         .refreshable {
             await loadDiscoverSections(force: true)
         }
-
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Discover")
-                .font(.largeTitle.weight(.semibold))
-            Text("Charts from YouTube Music and YouTube")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @MainActor
     private func loadDiscoverSections(force: Bool = false) async {
         if isLoading { return }
-        if didLoadInitialSections && !force { return }
+        if didLoadInitialSections, !force { return }
 
         isLoading = true
         errorMessage = nil
@@ -106,7 +110,9 @@ public struct DiscoverView: View {
                 loadedSections.append(
                     .init(
                         id: "songs", title: "Top Songs", subtitle: "YouTube Music",
-                        items: Array(songs.prefix(10))))
+                        items: Array(songs.prefix(10))
+                    )
+                )
             }
         } catch {
             lastError = error
@@ -118,7 +124,9 @@ public struct DiscoverView: View {
                 loadedSections.append(
                     .init(
                         id: "videos", title: "Top Videos", subtitle: "YouTube",
-                        items: Array(videos.prefix(10))))
+                        items: Array(videos.prefix(10))
+                    )
+                )
             }
         } catch {
             lastError = error
@@ -130,7 +138,9 @@ public struct DiscoverView: View {
                 loadedSections.append(
                     .init(
                         id: "artists", title: "Top Artists", subtitle: "YouTube Music",
-                        items: Array(artists.prefix(10))))
+                        items: Array(artists.prefix(10))
+                    )
+                )
             }
         } catch {
             lastError = error
@@ -142,7 +152,9 @@ public struct DiscoverView: View {
                 loadedSections.append(
                     .init(
                         id: "trending", title: "Trending", subtitle: "YouTube",
-                        items: Array(trending.prefix(10))))
+                        items: Array(trending.prefix(10))
+                    )
+                )
             }
         } catch {
             lastError = error
@@ -151,11 +163,34 @@ public struct DiscoverView: View {
         sections = loadedSections
         if loadedSections.isEmpty {
             errorMessage = lastError?.localizedDescription ?? "No chart data was returned."
+        } else {
+            DiscoverCache(sections: loadedSections, timestamp: Date()).save()
         }
     }
 }
 
-private struct DiscoverSection: Identifiable {
+private struct DiscoverCache: Codable {
+    let sections: [DiscoverSection]
+    let timestamp: Date
+
+    static var cacheFileURL: URL {
+        let paths = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)
+        return paths[0].appendingPathComponent("cisum_discover_cache.json")
+    }
+
+    static func load() -> DiscoverCache? {
+        guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
+        return try? JSONDecoder().decode(DiscoverCache.self, from: data)
+    }
+
+    func save() {
+        if let data = try? JSONEncoder().encode(self) {
+            try? data.write(to: Self.cacheFileURL)
+        }
+    }
+}
+
+private struct DiscoverSection: Identifiable, Codable {
     let id: String
     let title: String
     let subtitle: String
@@ -181,7 +216,6 @@ private struct DiscoverSectionView: View {
                 }
             }
         }
-
     }
 }
 
@@ -189,44 +223,48 @@ private struct DiscoverChartRow: View {
     let rank: Int
     let item: YouTubeChartItem
 
+    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(PlayerPresentationController.self) private var playerPresentationController
+    @Environment(\.router) private var router
+
     var body: some View {
-        HStack(spacing: 12) {
-            Text("#\(rank)")
-                .font(.caption.weight(.semibold))
-                .frame(width: 34)
-                .foregroundStyle(.secondary)
-
-            if let artworkURL = item.thumbnailURL {
-                KFImage(artworkURL)
-                    .downsampling(size: CGSize(width: 104, height: 104))
-                    .placeholder {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.gray.opacity(0.2))
-                    }
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 52, height: 52)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(item.subtitle)
-                    .font(.caption)
+        Button {
+            playItem(item)
+        } label: {
+            HStack(spacing: 8) {
+                Text("#\(rank)")
+                    .font(.caption.weight(.bold))
+                    .frame(width: 34, alignment: .leading)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                
+                TrackListItem(
+                    trackName: item.title,
+                    artistName: item.subtitle,
+                    artworkURL: item.thumbnailURL
+                )
             }
-
-            Spacer()
+            .contentShape(Rectangle())
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
+        .buttonStyle(.plain)
+    }
 
+    private func playItem(_ item: YouTubeChartItem) {
+        if item.type == .song || item.type == .video {
+            let song = YouTubeMusicSong(
+                id: item.id,
+                title: item.title,
+                artists: [item.subtitle],
+                album: nil,
+                duration: nil,
+                thumbnailURL: item.thumbnailURL,
+                videoId: item.id,
+                isExplicit: false
+            )
+            playerViewModel.load(song: song, preserveQueue: false)
+            playerPresentationController.expand()
+        } else if item.type == .artist {
+            router.navigate(to: .artist(id: item.id))
+        }
     }
 }
 

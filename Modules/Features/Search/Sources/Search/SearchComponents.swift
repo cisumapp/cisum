@@ -19,7 +19,7 @@ public struct SearchTrackRow: View {
         HStack(spacing: 12) {
             KFImage(item.artworkURL)
                 .downsampling(size: CGSize(width: 100, height: 100))
-                .placeholder { Color.gray.opacity(0.3) }
+                .placeholder { Color.cisumChromeStrong }
                 .resizable()
                 .scaledToFill()
                 .frame(width: 50, height: 50)
@@ -40,7 +40,8 @@ public struct SearchTrackRow: View {
                     SearchBadge(
                         title: "Spotify",
                         tint: Color(red: 0.11, green: 0.73, blue: 0.33).opacity(0.15),
-                        textColor: Color(red: 0.11, green: 0.73, blue: 0.33))
+                        textColor: Color(red: 0.11, green: 0.73, blue: 0.33)
+                    )
 
                     if item.isExplicit {
                         SearchBadge(title: "Explicit", tint: .red.opacity(0.16), textColor: .red)
@@ -80,7 +81,6 @@ public struct SearchTrackRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title) by \(item.subtitle) on Spotify")
         .accessibilityHint(fallback != nil ? "Double tap to play" : "Resolving stream")
-
     }
 }
 
@@ -97,7 +97,7 @@ public struct SearchArtistRow: View {
         HStack(spacing: 12) {
             KFImage(item.artworkURL)
                 .downsampling(size: CGSize(width: 80, height: 80))
-                .placeholder { Color.gray.opacity(0.3) }
+                .placeholder { Color.cisumChromeStrong }
                 .resizable()
                 .scaledToFill()
                 .frame(width: 44, height: 44)
@@ -119,7 +119,6 @@ public struct SearchArtistRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Artist: \(item.title)")
         .accessibilityHint("Double tap to view details")
-
     }
 }
 
@@ -173,7 +172,6 @@ public struct SearchPlaylistRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Playlist: \(item.title) by \(item.subtitle)")
         .accessibilityHint(isImporting ? "Importing playlist" : "Double tap to open")
-
     }
 }
 
@@ -191,7 +189,7 @@ public struct SearchFederatedRow: View {
             KFImage(item.artworkURL)
                 .downsampling(size: CGSize(width: 100, height: 100))
                 .placeholder {
-                    Color.gray.opacity(0.3)
+                    Color.cisumChromeStrong
                 }
                 .resizable()
                 .scaledToFill()
@@ -234,7 +232,6 @@ public struct SearchFederatedRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.title) by \(item.subtitle) from \(item.service.rawValue)")
         .accessibilityHint(item.isPlayable ? "Double tap to play" : "Metadata only")
-
     }
 }
 
@@ -260,7 +257,6 @@ public struct SearchBadge: View {
             .background(tint, in: Capsule())
             .foregroundStyle(textColor)
             .accessibilityLabel(title)
-
     }
 }
 
@@ -274,7 +270,8 @@ public struct SearchMetadataBadges: View {
     public var body: some View {
         HStack(spacing: 6) {
             SearchBadge(
-                title: item.service.rawValue, tint: .secondary.opacity(0.12), textColor: .secondary)
+                title: item.service.rawValue, tint: .secondary.opacity(0.12), textColor: .secondary
+            )
 
             if item.isExplicit {
                 SearchBadge(title: "Explicit", tint: .red.opacity(0.16), textColor: .red)
@@ -290,7 +287,6 @@ public struct SearchMetadataBadges: View {
         }
         .lineLimit(1)
         .truncationMode(.tail)
-
     }
 }
 
@@ -343,7 +339,7 @@ public struct SpotifyArtistDetailSheet: View {
                             .shadow(radius: 10)
                     } else {
                         Circle()
-                            .fill(.secondary.opacity(0.2))
+                            .fill(Color.cisumChromeSubtle)
                             .frame(width: 200, height: 200)
                             .overlay {
                                 Image(systemName: "person.fill")
@@ -380,16 +376,16 @@ public struct SpotifyArtistDetailSheet: View {
                 .padding()
             }
             .navigationTitle("Artist")
-#if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-#endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        dismiss()
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") {
+                            dismiss()
+                        }
                     }
                 }
-            }
         }
     }
 }

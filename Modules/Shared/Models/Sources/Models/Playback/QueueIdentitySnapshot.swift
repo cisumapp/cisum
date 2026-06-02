@@ -1,7 +1,7 @@
 import Foundation
 
-// Canonical queue identity snapshot used for persistence. Keep this minimal and
-// stable; the runtime may use a richer representation but it must be serializable.
+/// Canonical queue identity snapshot used for persistence. Keep this minimal and
+/// stable; the runtime may use a richer representation but it must be serializable.
 public struct QueueIdentitySnapshot: Codable, Hashable, Sendable {
     public let canonicalID: String
     public let activeRepresentationKey: String?

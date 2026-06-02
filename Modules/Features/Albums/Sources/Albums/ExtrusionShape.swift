@@ -11,10 +11,10 @@ import SwiftUI
 
 struct ExtrusionShape: Shape {
     var offset: CGFloat
-    
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        
+
         path.move(to: CGPoint(x: 0, y: 0))
         path.addLine(to: CGPoint(x: rect.maxX - offset, y: 0))
         path.addLine(to: CGPoint(x: rect.maxX, y: offset))
@@ -22,7 +22,7 @@ struct ExtrusionShape: Shape {
         path.addLine(to: CGPoint(x: offset, y: rect.maxY))
         path.addLine(to: CGPoint(x: 0, y: rect.maxY - offset))
         path.closeSubpath()
-        
+
         return path
     }
 }

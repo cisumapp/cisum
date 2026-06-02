@@ -5,8 +5,8 @@
 //  Created by Aarav Gupta on 21/03/26.
 //
 
-import WidgetKit
 import SwiftUI
+import WidgetKit
 
 @main
 struct LyricsBundle: WidgetBundle {

@@ -10,33 +10,35 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Playlists",
             targets: ["Playlists"]
-        ),
+        )
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
-        .package(path: "../../Shared/Services"),
-        .package(path: "../../Shared/DesignSystem"),
+        .package(path: "../../Shared/Aesthetics"),
+        .package(path: "../Player"),
+        .package(path: "../Tracks"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0"))
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "Playlists",
             dependencies: [
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
-                .product(name: "Services", package: "Services"),
-                .product(name: "DesignSystem", package: "DesignSystem"),
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "Player", package: "Player"),
+                .product(name: "Tracks", package: "Tracks"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "SpotifySDK", package: "SpotifySDK"),
+                .product(name: "Kingfisher", package: "Kingfisher")
             ]
-        ),
-
+        )
     ],
     swiftLanguageModes: [.v6]
 )

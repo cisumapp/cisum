@@ -71,4 +71,3 @@ public final class Playlist {
         set { sourceProviderRawValue = newValue?.rawValue }
     }
 }
-

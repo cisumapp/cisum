@@ -9,10 +9,9 @@ import SwiftUI
 
 /// A custom implementation of `Tab` that works on iOS 17+.
 public struct Tab<SelectionValue: Hashable> {
-    
     public let data: TabViewData<SelectionValue>
-    
-    public init<Content: View>(_ title: String, systemImage: String, value: SelectionValue, role: TabRole? = nil, @ViewBuilder content: () -> Content) {
+
+    public init(_ title: String, systemImage: String, value: SelectionValue, role: TabRole? = nil, @ViewBuilder content: () -> some View) {
         self.data = TabViewData(
             title: title,
             icon: systemImage,

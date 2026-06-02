@@ -1,24 +1,37 @@
 // swift-tools-version: 6.3
-// The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
     name: "Caching",
+    platforms: [
+        .iOS(.v17),
+        .macOS(.v14)
+    ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Caching",
             targets: ["Caching"]
-        ),
+        )
+    ],
+    dependencies: [
+        .package(path: "../Models"),
+        .package(path: "../Utilities"),
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
+        .package(path: "../../../Packages/StreamingKit/ProviderSDK")
     ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "Caching"
-        ),
-
+            name: "Caching",
+            dependencies: [
+                .product(name: "Models", package: "Models"),
+                .product(name: "Utilities", package: "Utilities"),
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "SpotifySDK", package: "SpotifySDK"),
+                .product(name: "ProviderSDK", package: "ProviderSDK")
+            ]
+        )
     ],
     swiftLanguageModes: [.v6]
 )

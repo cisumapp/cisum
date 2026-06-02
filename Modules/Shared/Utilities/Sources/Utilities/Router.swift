@@ -14,6 +14,7 @@ public enum AppRoute: Hashable {
     case album(id: String)
     case login
     case spotifyLogin
+    case youtubeLogin
 }
 
 @MainActor
@@ -25,7 +26,7 @@ public protocol Router: AnyObject {
 @MainActor
 public final class EmptyRouter: Router {
     public init() {}
-    public func navigate(to route: AppRoute) {}
+    public func navigate(to _: AppRoute) {}
     public func pop() {}
 }
 

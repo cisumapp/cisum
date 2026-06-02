@@ -14,12 +14,15 @@ let package = Package(
         .library(
             name: "Albums",
             targets: ["Albums"]
-        ),
+        )
     ],
     dependencies: [
-        .package(path: "../Artists"),
-        .package(path: "../../Shared/DesignSystem"),
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.8.1")),
+        .package(path: "../../Shared/Aesthetics"),
+        .package(path: "../../Shared/Models"),
+        .package(path: "../Tracks"),
+        .package(path: "../Player"),
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -27,14 +30,17 @@ let package = Package(
         .target(
             name: "Albums",
             dependencies: [
-                .product(name: "DesignSystem", package: "DesignSystem"),
-                .product(name: "Artists", package: "Artists"),
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "Models", package: "Models"),
+                .product(name: "Tracks", package: "Tracks"),
+                .product(name: "Player", package: "Player"),
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "Kingfisher", package: "Kingfisher")
-            ],
+            ]
         ),
         .testTarget(
             name: "AlbumsTests",
             dependencies: ["Albums"]
-        ),
+        )
     ]
 )

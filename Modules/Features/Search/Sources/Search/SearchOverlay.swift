@@ -1,15 +1,16 @@
+import Aesthetics
+import Models
+import Search
 import SwiftUI
-import DesignSystem
-import Services
-
 
 public struct SearchOverlayBar: View {
-    @Environment(AppServices.self) private var appServices
-    @Environment(SearchServices.self) private var searchServices
+    @Environment(SearchOverlayController.self) private var searchOverlay
+    @Environment(\.searchViewModel) private var searchViewModelOptional
     @Environment(\.router) private var router
-    
-    private var searchOverlay: SearchOverlayController { appServices.searchOverlayController }
-    private var searchViewModel: any SearchViewModelInterface { searchServices.searchViewModel }
+
+    private var searchViewModel: any SearchViewModelInterface {
+        searchViewModelOptional!
+    }
 
     public init() {}
 
@@ -30,7 +31,6 @@ public struct SearchOverlayBar: View {
         .onChange(of: searchOverlay.focusRequestID) { _, _ in
             isSearchFieldFocused = true
         }
-
     }
 
     private var shouldShowSuggestions: Bool {
@@ -83,9 +83,9 @@ public struct SearchOverlayBar: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 50, style: .continuous)
-                .stroke(.white.opacity(0.15), lineWidth: 1)
+                .stroke(Color.cisumChromeBorder, lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.12), radius: 20, y: 6)
+        .shadow(color: .primary.opacity(0.12), radius: 20, y: 6)
     }
 
     private var scopeSelector: some View {
@@ -107,7 +107,7 @@ public struct SearchOverlayBar: View {
                     .padding(.vertical, 6)
                     .background {
                         Capsule(style: .continuous)
-                            .fill(isSelected ? .white.opacity(0.22) : .white.opacity(0.08))
+                            .fill(isSelected ? Color.primary.opacity(0.22) : Color.secondary.opacity(0.08))
                     }
                 }
                 .buttonStyle(.plain)
@@ -124,7 +124,7 @@ public struct SearchOverlayBar: View {
                         .padding(.vertical, 6)
                         .background {
                             Capsule(style: .continuous)
-                                .fill(.white.opacity(0.08))
+                                .fill(Color.secondary.opacity(0.08))
                         }
                 }
                 .buttonStyle(.plain)

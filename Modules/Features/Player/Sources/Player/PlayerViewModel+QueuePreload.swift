@@ -1,8 +1,11 @@
-import Utilities
 import Foundation
-import YouTubeSDK
 import Models
-import Services
+import ProviderSDK
+import Utilities
+import YouTubeSDK
+
+private let queueSP = CisumSignpost.queue
+private let queueLog = CisumLog.queue
 
 @MainActor
 extension PlayerViewModel {
@@ -37,35 +40,40 @@ extension PlayerViewModel {
         preparedNextPlayback = nil
         nextPlaybackPreloadTask?.cancel()
         preloadingNextMediaID = nextEntry.mediaID
+        let preloadSpid = queueSP.begin("next-preload", "id=\(nextEntry.mediaID)")
         nextPlaybackPreloadTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
                 if self.preloadingNextMediaID == nextEntry.mediaID {
                     self.preloadingNextMediaID = nil
                 }
+                queueSP.end("next-preload", state: preloadSpid, "id=\(nextEntry.mediaID)")
             }
 
-            let prepared = await self.prepareQueuePlayback(for: nextEntry)
+            let prepared = await prepareQueuePlayback(for: nextEntry)
             guard !Task.isCancelled,
                   let prepared,
-                  let currentQueuePosition = self.queuePosition else {
+                  let currentQueuePosition = self.queuePosition
+            else {
                 return
             }
 
             let expectedIndex = currentQueuePosition + 1
-            guard self.playbackQueue.indices.contains(expectedIndex),
-                  self.playbackQueue[expectedIndex].mediaID == prepared.mediaID else {
+            guard playbackQueue.indices.contains(expectedIndex),
+                  playbackQueue[expectedIndex].mediaID == prepared.mediaID
+            else {
                 return
             }
 
-            self.preparedNextPlayback = prepared
+            queueLog.info("Preload ready id=\(prepared.mediaID, privacy: .public) quality=\(prepared.qualityLabel, privacy: .public)")
+            preparedNextPlayback = prepared
         }
     }
 
     private func prepareQueuePlayback(for entry: PlaybackQueueEntry) async -> PreparedQueuePlayback? {
         do {
             switch entry {
-            case .song(let song):
+            case let .song(song):
                 return try await prepareMusicQueuePlayback(
                     QueueMusicPreloadInput(
                         mediaID: song.videoId,
@@ -79,7 +87,7 @@ extension PlayerViewModel {
                     )
                 )
 
-            case .cachedRadio(let track):
+            case let .cachedRadio(track):
                 return try await prepareMusicQueuePlayback(
                     QueueMusicPreloadInput(
                         mediaID: track.videoID,
@@ -93,8 +101,22 @@ extension PlayerViewModel {
                     )
                 )
 
-            case .video(let video):
-                let candidates = try await resolvePlaybackCandidates(forID: video.id)
+            case let .video(video):
+                let displayTitle = normalizedMusicDisplayTitle(video.title, artist: video.author)
+                let displayArtist = normalizedMusicDisplayArtist(video.author, title: video.title)
+                let representation = TrackRepresentation(
+                    providerID: "youtube",
+                    providerTrackID: video.id,
+                    title: displayTitle,
+                    artist: displayArtist,
+                    artworkURL: normalizedArtworkURL(from: video.thumbnailURL)
+                )
+                let candidates = try await resolvePlaybackCandidates(
+                    forID: video.id,
+                    title: video.title ?? "",
+                    artist: video.author ?? "",
+                    representations: [representation]
+                )
                 guard let candidate = candidates.first else { return nil }
                 let labels = playbackLabels(for: candidate)
 
@@ -116,7 +138,7 @@ extension PlayerViewModel {
                 debugQueuePreloadSelection(prepared, source: "youtube-video")
                 return prepared
 
-            case .external(let track):
+            case let .external(track):
                 let normalizedMediaID = track.mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalizedMediaID.isEmpty else { return nil }
 
@@ -162,7 +184,22 @@ extension PlayerViewModel {
     }
 
     private func prepareMusicQueuePlayback(_ input: QueueMusicPreloadInput) async throws -> PreparedQueuePlayback? {
-        let candidates = try await resolvePlaybackCandidates(forID: input.mediaID)
+        let displayTitle = normalizedMusicDisplayTitle(input.title, artist: input.artist)
+        let displayArtist = normalizedMusicDisplayArtist(input.artist, title: input.title)
+        let representation = TrackRepresentation(
+            providerID: "youtubeMusic",
+            providerTrackID: input.mediaID,
+            title: displayTitle,
+            artist: displayArtist,
+            album: input.albumName,
+            artworkURL: input.artworkURL
+        )
+        let candidates = try await resolvePlaybackCandidates(
+            forID: input.mediaID,
+            title: input.title,
+            artist: input.artist,
+            representations: [representation]
+        )
         guard let candidate = candidates.first else { return nil }
 
         let labels = playbackLabels(for: candidate)
@@ -186,8 +223,8 @@ extension PlayerViewModel {
     }
 
     private func debugQueuePreloadSelection(_ prepared: PreparedQueuePlayback, source: String) {
-#if DEBUG
+        #if DEBUG
         print("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
-#endif
+        #endif
     }
 }

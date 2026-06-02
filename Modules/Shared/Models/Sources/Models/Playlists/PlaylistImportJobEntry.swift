@@ -100,4 +100,3 @@ public final class PlaylistImportJobEntry {
         set { stateRawValue = newValue.rawValue }
     }
 }
-

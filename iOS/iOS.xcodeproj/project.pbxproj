@@ -180,6 +180,7 @@
 				772039502F6AAAA700E85D4A /* Resources */,
 				77EC570F2F6AB9B5002B5513 /* Embed Frameworks */,
 				77C8BF722F6E36D200E7354F /* Embed Foundation Extensions */,
+				771B201F2FCDC6A20025203F /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -313,8 +314,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		771B201F2FCDC6A20025203F /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\n# Strip invalid architectures (e.g. arm64e) from frameworks in the app bundle\nAPP_FRAMEWORKS_DIR=\"${TARGET_BUILD_DIR}/${WRAPPER_NAME}/Frameworks\"\n\nif [ -d \"$APP_FRAMEWORKS_DIR\" ]; then\n    find \"$APP_FRAMEWORKS_DIR\" -name \"*.framework\" -type d | while read -r framework; do\n        FRAMEWORK_NAME=$(basename \"$framework\" .framework)\n        FRAMEWORK_EXECUTABLE=\"$framework/$FRAMEWORK_NAME\"\n\n        if [ -f \"$FRAMEWORK_EXECUTABLE\" ]; then\n            # Check if the binary contains arm64e\n            if lipo -info \"$FRAMEWORK_EXECUTABLE\" | grep -q \"arm64e\"; then\n                echo \"Removing arm64e slice from $FRAMEWORK_NAME...\"\n                \n                # Remove the arm64e slice and save to a temporary file\n                lipo -remove arm64e \"$FRAMEWORK_EXECUTABLE\" -o \"$FRAMEWORK_EXECUTABLE.stripped\"\n                \n                # Replace the original with the stripped version\n                if [ -f \"$FRAMEWORK_EXECUTABLE.stripped\" ]; then\n                    rm \"$FRAMEWORK_EXECUTABLE\"\n                    mv \"$FRAMEWORK_EXECUTABLE.stripped\" \"$FRAMEWORK_EXECUTABLE\"\n                    \n                    # Re-sign the framework (required after modifying the binary)\n                    if [ -n \"$EXPANDED_CODE_SIGN_IDENTITY\" ]; then\n                        echo \"Re-signing $FRAMEWORK_NAME...\"\n                        codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --preserve-metadata=identifier,entitlements \"$framework\"\n                    fi\n                fi\n            fi\n        fi\n    done\nfi\n";
+		};
 		7799E1AB2FAB4568008E0E98 /* Lint and Format */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -325,7 +344,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  exit 0\nfi\n\nREPO_ROOT=\"$SRCROOT/..\"\n\nif command -v swiftformat >/dev/null 2>&1; then\n  if ! swiftformat --lint --config \"$REPO_ROOT/.swiftformat\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/Packages\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftFormat reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftFormat not installed, skipping\"\nfi\n\nif command -v swiftlint >/dev/null 2>&1; then\n  if ! swiftlint lint --config \"$REPO_ROOT/.swiftlint.yml\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/Packages\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftLint reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftLint not installed, skipping\"\nfi\n";
+			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  exit 0\nfi\n\nREPO_ROOT=\"$SRCROOT/..\"\n\nif command -v swiftformat >/dev/null 2>&1; then\n  if ! swiftformat --lint --config \"$REPO_ROOT/.swiftformat\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/Packages\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftFormat reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftFormat not installed, skipping\"\nfi\n\nif command -v swiftlint >/dev/null 2>&1; then\n  if ! swiftlint lint --config \"$REPO_ROOT/.swiftlint.yml\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/Packages\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftLint reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftLint not installed, skipping\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -512,7 +531,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortraitUpsideDown;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -554,7 +573,7 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortraitUpsideDown;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -1,9 +1,9 @@
-import Utilities
 import Kingfisher
 import Models
-import Services
+import Playlists
 import SwiftData
 import SwiftUI
+import Utilities
 import YouTubeSDK
 
 public struct YouTubePlaylistImportSheet: View {
@@ -11,13 +11,15 @@ public struct YouTubePlaylistImportSheet: View {
         case search = "Search"
         case link = "Link"
 
-        public var id: String { rawValue }
+        public var id: String {
+            rawValue
+        }
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(ProviderServices.self) private var providerServices
-    private var youtube: YouTube { providerServices.youtube }
     @Environment(\.modelContext) private var modelContext
+
+    @Environment(\.youtube) private var youtube
 
     public let onImported: (String) -> Void
 
@@ -36,8 +38,11 @@ public struct YouTubePlaylistImportSheet: View {
     @State private var errorMessage: String?
 
     private var importService: YouTubePlaylistImportService {
-        let store = PlaylistLibraryStore(context: modelContext)
-        return YouTubePlaylistImportService(youtube: youtube, playlistStore: store)
+        guard let youtubeService = youtube else {
+            fatalError("YouTube service not available in environment")
+        }
+        let store = PlaylistLibraryStore(modelContainer: modelContext.container)
+        return YouTubePlaylistImportService(youtube: youtubeService, playlistStore: store)
     }
 
     public var body: some View {
@@ -61,16 +66,16 @@ public struct YouTubePlaylistImportSheet: View {
                 }
             }
             .navigationTitle("Add Playlist")
-#if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-#endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") {
-                        dismiss()
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") {
+                            dismiss()
+                        }
                     }
                 }
-            }
         }
         .presentationDetents([.medium, .large])
         .alert("Import Failed", isPresented: showsErrorAlert) {
@@ -80,16 +85,15 @@ public struct YouTubePlaylistImportSheet: View {
         } message: {
             Text(errorMessage ?? "Unknown error")
         }
-
     }
 
     private var searchSection: some View {
         Section("Search YouTube Playlists") {
             HStack(spacing: 10) {
                 TextField("Playlist name", text: $searchQuery)
-#if os(iOS)
+                #if os(iOS)
                     .textInputAutocapitalization(.never)
-#endif
+                #endif
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .onSubmit {
@@ -113,7 +117,8 @@ public struct YouTubePlaylistImportSheet: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     isSearching || isImporting
-                        || searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        || searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
             }
 
             if searchResults.isEmpty {
@@ -143,9 +148,9 @@ public struct YouTubePlaylistImportSheet: View {
                 text: $playlistLink,
                 axis: .vertical
             )
-#if os(iOS)
+            #if os(iOS)
             .textInputAutocapitalization(.never)
-#endif
+            #endif
             .autocorrectionDisabled()
 
             Button {
@@ -162,7 +167,8 @@ public struct YouTubePlaylistImportSheet: View {
             .buttonStyle(.borderedProminent)
             .disabled(
                 isSearching || isImporting
-                    || playlistLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    || playlistLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
 
             Text(
                 "Paste any YouTube or YouTube Music playlist link. You can also paste a playlist ID."
@@ -192,8 +198,8 @@ public struct YouTubePlaylistImportSheet: View {
     }
 }
 
-extension YouTubePlaylistImportSheet {
-    fileprivate func performSearch() async {
+private extension YouTubePlaylistImportSheet {
+    func performSearch() async {
         let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
             searchResults = []
@@ -211,21 +217,21 @@ extension YouTubePlaylistImportSheet {
         }
     }
 
-    fileprivate func importSearchResultPlaylist(_ playlist: YouTubePlaylist) async {
+    func importSearchResultPlaylist(_ playlist: YouTubePlaylist) async {
         guard importingPlaylistID == nil else { return }
         importingPlaylistID = playlist.id
         defer { importingPlaylistID = nil }
 
         do {
-            let imported = try await importService.importPlaylist(from: playlist)
-            onImported(imported.playlistID)
+            let playlistID = try await importService.importPlaylist(from: playlist)
+            onImported(playlistID)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    fileprivate func importFromLink() async {
+    func importFromLink() async {
         guard importingPlaylistID == nil else { return }
         let trimmedLink = playlistLink.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLink.isEmpty else { return }
@@ -234,8 +240,8 @@ extension YouTubePlaylistImportSheet {
         defer { importingPlaylistID = nil }
 
         do {
-            let imported = try await importService.importPlaylist(fromLink: trimmedLink)
-            onImported(imported.playlistID)
+            let playlistID = try await importService.importPlaylist(fromLink: trimmedLink)
+            onImported(playlistID)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -260,7 +266,7 @@ private struct SearchPlaylistImportRow: View {
                 .scaledToFill()
                 .frame(width: 50, height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            
+
             VStack(alignment: .leading, spacing: 3) {
                 Text(normalizedMusicDisplayTitle(playlist.title, artist: playlist.author))
                     .font(.headline)

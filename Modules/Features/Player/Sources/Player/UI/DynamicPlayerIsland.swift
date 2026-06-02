@@ -7,13 +7,11 @@
 
 import Kingfisher
 import SwiftUI
-import Services
 import Utilities
 
 #if os(iOS)
 public struct DynamicPlayerIsland: View {
-@Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
+    @Environment(\.playerViewModel) private var playerViewModel
 
     @Binding var isPlayerExpanded: Bool
     var namespace: Namespace.ID
@@ -22,8 +20,6 @@ public struct DynamicPlayerIsland: View {
         self._isPlayerExpanded = isPlayerExpanded
         self.namespace = namespace
     }
-
-    
 
     public var body: some View {
         nowPlaying
@@ -48,8 +44,8 @@ public struct DynamicPlayerIsland: View {
 
                         let threshold: CGFloat = 50
 
-                        if abs(width) < threshold && abs(height) < threshold {
-                            return  // ignore tiny gestures
+                        if abs(width) < threshold, abs(height) < threshold {
+                            return // ignore tiny gestures
                         }
 
                         if abs(width) > abs(height) * 1.2 {
@@ -73,13 +69,11 @@ public struct DynamicPlayerIsland: View {
                         }
                     }
             )
-
     }
 }
 
-extension DynamicPlayerIsland {
-    @ViewBuilder
-    fileprivate var artwork: some View {
+fileprivate extension DynamicPlayerIsland {
+    var artwork: some View {
         ZStack {
             if !isPlayerExpanded {
                 KFImage(playerViewModel.currentImageURL)
@@ -92,7 +86,7 @@ extension DynamicPlayerIsland {
         }
     }
 
-    fileprivate var nowPlaying: some View {
+    var nowPlaying: some View {
         HStack(spacing: 12) {
             artwork
 
@@ -115,7 +109,7 @@ extension DynamicPlayerIsland {
         .padding(.trailing, 10)
     }
 
-    fileprivate var previous: some View {
+    var previous: some View {
         Button {
             playerViewModel.skipToPrevious()
         } label: {
@@ -127,7 +121,7 @@ extension DynamicPlayerIsland {
         .accessibilityLabel("Previous")
     }
 
-    fileprivate var togglePlayPause: some View {
+    var togglePlayPause: some View {
         Button {
             playerViewModel.togglePlayPause()
         } label: {
@@ -138,7 +132,7 @@ extension DynamicPlayerIsland {
         .accessibilityLabel(playerViewModel.isPlaying ? "Pause" : "Play")
     }
 
-    fileprivate var next: some View {
+    var next: some View {
         Button {
             playerViewModel.skipToNext()
         } label: {

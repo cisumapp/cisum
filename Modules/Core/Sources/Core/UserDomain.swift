@@ -1,11 +1,14 @@
+import Authentication
 import Foundation
-import Services
+import Networking
+import Plugins
+import Profile
 
 public final class UserDomain {
-    internal let spotifySessionCoordinator: SpotifySessionCoordinator
-    internal let authService: AuthService
-    internal let supabaseService: SupabaseService
-    internal let analyticsService: AnalyticsService
+    let spotifySessionCoordinator: SpotifySessionCoordinator
+    let authService: AuthService
+    let supabaseService: SupabaseService
+    let analyticsService: AnalyticsService
 
     public init(
         spotifySessionCoordinator: SpotifySessionCoordinator,

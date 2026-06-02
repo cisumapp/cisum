@@ -11,15 +11,17 @@ let package = Package(
         .library(
             name: "Artists",
             targets: ["Artists"]
-        ),
+        )
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
-        .package(path: "../../Shared/Services"),
-        .package(path: "../../Shared/DesignSystem"),
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.8.1")),
+        .package(path: "../../Shared/Aesthetics"),
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../Player"),
+        .package(path: "../Albums"),
+        .package(path: "../Tracks")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -29,12 +31,14 @@ let package = Package(
             dependencies: [
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
-                .product(name: "Services", package: "Services"),
-                .product(name: "DesignSystem", package: "DesignSystem"),
+                .product(name: "Aesthetics", package: "Aesthetics"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK")
-            ],
-        ),
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "Player", package: "Player"),
+                .product(name: "Albums", package: "Albums"),
+                .product(name: "Tracks", package: "Tracks")
+            ]
+        )
 
     ],
     swiftLanguageModes: [.v6]

@@ -52,7 +52,8 @@ public struct PlaylistDetailView: View {
                         "No Tracks Yet",
                         systemImage: "music.note",
                         description: Text(
-                            "This playlist is ready, but no tracks have been imported yet.")
+                            "This playlist is ready, but no tracks have been imported yet."
+                        )
                     )
                 }
             } else {
@@ -67,7 +68,6 @@ public struct PlaylistDetailView: View {
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
-
     }
 }
 

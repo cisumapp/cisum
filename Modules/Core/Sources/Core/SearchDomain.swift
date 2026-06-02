@@ -1,18 +1,20 @@
+import Caching
 import Foundation
+import Networking
+import Player
 import Search
-import Services
 
 public final class SearchDomain {
-    internal let searchViewModel: SearchViewModel
-    internal let historyStore: Services.SearchHistoryStore
-    internal let searchCacheHintStore: Services.SearchCacheHintStore
-    internal let searchCache: any SearchResultsCaching
-    internal let suggestionRanker: SuggestionRanker.Type
+    let searchViewModel: SearchViewModel
+    let historyStore: Search.SearchHistoryStore
+    let searchCacheHintStore: SearchCacheHintStore
+    let searchCache: any SearchResultsCaching
+    let suggestionRanker: SuggestionRanker.Type
 
     public init(
         searchViewModel: SearchViewModel,
-        historyStore: Services.SearchHistoryStore,
-        searchCacheHintStore: Services.SearchCacheHintStore,
+        historyStore: Search.SearchHistoryStore,
+        searchCacheHintStore: SearchCacheHintStore,
         searchCache: any SearchResultsCaching,
         suggestionRanker: SuggestionRanker.Type
     ) {

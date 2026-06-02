@@ -1,38 +1,34 @@
 #if os(iOS)
-import SwiftUI
-import SwiftData
-import DesignSystem
+import Aesthetics
 import Kingfisher
-import Services
 import Models
+import Player
+import SwiftData
+import SwiftUI
 import YouTubeSDK
 
 public struct AlbumView: View {
     let album: Album
     @State private var viewModel = AlbumViewModel()
-    @Environment(PlaybackServices.self) private var playbackServices
-    @Environment(SearchServices.self) private var searchServices
-    @Environment(AppServices.self) private var appServices
-    
+    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.searchViewModel) private var searchViewModel
+    @Environment(PlayerPresentationController.self) private var playerPresentationController
+
     @Query private var tracks: [Song]
-    
+
     public init(album: Album) {
         self.album = album
         let albumID = album.albumID
         _tracks = Query(filter: #Predicate<Song> { $0.albumID == albumID })
     }
-    
-    private var playerViewModel: any PlayerViewModelInterface {
-        playbackServices.playerViewModel
-    }
-    
+
     public var body: some View {
         GeometryReader { geo in
             ScrollView {
                 VStack(spacing: 0) {
                     AlbumCover(isCardExpanded: true, viewModel: viewModel, album: album)
                         .frame(width: geo.size.width, height: geo.size.width)
-                    
+
                     VStack(spacing: 0) {
                         HStack {
                             Button {
@@ -41,9 +37,9 @@ public struct AlbumView: View {
                                 ZStack {
                                     RoundedRectangle(cornerRadius: 50)
                                         .fill(viewModel.backgroundColor)
-                                    
+
                                     Text("Play")
-                                        .foregroundStyle(viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor) )
+                                        .foregroundStyle(viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor))
                                         .fontWeight(.bold)
                                 }
                             }
@@ -51,7 +47,7 @@ public struct AlbumView: View {
                             .buttonStyle(.plain)
                         }
                         .padding(.vertical, 24)
-                        
+
                         LazyVStack(spacing: 0) {
                             ForEach(Array(tracks.enumerated()), id: \.element.songID) { index, track in
                                 Button {
@@ -62,29 +58,27 @@ public struct AlbumView: View {
                                             Text("\(index + 1)")
                                                 .font(.caption.monospacedDigit())
                                                 .frame(width: 24, alignment: .leading)
-                                            
+
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(track.title)
                                                     .lineLimit(1)
-                                                
+
                                                 Text(track.primaryArtistName ?? "")
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
                                                     .lineLimit(1)
                                             }
-                                            
+
                                             Spacer()
-                                            
+
                                             Group {
                                                 if track.isExplicit {
                                                     Image(systemName: "e.square.fill")
                                                         .foregroundStyle(.secondary)
                                                 }
-                                                
+
                                                 Menu {
-                                                    Button {
-                                                        
-                                                    } label: {
+                                                    Button {} label: {
                                                         Text("Download")
                                                     }
                                                 } label: {
@@ -100,7 +94,7 @@ public struct AlbumView: View {
                                     .padding()
                                 }
                                 .buttonStyle(.plain)
-                                
+
                                 Divider()
                                     .padding(.horizontal)
                             }
@@ -112,15 +106,15 @@ public struct AlbumView: View {
             .ignoresSafeArea(edges: .top)
         }
     }
-    
+
     private func playTracks(startingAt index: Int) {
         guard !tracks.isEmpty else { return }
-        
+
         let externalTracks: [ExternalQueueTrack] = tracks.compactMap { track in
             let sourceProvider = track.preferredFallbackProvider ?? .youtube
             let payload: FederatedSearchPayload
             let mediaID: String
-            
+
             if sourceProvider == .spotify, let spotifyID = track.spotifyTrackID {
                 mediaID = spotifyID
                 let spotifyTrack = SpotifySearchTrack(
@@ -162,7 +156,7 @@ public struct AlbumView: View {
                 audioCodecLabel: nil,
                 payload: payload
             )
-            
+
             return ExternalQueueTrack(
                 mediaID: mediaID,
                 title: track.title,
@@ -173,16 +167,16 @@ public struct AlbumView: View {
                 qualityLabelHint: nil,
                 codecLabelHint: nil,
                 resolvePayload: {
-                    guard let resolved = try await searchServices.searchViewModel.resolveExternalStream(for: item) else {
+                    guard let resolved = try await searchViewModel?.resolveExternalStream(for: item) else {
                         throw NSError(domain: "AlbumView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to resolve stream"])
                     }
                     return resolved
                 }
             )
         }
-        
+
         playerViewModel.setQueue(externalTracks, startIndex: index)
-        appServices.playerPresentationController.expand()
+        playerPresentationController.expand()
     }
 }
 #endif

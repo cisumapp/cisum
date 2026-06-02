@@ -8,7 +8,7 @@
 import Foundation
 
 public extension BinaryFloatingPoint {
-    public func asTimeString(style: DateComponentsFormatter.UnitsStyle) -> String {
+    func asTimeString(style: DateComponentsFormatter.UnitsStyle) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.minute, .second]
         formatter.unitsStyle = style

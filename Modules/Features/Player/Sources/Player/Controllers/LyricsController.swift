@@ -1,7 +1,6 @@
 import Foundation
-import Observation
 import Models
-import Services
+import Observation
 
 @Observable
 @MainActor
@@ -12,9 +11,9 @@ public final class LyricsController {
     public var isVisible: Bool = false
     public var currentLineIndex: Int?
     public var attribution: String?
-    
+
     public init() {}
-    
+
     public func updateCurrentLine(for time: Double) {
         guard state == .synced else { return }
         let index = syncedLines.lastIndex { $0.timestamp <= time }
@@ -22,7 +21,7 @@ public final class LyricsController {
             currentLineIndex = index
         }
     }
-    
+
     public func reset() {
         state = .idle
         syncedLines = []
@@ -30,21 +29,21 @@ public final class LyricsController {
         currentLineIndex = nil
         attribution = nil
     }
-    
+
     public func loadLyrics(synced: [TimedLyricLine], plain: String?, attribution: String?) {
         if !synced.isEmpty {
-            self.syncedLines = synced
-            self.state = .synced
-        } else if let plain = plain, !plain.isEmpty {
-            self.plainText = plain
-            self.state = .plain
+            syncedLines = synced
+            state = .synced
+        } else if let plain, !plain.isEmpty {
+            plainText = plain
+            state = .plain
         } else {
-            self.state = .unavailable("No lyrics available for this track.")
+            state = .unavailable("No lyrics available for this track.")
         }
         self.attribution = attribution
     }
-    
+
     public func setLoading() {
-        self.state = .loading
+        state = .loading
     }
 }

@@ -1,17 +1,15 @@
 //
-//  cisumForwardButton.swift
+//  ForwardButton.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 05/05/25.
 //
 
 import SwiftUI
-import Services
 
 struct ForwardButton: View {
-@Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
-    
+    @Environment(\.playerViewModel) private var playerViewModel
+
     @State private var transparency: Double = 0.0
 
     var body: some View {
@@ -37,6 +35,5 @@ struct ForwardButton: View {
         .accessibilityLabel("Skip Forward")
         .disabled(!playerViewModel.canSkipForward)
         .opacity(playerViewModel.canSkipForward ? 1 : 0.5)
-
     }
 }

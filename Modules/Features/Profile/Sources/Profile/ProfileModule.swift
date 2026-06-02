@@ -1,4 +1,7 @@
-import Services
+import Caching
+import Networking
+import Player
+import Plugins
 import SwiftUI
 import YouTubeSDK
 
@@ -13,8 +16,8 @@ public final class ProfileModule {
         prefetchSettings: PrefetchSettings,
         networkMonitor: NetworkPathMonitor,
         playbackControlSettings: PlaybackControlSettings,
-        streamingProviderSettings: StreamingProviderSettings
-        , lastFMSettings: LastFMSettings
+        streamingProviderSettings: StreamingProviderSettings,
+        lastFMSettings: LastFMSettings
     ) {
         self.prefetchSettings = prefetchSettings
         self.networkMonitor = networkMonitor

@@ -12,23 +12,29 @@ let package = Package(
     products: [
         .library(
             name: "Home",
-            targets: ["Home"],
-        ),
+            targets: ["Home"]
+        )
     ],
     dependencies: [
-        .package(path: "../../Shared/DesignSystem"),
+        .package(path: "../../Shared/Aesthetics"),
         .package(path: "../../Shared/Utilities"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../../Shared/Models"),
+        .package(path: "../Tracks"),
+        .package(path: "../Player"),
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK")
     ],
     targets: [
         .target(
             name: "Home",
             dependencies: [
-                "DesignSystem",
-                "Utilities",
-                "YouTubeSDK"
-            ],
-        ),
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "Utilities", package: "Utilities"),
+                .product(name: "Models", package: "Models"),
+                .product(name: "Tracks", package: "Tracks"),
+                .product(name: "Player", package: "Player"),
+                .product(name: "YouTubeSDK", package: "YouTubeSDK")
+            ]
+        )
     ],
     swiftLanguageModes: [.v6]
 )

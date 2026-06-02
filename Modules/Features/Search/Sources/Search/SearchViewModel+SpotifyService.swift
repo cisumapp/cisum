@@ -1,16 +1,15 @@
 import Foundation
 import Models
-import Services
+import Utilities
 
 extension SearchViewModel {
-    
     nonisolated func performFallbackMatch(
         title: String,
         artist: String,
         duration: TimeInterval?,
         candidates: [FederatedSearchItem]
     ) async -> SpotifyFallbackMatch? {
-        return findBestSpotifyFallbackMatch(
+        findBestSpotifyFallbackMatch(
             for: title,
             artist: artist,
             durationSeconds: duration,
@@ -50,7 +49,7 @@ extension SearchViewModel {
         })
     }
 
-    nonisolated private func spotifyFallbackScore(
+    private nonisolated func spotifyFallbackScore(
         sourceTitle: String,
         sourceArtist: String,
         sourceDuration: TimeInterval?,
@@ -76,14 +75,16 @@ extension SearchViewModel {
             candidateTitle: normalizedCandidateTitle
         )
 
-        let providerBonus: Double
-        switch candidate.service {
+        let providerBonus: Double = switch candidate.service {
         case .youtubeMusic:
-            providerBonus = 0.05
+            0.05
         case .youtube:
-            providerBonus = 0.03
+            0.03
         case .spotify:
-            providerBonus = 0
+            0
+        case .providerSDK:
+            // Native provider metadata is as accurate as YouTube Music for fallback matching.
+            0.05
         }
 
         return (0.42 * titleOverlap)
@@ -97,7 +98,7 @@ extension SearchViewModel {
             + variantPenalty
     }
 
-    nonisolated private func spotifyDurationMatchScore(sourceDuration: TimeInterval?, candidateDuration: TimeInterval?) -> Double {
+    private nonisolated func spotifyDurationMatchScore(sourceDuration: TimeInterval?, candidateDuration: TimeInterval?) -> Double {
         guard let sourceDuration, sourceDuration > 0 else { return 0.12 }
         guard let candidateDuration, candidateDuration > 0 else { return 0.12 }
 
@@ -108,22 +109,22 @@ extension SearchViewModel {
         return max(0, 1 - (normalizedDelta * 3.5))
     }
 
-    nonisolated private func spotifyVariantPenalty(sourceTitle: String, candidateTitle: String) -> Double {
+    private nonisolated func spotifyVariantPenalty(sourceTitle: String, candidateTitle: String) -> Double {
         let sourceHasVariant = spotifyTitleHasVariantMarker(sourceTitle)
         let candidateHasVariant = spotifyTitleHasVariantMarker(candidateTitle)
 
-        if candidateHasVariant && !sourceHasVariant {
+        if candidateHasVariant, !sourceHasVariant {
             return -0.34
         }
 
-        if sourceHasVariant && !candidateHasVariant {
+        if sourceHasVariant, !candidateHasVariant {
             return -0.08
         }
 
         return 0
     }
 
-    nonisolated private func spotifyTitleHasVariantMarker(_ title: String) -> Bool {
+    private nonisolated func spotifyTitleHasVariantMarker(_ title: String) -> Bool {
         let markers = [
             " remix",
             " live",
