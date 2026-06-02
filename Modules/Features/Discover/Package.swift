@@ -12,21 +12,23 @@ let package = Package(
         .library(name: "Discover", targets: ["Discover"])
     ],
     dependencies: [
-        .package(path: "../../Shared/DesignSystem"),
+        .package(path: "../../Shared/Aesthetics"),
         .package(path: "../../Shared/Utilities"),
-        .package(path: "../../Shared/Services"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.8.1"))
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
+        .package(path: "../Player"),
+        .package(path: "../Tracks")
     ],
     targets: [
         .target(
             name: "Discover",
             dependencies: [
-                "DesignSystem",
-                "Utilities",
-                "Services",
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "Utilities", package: "Utilities"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-                .product(name: "Kingfisher", package: "Kingfisher")
+                .product(name: "Kingfisher", package: "Kingfisher"),
+                .product(name: "Player", package: "Player"),
+                .product(name: "Tracks", package: "Tracks")
             ]
         )
     ],

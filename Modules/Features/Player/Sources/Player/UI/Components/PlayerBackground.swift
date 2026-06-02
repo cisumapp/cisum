@@ -6,15 +6,13 @@
 //
 
 #if os(iOS)
+import Aesthetics
 import Kingfisher
 import SwiftUI
-import DesignSystem
 import Utilities
-import Services
 
 struct PlayerBackground: View {
-    @Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
+    @Environment(\.playerViewModel) private var playerViewModel
 
     let isPlayerExpanded: Bool
     let isFullExpanded: Bool
@@ -34,24 +32,41 @@ struct PlayerBackground: View {
                                 .scaleEffect(1.1)
                                 .blur(radius: 10)
 
-                            DesignSystem.Vinyl(
+                            Aesthetics.Vinyl(
                                 isPlaying: playerViewModel.isPlaying,
-                                accentColor: playerViewModel.currentAccentColor
-                            ) {
-                                KFImage(playerViewModel.currentImageURL)
-                                    .downsampling(size: CGSize(width: 1400, height: 1400))
-                                    .resizable()
-                                    .scaledToFill()
-                            } previous: {
-                                Image.vinylNotPlaying
-                                    .resizable()
-                            } upnext: {
-                                Image.vinylNotPlaying
-                                    .resizable()
-                            }
+                                accentColor: playerViewModel.currentAccentColor,
+                                content: {
+                                    KFImage(playerViewModel.currentImageURL)
+                                        .downsampling(size: CGSize(width: 1400, height: 1400))
+                                        .resizable()
+                                        .scaledToFill()
+                                },
+                                previous: {
+                                    if let pvm = playerViewModel as? PlayerViewModel, let previous = pvm.previousQueuePreviewItem {
+                                        KFImage(previous.artworkURL)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        Color.clear
+                                    }
+                                },
+                                upnext: {
+                                    if let pvm = playerViewModel as? PlayerViewModel, let next = pvm.nextQueuePreviewItem {
+                                        KFImage(next.artworkURL)
+                                            .resizable()
+                                            .scaledToFill()
+                                    } else {
+                                        Color.clear
+                                    }
+                                },
+                                previousTitle: (playerViewModel as? PlayerViewModel)?.previousQueuePreviewItem?.title,
+                                previousSubtitle: (playerViewModel as? PlayerViewModel)?.previousQueuePreviewItem?.subtitle,
+                                upnextTitle: (playerViewModel as? PlayerViewModel)?.nextQueuePreviewItem?.title,
+                                upnextSubtitle: (playerViewModel as? PlayerViewModel)?.nextQueuePreviewItem?.subtitle
+                            )
 
                             ZStack {
-                                Color.white.opacity(0.1)
+                                Color.black.opacity(0.1)
                                     .scaleEffect(1.8)
                                     .blur(radius: 100)
 
@@ -66,20 +81,19 @@ struct PlayerBackground: View {
         }
         .clipShape(.rect(cornerRadius: dynamicCornerRadius))
         .frame(height: isPlayerExpanded ? nil : Utilities.AppConstants.dynamicPlayerIslandHeight)
-
     }
 }
 
-extension PlayerBackground {
-    fileprivate var dynamicCornerRadius: CGFloat {
+fileprivate extension PlayerBackground {
+    var dynamicCornerRadius: CGFloat {
         isPlayerExpanded ? expandPlayerCornerRadius : collapsedPlayerCornerRadius
     }
 
-    fileprivate var expandPlayerCornerRadius: CGFloat {
+    var expandPlayerCornerRadius: CGFloat {
         isFullExpanded ? 0 : UIScreen.deviceCornerRadius
     }
 
-    fileprivate var collapsedPlayerCornerRadius: CGFloat {
+    var collapsedPlayerCornerRadius: CGFloat {
         Utilities.AppConstants.dynamicPlayerIslandHeight / 2
     }
 }

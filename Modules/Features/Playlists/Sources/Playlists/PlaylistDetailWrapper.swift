@@ -1,6 +1,6 @@
-import SwiftUI
-import SwiftData
 import Models
+import SwiftData
+import SwiftUI
 
 public struct PlaylistDetailWrapper: View {
     public let playlistID: String
@@ -14,7 +14,7 @@ public struct PlaylistDetailWrapper: View {
 
     public var body: some View {
         if let playlist = playlists.first {
-            PlaylistView(playlist: playlist)
+            PlaylistCard(playlist: playlist)
         } else {
             ProgressView()
         }

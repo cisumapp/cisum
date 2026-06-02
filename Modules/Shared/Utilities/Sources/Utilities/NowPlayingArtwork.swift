@@ -5,8 +5,8 @@
 //  Created by GitHub Copilot on 29/03/26.
 //
 
-import Foundation
 import CryptoKit
+import Foundation
 
 public nonisolated func normalizedITunesArtworkURL(from artworkURL: URL?) -> URL? {
     guard let artworkURL else { return nil }
@@ -75,7 +75,7 @@ public nonisolated func motionArtworkVideoCacheID(mediaID: String, albumCacheKey
     return "media-\(mediaID)-\(fallbackSourceToken)"
 }
 
-nonisolated private func normalizedMotionArtworkToken(_ value: String?) -> String? {
+private nonisolated func normalizedMotionArtworkToken(_ value: String?) -> String? {
     guard let value else { return nil }
 
     let lowered = value
@@ -102,7 +102,7 @@ nonisolated private func normalizedMotionArtworkToken(_ value: String?) -> Strin
     return collapsed
 }
 
-nonisolated private func stableMotionArtworkHash(_ value: String) -> String {
+private nonisolated func stableMotionArtworkHash(_ value: String) -> String {
     let digest = SHA256.hash(data: Data(value.utf8))
     return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
 }

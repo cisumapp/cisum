@@ -1,5 +1,5 @@
+import Aesthetics
 import SwiftUI
-import DesignSystem
 
 @MainActor
 @Observable

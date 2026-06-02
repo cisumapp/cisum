@@ -10,20 +10,20 @@ let package = Package(
         .library(
             name: "Authentication",
             targets: ["Authentication"]
-        ),
+        )
     ],
     dependencies: [
-        .package(path: "../../Shared/Services"),
-        .package(path: "../../Shared/DesignSystem"),
+        .package(path: "../../Shared/Aesthetics"),
+        .package(url: "https://github.com/clerk/clerk-ios", from: "1.1.3")
     ],
     targets: [
         .target(
             name: "Authentication",
             dependencies: [
-                .product(name: "Services", package: "Services"),
-                .product(name: "DesignSystem", package: "DesignSystem"),
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "ClerkKit", package: "clerk-ios")
             ]
-        ),
+        )
 
     ],
     swiftLanguageModes: [.v6]

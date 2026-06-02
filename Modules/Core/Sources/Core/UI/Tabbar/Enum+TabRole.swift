@@ -17,7 +17,7 @@ extension TabRole {
     var toNative: SwiftUI.TabRole? {
         switch self {
         case .search:
-            return SwiftUI.TabRole.search
+            SwiftUI.TabRole.search
         }
     }
 }

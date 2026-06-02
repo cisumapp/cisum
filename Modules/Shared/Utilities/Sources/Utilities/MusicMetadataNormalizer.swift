@@ -72,14 +72,14 @@ public nonisolated func normalizedArtworkURL(from rawValue: String?) -> URL? {
 
     if candidate.hasPrefix("//") {
         candidate = "https:" + candidate
-    } else if !candidate.hasPrefix("http://") && !candidate.hasPrefix("https://") {
+    } else if !candidate.hasPrefix("http://"), !candidate.hasPrefix("https://") {
         candidate = "https://" + candidate
     }
 
     return URL(string: candidate)
 }
 
-nonisolated private func stripDuplicateArtistText(from title: String, artist: String) -> String {
+private nonisolated func stripDuplicateArtistText(from title: String, artist: String) -> String {
     guard !title.isEmpty, !artist.isEmpty else { return title }
 
     let lowerTitle = title.lowercased()
@@ -111,15 +111,15 @@ nonisolated private func stripDuplicateArtistText(from title: String, artist: St
     return title
 }
 
-nonisolated private func stripArtistNoiseSuffixes(from artist: String) -> String {
+private nonisolated func stripArtistNoiseSuffixes(from artist: String) -> String {
     stripTrailingNoise(in: artist, keywords: artistNoiseKeywords())
 }
 
-nonisolated private func stripMusicNoiseSuffixes(from title: String) -> String {
+private nonisolated func stripMusicNoiseSuffixes(from title: String) -> String {
     stripTrailingNoise(in: title, keywords: musicNoiseKeywords())
 }
 
-nonisolated private func stripTrailingNoise(in value: String, keywords: [String]) -> String {
+private nonisolated func stripTrailingNoise(in value: String, keywords: [String]) -> String {
     var result = collapsedMusicWhitespace(value)
 
     while true {
@@ -131,7 +131,7 @@ nonisolated private func stripTrailingNoise(in value: String, keywords: [String]
     }
 }
 
-nonisolated private func removeTrailingNoise(from value: String, keywords: [String]) -> String {
+private nonisolated func removeTrailingNoise(from value: String, keywords: [String]) -> String {
     let separators = [" ", " - ", " – ", " — ", " | ", " • ", ": "]
     let bracketPairs = [("(", ")"), ("[", "]"), ("{", "}")]
     let lowerValue = value.lowercased()
@@ -156,25 +156,34 @@ nonisolated private func removeTrailingNoise(from value: String, keywords: [Stri
         }
 
         if lowerValue.hasSuffix(lowerKeyword) {
-            let cutIndex = value.index(value.endIndex, offsetBy: -keyword.count)
-            return collapsedMusicWhitespace(String(value[..<cutIndex]))
+            if lowerValue == lowerKeyword {
+                return ""
+            }
+            let indexBeforeKeyword = lowerValue.index(lowerValue.endIndex, offsetBy: -(keyword.count + 1))
+            let charBeforeKeyword = lowerValue[indexBeforeKeyword]
+
+            // Only strip if it's not part of a larger word (e.g. 'A' before 'live' in 'Alive')
+            if !charBeforeKeyword.isLetter, !charBeforeKeyword.isNumber {
+                let cutIndex = value.index(value.endIndex, offsetBy: -keyword.count)
+                return collapsedMusicWhitespace(String(value[..<cutIndex]))
+            }
         }
     }
 
     return value
 }
 
-nonisolated private func collapsedMusicWhitespace(_ value: String) -> String {
+private nonisolated func collapsedMusicWhitespace(_ value: String) -> String {
     value
         .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         .trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-nonisolated private func musicDisplaySeparators() -> [String] {
+private nonisolated func musicDisplaySeparators() -> [String] {
     [" - ", " – ", " — ", " | ", " • ", ": "]
 }
 
-nonisolated private func musicNoiseKeywords() -> [String] {
+private nonisolated func musicNoiseKeywords() -> [String] {
     [
         "official music video",
         "official audio",
@@ -192,7 +201,7 @@ nonisolated private func musicNoiseKeywords() -> [String] {
     ]
 }
 
-nonisolated private func artistNoiseKeywords() -> [String] {
+private nonisolated func artistNoiseKeywords() -> [String] {
     ["topic", "provided to youtube by"]
 }
 
@@ -228,15 +237,15 @@ public nonisolated func resolvedInnerTubeLanguageCode() -> String {
 public nonisolated func shouldKeepMusicHomeItem(_ item: YouTubeItem) -> Bool {
     switch item {
     case .song:
-        return true
-    case .video(let video):
-        return shouldKeepMusicVideoResult(video)
-    case .channel(let channel):
-        return shouldKeepMusicChannel(channel)
-    case .playlist(let playlist):
-        return shouldKeepMusicPlaylist(playlist)
-    case .shelf(let shelf):
-        return isLikelyMusicMetadata(title: shelf.title, secondaryText: nil)
+        true
+    case let .video(video):
+        shouldKeepMusicVideoResult(video)
+    case let .channel(channel):
+        shouldKeepMusicChannel(channel)
+    case let .playlist(playlist):
+        shouldKeepMusicPlaylist(playlist)
+    case let .shelf(shelf):
+        isLikelyMusicMetadata(title: shelf.title, secondaryText: nil)
     }
 }
 

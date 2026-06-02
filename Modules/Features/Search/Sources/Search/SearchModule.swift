@@ -1,5 +1,10 @@
+import Caching
+import Library
 import Models
-import Services
+import Networking
+import Player
+import Plugins
+import Search
 import SwiftUI
 import YouTubeSDK
 
@@ -8,21 +13,21 @@ public struct SearchDependencies {
     public let youtube: YouTube
     public let settings: PrefetchSettings
     public let networkMonitor: NetworkPathMonitor
-    public let historyStore: Services.SearchHistoryStore
-    public let searchCacheHintStore: Services.SearchCacheHintStore
+    public let historyStore: SearchHistoryStore
+    public let searchCacheHintStore: SearchCacheHintStore
     public let streamingProviderSettings: StreamingProviderSettings
     public let centralMediaStore: CentralMediaStore?
     public let metadataCache: any VideoMetadataCaching
     public let searchCache: any SearchResultsCaching
     public let spotifySessionCoordinator: SpotifySessionCoordinator?
     public let viewModel: any SearchViewModelInterface
-    
+
     public init(
         youtube: YouTube,
         settings: PrefetchSettings,
         networkMonitor: NetworkPathMonitor,
-        historyStore: Services.SearchHistoryStore,
-        searchCacheHintStore: Services.SearchCacheHintStore,
+        historyStore: SearchHistoryStore,
+        searchCacheHintStore: SearchCacheHintStore,
         streamingProviderSettings: StreamingProviderSettings,
         centralMediaStore: CentralMediaStore?,
         metadataCache: any VideoMetadataCaching,

@@ -5,24 +5,25 @@
 //  Created by Aarav Gupta on 29/04/26.
 //
 
-import SwiftUI
-import SwiftData
-import Models
-import Services
 import Kingfisher
+import Aesthetics
+import Models
+import Player
+import SwiftData
+import SwiftUI
 import YouTubeSDK
 
 public struct PlaylistView: View {
     let playlist: Playlist
     @Query private var tracks: [PlaylistItem]
 
-    @Environment(AppServices.self) private var appServices
-    @Environment(SearchServices.self) private var searchServices
-    @Environment(PlaybackServices.self) private var playbackServices
+    @Environment(PlayerPresentationController.self) private var playerPresentationController
+    @Environment(\.searchViewModel) private var searchViewModel
+    @Environment(\.playerViewModel) private var playerViewModel
 
     @State private var showPlaybackAlert = false
     @State private var playbackAlertMessage = ""
-    
+
     public init(playlist: Playlist) {
         self.playlist = playlist
         let playlistID = playlist.playlistID
@@ -32,31 +33,29 @@ public struct PlaylistView: View {
         )
     }
 
-    private var searchViewModel: any SearchViewModelInterface {
-        searchServices.searchViewModel
-    }
-
-    private var playerViewModel: any PlayerViewModelInterface {
-        playbackServices.playerViewModel
-    }
-
-    private var presentationController: PlayerPresentationController {
-        appServices.playerPresentationController
-    }
-    
     public var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            
+
             ZStack {
-                LinearGradient(colors: [.black, .accentColor, .accentColor, .accentColor], startPoint: .bottom, endPoint: .top)
-                
+                LinearGradient(
+                    colors: [
+                        .black,
+                        playerViewModel.currentAccentColor,
+                        playerViewModel.currentAccentColor,
+                        playerViewModel.currentAccentColor
+                    ],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+
                 ScrollView {
                     Rectangle()
-                        .fill(Color.accentColor)
+                        .fill(playerViewModel.currentAccentColor)
                         .frame(width: size.width, height: size.width)
                         .overlay {
-                            if let artwork = playlist.artworkURLString, let artworkURL = URL(string: artwork) {
+                            if let artwork = playlist.artworkURLString,
+                               let artworkURL = URL(string: artwork) {
                                 KFImage(artworkURL)
                                     .resizable()
                                     .scaledToFill()
@@ -69,15 +68,13 @@ public struct PlaylistView: View {
                                 Text(playlist.title)
                                     .font(.largeTitle)
                                     .fontWeight(.semibold)
-                                
+
                                 if let owner = playlist.ownerName {
-                                    Button {
-                                        
-                                    } label: {
+                                    Button {} label: {
                                         HStack(spacing: 4) {
                                             Text(owner)
                                                 .textCase(.uppercase)
-                                            
+
                                             Image(systemName: "chevron.right")
                                                 .font(.callout)
                                         }
@@ -86,13 +83,18 @@ public struct PlaylistView: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                            .frame(
+                                maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading
+                            )
                             .padding()
                             .background(
-                                LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .bottom, endPoint: .center)
+                                LinearGradient(
+                                    colors: [.black.opacity(0.7), .clear], startPoint: .bottom,
+                                    endPoint: .center
+                                )
                             )
                         }
-                    
+
                     HStack {
                         Button {
                             Task {
@@ -101,10 +103,10 @@ public struct PlaylistView: View {
                         } label: {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 50)
-                                    .fill(Color.accentColor)
-                                
+                                    .fill(playerViewModel.currentAccentColor)
+
                                 Text("Play")
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.cisumBg)
                                     .fontWeight(.bold)
                             }
                         }
@@ -112,7 +114,7 @@ public struct PlaylistView: View {
                         .buttonStyle(.plain)
                     }
                     .padding(.vertical)
-                    
+
                     LazyVStack(spacing: 0) {
                         ForEach(Array(tracks.enumerated()), id: \.element.itemKey) { index, track in
                             Button {
@@ -125,24 +127,22 @@ public struct PlaylistView: View {
                                         Text("\(index + 1)")
                                             .font(.caption.monospacedDigit())
                                             .frame(width: 24, alignment: .leading)
-                                        
+
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(track.title)
                                                 .lineLimit(1)
-                                            
+
                                             Text(track.artistName ?? "")
                                                 .font(.caption)
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(1)
                                         }
-                                        
+
                                         Spacer()
-                                        
+
                                         Group {
                                             Menu {
-                                                Button {
-                                                    
-                                                } label: {
+                                                Button {} label: {
                                                     Text("Download")
                                                 }
                                             } label: {
@@ -158,7 +158,7 @@ public struct PlaylistView: View {
                                 .padding()
                             }
                             .buttonStyle(.plain)
-                            
+
                             Divider()
                                 .padding(.horizontal)
                         }
@@ -184,14 +184,15 @@ public struct PlaylistView: View {
 
         let selectedItem = tracks[index]
         let selectedMediaID = playbackMediaID(for: selectedItem)
-        guard let startIndex = queueTracks.firstIndex(where: { $0.mediaID == selectedMediaID }) else {
+        guard let startIndex = queueTracks.firstIndex(where: { $0.mediaID == selectedMediaID })
+        else {
             playbackAlertMessage = "Unable to start playback for the selected track."
             showPlaybackAlert = true
             return
         }
 
         playerViewModel.setQueue(queueTracks, startIndex: startIndex)
-        presentationController.expand()
+        playerPresentationController.expand()
     }
 
     private func makePlayableQueueTrack(for track: PlaylistItem) -> ExternalQueueTrack {
@@ -208,7 +209,7 @@ public struct PlaylistView: View {
             qualityLabelHint: nil,
             codecLabelHint: nil,
             resolvePayload: {
-                guard let resolved = try await searchViewModel.resolveExternalStream(for: searchItem) else {
+                guard let resolved = try await searchViewModel?.resolveExternalStream(for: searchItem) else {
                     throw FederatedSearchError.noPlayableStream(
                         "Unable to resolve a playable stream for \"\(track.title)\"."
                     )
@@ -219,8 +220,10 @@ public struct PlaylistView: View {
     }
 
     private func playbackMediaID(for track: PlaylistItem) -> String {
-        if let resolvedMediaID = track.resolvedMediaID?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !resolvedMediaID.isEmpty {
+        if let resolvedMediaID = track.resolvedMediaID?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ),
+            !resolvedMediaID.isEmpty {
             return resolvedMediaID
         }
 
@@ -258,15 +261,17 @@ public struct PlaylistView: View {
         }
 
         switch playlist.sourceProvider {
-        default:
+        case .youtube, .youtubeMusic:
             let youtubeID = track.sourceTrackID ?? track.itemKey
-            guard let youtubeVideo = makeSyntheticYouTubeVideo(
-                videoID: youtubeID,
-                title: track.title,
-                author: artistName,
-                durationSeconds: duration,
-                artworkURL: artworkURL
-            ) else {
+            guard
+                let youtubeVideo = makeSyntheticYouTubeVideo(
+                    videoID: youtubeID,
+                    title: track.title,
+                    author: artistName,
+                    durationSeconds: duration,
+                    artworkURL: artworkURL
+                )
+            else {
                 return makeFallbackSpotifyItem(for: track, artworkURL: artworkURL)
             }
 
@@ -283,34 +288,13 @@ public struct PlaylistView: View {
                 payload: .youtubeVideo(youtubeVideo)
             )
 
-//        default:
-//            let spotifyID = track.sourceTrackID ?? track.itemKey
-//            let spotifyTrack = SpotifySearchTrack(
-//                id: spotifyID,
-//                title: track.title,
-//                artistName: artistName,
-//                albumName: track.albumName,
-//                artworkURL: artworkURL,
-//                durationSeconds: duration ?? 0,
-//                previewURL: nil
-//            )
-//
-//            return FederatedSearchItem(
-//                id: "spotify-\(spotifyID)",
-//                title: track.title,
-//                subtitle: artistName.isEmpty ? (track.albumName ?? "Spotify") : artistName,
-//                artworkURL: artworkURL,
-//                durationSeconds: duration,
-//                isPlayable: true,
-//                isExplicit: false,
-//                audioQualityLabel: nil,
-//                audioCodecLabel: nil,
-//                payload: .spotify(spotifyTrack)
-//            )
+        default:
+            return makeFallbackSpotifyItem(for: track, artworkURL: artworkURL)
         }
     }
 
-    private func makeFallbackSpotifyItem(for track: PlaylistItem, artworkURL: URL?) -> FederatedSearchItem {
+    private func makeFallbackSpotifyItem(for track: PlaylistItem, artworkURL: URL?)
+        -> FederatedSearchItem {
         let artistName = track.artistName ?? ""
         let spotifyID = track.sourceTrackID ?? track.itemKey
         let spotifyTrack = SpotifySearchTrack(
@@ -320,7 +304,8 @@ public struct PlaylistView: View {
             albumName: track.albumName,
             artworkURL: artworkURL,
             durationSeconds: track.durationSeconds ?? 0,
-            previewURL: nil
+            previewURL: nil,
+            isrc: track.isrc
         )
 
         return FederatedSearchItem(
@@ -350,7 +335,7 @@ public struct PlaylistView: View {
             "viewCount": "0",
             "author": author,
             "channelId": "",
-            "shortDescription": "",
+            "shortDescription": ""
         ]
 
         if let durationSeconds {
@@ -374,4 +359,8 @@ public struct PlaylistView: View {
 
         return try? JSONDecoder().decode(YouTubeVideo.self, from: data)
     }
+}
+
+#Preview {
+    PlaylistView(playlist: Playlist(title: "tera sharmana", normalizedTitle: "tera sharmana"))
 }

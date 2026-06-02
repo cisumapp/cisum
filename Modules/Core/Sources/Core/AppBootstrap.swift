@@ -5,34 +5,56 @@
 //  Created by Aarav Gupta on 28/03/26.
 //
 
-import Foundation
-import SwiftData
-import YouTubeSDK
-import Services
-import Plugins
-import Search
-import Player
-import Models
-import DesignSystem
+import Aesthetics
+import Authentication
+import Caching
 import ClerkKit
+import Foundation
+import Library
+import Models
+import Networking
+import Player
+import Playlists
+import Plugins
+import Profile
+import Radio
+import Search
+import SwiftData
+import Utilities
+import YouTubeSDK
+
+private let lifecycleLog = CisumLog.lifecycle
+private let lifecycleSP  = CisumSignpost.lifecycle
 
 @MainActor
 enum AppBootstrap {
     static func makeDependenciesOrFallback(youtube: YouTube, router: Router) -> ServicesContainer {
+        Logger.initCrashReporter()
+        let spid = lifecycleSP.begin("app-bootstrap")
+        lifecycleLog.info("Bootstrap started")
         // FORCE IN-MEMORY FOR DIAGNOSTICS
         // return makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: NSError(domain: "ManualBypass", code: 0))
 
         do {
-            return try makeDependencies(youtube: youtube, router: router)
+            let container = try makeDependencies(youtube: youtube, router: router)
+            lifecycleSP.end("app-bootstrap", state: spid, "path=persistent")
+            lifecycleLog.info("Bootstrap complete (persistent store)")
+            return container
         } catch {
-            print("❌ SwiftData bootstrap error:", error)
+            lifecycleLog.error("Bootstrap persistent store error: \(error.localizedDescription, privacy: .public)")
+            lifecycleSP.event("bootstrap-fallback", "error=\(error.localizedDescription)")
             // assertionFailure("Persistent bootstrap failed: \(error.localizedDescription). Falling back to in-memory dependencies.")
-            return makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: error)
+            let container = makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: error)
+            lifecycleSP.end("app-bootstrap", state: spid, "path=in-memory")
+            lifecycleLog.warning("Bootstrap complete (in-memory fallback)")
+            return container
         }
     }
 
     static func makeDependencies(youtube: YouTube, router: Router) throws -> ServicesContainer {
+        let spid = lifecycleSP.begin("make-persistent-container")
         let modelContainer = try makePersistentModelContainer()
+        lifecycleSP.end("make-persistent-container", state: spid)
         return buildDependencies(youtube: youtube, router: router, modelContainer: modelContainer)
     }
 
@@ -41,26 +63,36 @@ enum AppBootstrap {
         router: Router,
         modelContainer: ModelContainer
     ) -> ServicesContainer {
+        let spid = lifecycleSP.begin("build-services")
+        defer { lifecycleSP.end("build-services", state: spid) }
+
         // Initialize Clerk with publishable key
-        Clerk.configure(publishableKey: "pk_test_Y2xvc2luZy1iYXQtNjEuY2xlcmsuYWNjb3VudHMuZGV2JA")
-        
+        Clerk.configure(publishableKey: "pk_live_Y2xlcmsuY2lzdW0uc3R1ZGlvJA")
+
         let prefetchSettings = PrefetchSettings.shared
         let networkMonitor = NetworkPathMonitor.shared
         let playbackControlSettings = PlaybackControlSettings.shared
         let streamingProviderSettings = StreamingProviderSettings.shared
         let modelContext = ModelContext(modelContainer)
-        let historyStore = Services.SearchHistoryStore(context: modelContext)
-        let mediaCacheStore = MediaCacheStore(context: modelContext)
-        let searchCacheHintStore = Services.SearchCacheHintStore(context: modelContext)
-        let playlistLibraryStore = PlaylistLibraryStore(context: modelContext)
-        let playlistImportJobStore = PlaylistImportJobStore(context: modelContext)
-        let centralMediaStore = CentralMediaStore(context: modelContext)
+        let historyStore = SearchHistoryStore(modelContainer: modelContainer)
+        let mediaCacheStore = MediaCacheStore(modelContainer: modelContainer)
+        let searchCacheHintStore = SearchCacheHintStore(modelContainer: modelContainer)
+        let playlistLibraryStore = PlaylistLibraryStore(modelContainer: modelContainer)
+        let playlistImportJobStore = PlaylistImportJobStore(modelContainer: modelContainer)
+        let centralMediaStore = CentralMediaStore(modelContainer: modelContainer)
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
+        let providerSDK = Plugins.makeProviderSDK()
+        let includeProviderSDK = UserDefaults.standard.object(forKey: "plugins.provider_sdk_enabled") as? Bool ?? true
+        let includeYouTubeFallback = UserDefaults.standard.object(forKey: "plugins.youtube_fallback_enabled") as? Bool ?? true
+        
         Plugins.configurePlaybackURLResolver(
+            providerSDK: providerSDK,
             youtube: youtube,
             mediaCacheStore: mediaCacheStore,
-            metadataCache: metadataCache
+            metadataCache: metadataCache,
+            includeProviderSDK: includeProviderSDK,
+            includeYouTubeFallback: includeYouTubeFallback
         )
         let searchCache = SearchResultsCache.shared
         let radioSessionStore = RadioSessionStore.shared
@@ -70,13 +102,13 @@ enum AppBootstrap {
         let supabaseService = SupabaseService()
         let analyticsService = AnalyticsService()
         let lastFMScrobbler = LastFMScrobbler(configuration: lastFMSettings.configuration, authService: authService)
-        let listeningHistoryStore = ListeningHistoryStore(context: modelContext)
+        let listeningHistoryStore = ListeningHistoryStore(modelContainer: modelContainer)
         let spotifySessionCoordinator = SpotifySessionCoordinator.shared
-        let spotifyCacheStore = SpotifyCacheStore(context: modelContext)
+        let spotifyCacheStore = SpotifyCacheStore(modelContainer: modelContainer)
         spotifySessionCoordinator.setCacheDelegate(spotifyCacheStore)
-    #if os(iOS)
+        #if os(iOS)
         let artworkColorExtractor = ImageColorExtractor.shared
-    #endif
+        #endif
         let playerPresentationController = PlayerPresentationController()
         let searchOverlayController = SearchOverlayController()
         let coreServices = CoreServices(
@@ -89,13 +121,17 @@ enum AppBootstrap {
         )
 
         Task { @MainActor in
+            await ProviderManifestStore.shared.reconcilePersistedManifests()
+        }
+
+        Task { @MainActor in
             await mediaCacheStore.performMaintenance()
-            searchCacheHintStore.performMaintenance()
+            await searchCacheHintStore.performMaintenance()
             await spotifySessionCoordinator.restoreSessionIfNeeded()
 //            await youtube.restoreSession()
         }
 
-#if os(iOS)
+        #if os(iOS)
         let playerViewModel = PlayerViewModel(
             youtube: youtube,
             settings: prefetchSettings,
@@ -103,14 +139,35 @@ enum AppBootstrap {
             metadataCache: metadataCache,
             mediaCacheStore: mediaCacheStore,
             playbackMetricsStore: playbackMetricsStore,
-              lastFMScrobbler: lastFMScrobbler,
-              lastFMSettings: lastFMSettings,
-              listeningHistoryStore: listeningHistoryStore,
-              streamingProviderSettings: streamingProviderSettings,
-              radioSessionStore: radioSessionStore,
-              artworkColorExtractor: artworkColorExtractor
+            radioSessionStore: radioSessionStore,
+            scrobbleTrack: { state, playedAt in
+                let duration = state.durationHint.map { Double($0) } ?? 0
+                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
+                try await lastFMScrobbler.scrobble(item, playedAt: playedAt)
+            },
+            recordNowPlayingTrack: { state in
+                let duration = state.durationHint.map { Double($0) } ?? 0
+                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
+                try await lastFMScrobbler.recordNowPlaying(item)
+            },
+            isScrobblingEnabled: { lastFMSettings.enabled },
+            isLocalHistoryEnabled: { lastFMSettings.localHistoryEnabled },
+            startListeningSession: { state in
+                await listeningHistoryStore.startSession(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, streamingService: state.streamingService.rawValue)
+            },
+            finishListeningSession: { sessionID, endedAt, listenedSeconds, wasScrobbled, scrobbledAt in
+                Task {
+                    await listeningHistoryStore.finishSession(id: sessionID, endedAt: endedAt, listenedSeconds: listenedSeconds, wasScrobbled: wasScrobbled, scrobbledAt: scrobbledAt)
+                }
+            },
+            markScrobbledSession: { sessionID, scrobbledAt in
+                Task {
+                    await listeningHistoryStore.markScrobbled(id: sessionID, scrobbledAt: scrobbledAt)
+                }
+            },
+            artworkColorExtractor: artworkColorExtractor
         )
-#else
+        #else
         let playerViewModel = PlayerViewModel(
             youtube: youtube,
             settings: prefetchSettings,
@@ -118,13 +175,34 @@ enum AppBootstrap {
             metadataCache: metadataCache,
             mediaCacheStore: mediaCacheStore,
             playbackMetricsStore: playbackMetricsStore,
-            lastFMScrobbler: lastFMScrobbler,
-            lastFMSettings: lastFMSettings,
-            listeningHistoryStore: listeningHistoryStore,
-            streamingProviderSettings: streamingProviderSettings,
-            radioSessionStore: radioSessionStore
+            radioSessionStore: radioSessionStore,
+            scrobbleTrack: { state, playedAt in
+                let duration = state.durationHint.map { Double($0) } ?? 0
+                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
+                try await lastFMScrobbler.scrobble(item, playedAt: playedAt)
+            },
+            recordNowPlayingTrack: { state in
+                let duration = state.durationHint.map { Double($0) } ?? 0
+                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
+                try await lastFMScrobbler.recordNowPlaying(item)
+            },
+            isScrobblingEnabled: { lastFMSettings.enabled },
+            isLocalHistoryEnabled: { lastFMSettings.localHistoryEnabled },
+            startListeningSession: { state in
+                await listeningHistoryStore.startSession(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, streamingService: state.streamingService.rawValue)
+            },
+            finishListeningSession: { sessionID, endedAt, listenedSeconds, wasScrobbled, scrobbledAt in
+                Task {
+                    await listeningHistoryStore.finishSession(id: sessionID, endedAt: endedAt, listenedSeconds: listenedSeconds, wasScrobbled: wasScrobbled, scrobbledAt: scrobbledAt)
+                }
+            },
+            markScrobbledSession: { sessionID, scrobbledAt in
+                Task {
+                    await listeningHistoryStore.markScrobbled(id: sessionID, scrobbledAt: scrobbledAt)
+                }
+            }
         )
-#endif
+        #endif
 
         let coreDomain = CoreDomain(
             streamingProviderSettings: streamingProviderSettings,
@@ -164,7 +242,8 @@ enum AppBootstrap {
                 streamingProviderSettings: streamingProviderSettings,
                 centralMediaStore: centralMediaStore,
                 metadataCache: metadataCache,
-                searchCache: searchCache
+                searchCache: searchCache,
+                providerSDK: providerSDK // H-1: wire up all streaming providers for unified search
             ),
             historyStore: historyStore,
             searchCacheHintStore: searchCacheHintStore,
@@ -225,8 +304,6 @@ enum AppBootstrap {
             metadataCache: metadataCache
         )
 
-
-
         let userServices = UserServices(
             spotifySessionCoordinator: spotifySessionCoordinator,
             authService: authService,
@@ -259,7 +336,7 @@ enum AppBootstrap {
         } catch {
             preconditionFailure(
                 "Bootstrap failed for persistent and in-memory stores. " +
-                "persistent=\(underlyingError.localizedDescription) memory=\(error.localizedDescription)"
+                    "persistent=\(underlyingError.localizedDescription) memory=\(error.localizedDescription)"
             )
         }
 
@@ -316,6 +393,4 @@ enum AppBootstrap {
 
         return try ModelContainer(for: schema)
     }
-
 }
-

@@ -1,5 +1,15 @@
 disabled_rules:
   - trailing_whitespace
+  - type_name
+  - identifier_name
+  - large_tuple
+  - force_try
+  - line_length
+  - type_body_length
+  - function_body_length
+  - cyclomatic_complexity
+  - file_length
+  - shorthand_operator
 
 excluded:
   - .build

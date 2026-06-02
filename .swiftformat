@@ -4,7 +4,6 @@
 --wrapparameters beforefirst
 --self init-only
 --ifdef no-indent
---enum namespaces
 --swiftversion 6.0
 --exclude .build
 --exclude DerivedData

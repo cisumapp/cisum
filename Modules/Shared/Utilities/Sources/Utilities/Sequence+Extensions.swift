@@ -14,7 +14,7 @@ public extension Sequence {
         var seen = Set<Element>()
         return filter { seen.insert($0).inserted }
     }
-    
+
     /// Returns an array with duplicates removed based on a specific key while preserving order.
     func removeDuplicates<T: Hashable>(on keyPath: (Element) -> T) -> [Element] {
         var seen = Set<T>()

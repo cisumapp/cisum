@@ -1,5 +1,7 @@
+import Caching
 import Foundation
-import Services
+import Networking
+import Plugins
 
 public final class CoreDomain {
     public let streamingProviderSettings: StreamingProviderSettings
@@ -17,9 +19,8 @@ public final class CoreDomain {
     }
 }
 
-
-extension CoreDomain {
-    public var interface: CoreInterface {
+public extension CoreDomain {
+    var interface: CoreInterface {
         CoreInterface(
             streamingProviderSettings: streamingProviderSettings,
             prefetchSettings: prefetchSettings,

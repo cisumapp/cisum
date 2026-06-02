@@ -3,32 +3,32 @@
 //  cisum
 //
 
+import AVFoundation
 import Foundation
 import Models
-import Services
 import ProviderSDK
-import AVFoundation
 import YouTubeSDK
 
 extension PlayerViewModel {
-
     // MARK: - Playback Resolution & Fallback
 
-    func resolvePlaybackCandidates(forID id: String, title: String = "", artist: String = "", forceDecipher: Bool = false) async throws -> [PlaybackCandidate] {
+    func resolvePlaybackCandidates(forID id: String, title: String = "", artist: String = "", representations: [TrackRepresentation]? = nil, forceDecipher: Bool = false) async throws -> [PlaybackCandidate] {
         let normalizedID = canonicalPlaybackMediaID(id)
         let resolver = await PlaybackURLResolver.sharedInstance()
-        return try await resolver.resolve(mediaID: normalizedID, title: title, artist: artist, forceDecipher: forceDecipher)
+        return try await resolver.resolve(mediaID: normalizedID, title: title, artist: artist, representations: representations, forceDecipher: forceDecipher)
     }
 
     func resolvePrioritizedPlaybackCandidates(
         mediaID: String,
         title: String,
-        artist: String
+        artist: String,
+        representations: [TrackRepresentation]? = nil
     ) async throws -> PrioritizedCandidateResolution {
         let youtubeCandidates = try await resolvePlaybackCandidates(
             forID: mediaID,
             title: title,
-            artist: artist
+            artist: artist,
+            representations: representations
         )
         return PrioritizedCandidateResolution(candidates: youtubeCandidates, hiResPayload: nil)
     }
@@ -44,25 +44,25 @@ extension PlayerViewModel {
 
         let ua = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
         let host = url.host ?? ""
-        
-        if host.contains("googlevideo.com") || url.absoluteString.contains("manifest") {
+
+        if url.absoluteString.contains("manifest.googlevideo.com") || url.pathExtension.lowercased() == "m3u8" {
             let proxyURL = url.proxyURL ?? url
             let nSolver = YouTubeWebViewHLSExtractor.shared.extractedNSolver
             let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver)
             let asset = AVURLAsset(url: proxyURL)
             asset.resourceLoader.setDelegate(proxyLoader, queue: DispatchQueue.global(qos: .userInitiated))
-            
+
             // Keep reference to prevent ARC release
-            self.webHLSProxyLoader = proxyLoader
-            
+            webHLSProxyLoader = proxyLoader
+
             return AVPlayerItem(asset: asset)
         }
 
-        if let headers = headers, !headers.isEmpty {
+        if let headers, !headers.isEmpty {
             let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
             return AVPlayerItem(asset: asset)
         }
-        
+
         return AVPlayerItem(url: url)
     }
 
@@ -93,12 +93,24 @@ extension PlayerViewModel {
         playbackCandidates = candidates
         playbackCandidateIndex = 0
     }
-    
-    func attemptNextPlaybackCandidateIfAvailable(errorMessage: String) -> Bool {
+
+    func switchPlaybackProvider(candidateIndex: Int) {
+        guard candidateIndex >= 0, candidateIndex < playbackCandidates.count else { return }
+
+        if isPlaying {
+            self.savedPositionToRestore = currentTime
+        }
+
+        playbackCandidateIndex = candidateIndex
+        playCurrentPlaybackCandidate()
+    }
+
+    func attemptNextPlaybackCandidateIfAvailable(errorMessage _: String) -> Bool {
         guard let currentMediaID = currentVideoId,
               currentMediaID == playbackCandidatesMediaID,
               !playbackCandidates.isEmpty,
-              playbackCandidateIndex + 1 < playbackCandidates.count else {
+              playbackCandidateIndex + 1 < playbackCandidates.count
+        else {
             return false
         }
 
@@ -108,10 +120,10 @@ extension PlayerViewModel {
 
         let position = currentTime > 1 ? currentTime : nil
 
-        Task { @MainActor [weak self] in
+        Swift.Task { @MainActor [weak self] in
             guard let self else { return }
             self.savedPositionToRestore = position
-            self.playCurrentPlaybackCandidate()
+            playCurrentPlaybackCandidate()
         }
         return true
     }
@@ -145,27 +157,37 @@ extension PlayerViewModel {
             guard let self else { return }
 
             do {
-                await self.metadataCache.remove(mediaID)
-                self.mediaCacheStore.invalidatePlayback(for: mediaID)
-                let candidates = try await self.resolvePlaybackCandidates(
+                await metadataCache.remove(mediaID)
+                await mediaCacheStore.invalidatePlayback(for: mediaID)
+
+                let providerID = currentStreamingServiceName == StreamingService.youtube.rawValue ? "youtube" : "youtubeMusic"
+                let representation = TrackRepresentation(
+                    providerID: providerID,
+                    providerTrackID: mediaID,
+                    title: currentTitle,
+                    artist: currentArtist
+                )
+
+                let candidates = try await resolvePlaybackCandidates(
                     forID: mediaID,
-                    title: self.currentTitle,
-                    artist: self.currentArtist,
+                    title: currentTitle,
+                    artist: currentArtist,
+                    representations: [representation],
                     forceDecipher: true
                 )
 
-                guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
-                self.configurePlaybackCandidates(for: mediaID, candidates: candidates)
-                self.playCurrentPlaybackCandidate()
-                self.logPlayback(
+                guard !Task.isCancelled, currentVideoId == mediaID else { return }
+                configurePlaybackCandidates(for: mediaID, candidates: candidates)
+                playCurrentPlaybackCandidate()
+                logPlayback(
                     "Recovered playback with refreshed stream URL for id=\(mediaID), attempt=\(currentAttemptCount + 1), status=\(statusCode.map(String.init) ?? "n/a")"
                 )
             } catch {
-                guard !Task.isCancelled, self.currentVideoId == mediaID else { return }
-                self.playbackEngine.setIsPlaying(false)
-                self.playbackError = error.localizedDescription
-                self.updateNowPlayingPlaybackInfo(force: true)
-                self.updateRemoteCommandState()
+                guard !Task.isCancelled, currentVideoId == mediaID else { return }
+                playbackEngine.setIsPlaying(false)
+                playbackError = error.localizedDescription
+                updateNowPlayingPlaybackInfo(force: true)
+                updateRemoteCommandState()
                 print("❌ PlayerViewModel: Playback recovery failed for id=\(mediaID): \(error.localizedDescription)")
             }
         }
@@ -190,8 +212,8 @@ extension PlayerViewModel {
         }
 
         if let errorDomain,
-            let errorCode,
-            errorDomain == NSURLErrorDomain {
+           let errorCode,
+           errorDomain == NSURLErrorDomain {
             let recoverableCodes: Set<Int> = [-1100, -1102, -1011, -1009, -1005, -1004, -1003, -1001]
             if recoverableCodes.contains(errorCode) {
                 return true
@@ -199,8 +221,8 @@ extension PlayerViewModel {
         }
 
         if let errorDomain,
-            let errorCode,
-            errorDomain == AVFoundationErrorDomain {
+           let errorCode,
+           errorDomain == AVFoundationErrorDomain {
             let recoverableCodes: Set<Int> = [-11800, -11819, -11850, -11867]
             if recoverableCodes.contains(errorCode) {
                 return true
@@ -236,7 +258,7 @@ extension PlayerViewModel {
         playbackError = error.localizedDescription
         updateNowPlayingPlaybackInfo(force: true)
         updateRemoteCommandState()
-        
+
         let videoID = currentVideoId ?? "Unknown"
         print("❌ PlayerViewModel: Playback failed for ID [\(videoID)]: \(error.localizedDescription)")
     }

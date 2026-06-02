@@ -22,6 +22,7 @@ public final class PlaylistItem {
     public var title: String
     public var artistName: String?
     public var albumName: String?
+    public var isrc: String?
     public var durationSeconds: Double?
     public var artworkURLString: String?
 
@@ -43,6 +44,7 @@ public final class PlaylistItem {
         title: String,
         artistName: String? = nil,
         albumName: String? = nil,
+        isrc: String? = nil,
         durationSeconds: Double? = nil,
         artworkURLString: String? = nil,
         resolvedMediaID: String? = nil,
@@ -61,6 +63,7 @@ public final class PlaylistItem {
         self.title = title
         self.artistName = artistName
         self.albumName = albumName
+        self.isrc = isrc
         self.durationSeconds = durationSeconds
         self.artworkURLString = artworkURLString
         self.resolvedMediaID = resolvedMediaID

@@ -1,40 +1,40 @@
+import Aesthetics
 import Kingfisher
+import Library
 import Models
-import Services
+import Player
+import Playlists
+import Plugins
 import SwiftData
 import SwiftUI
+import Tracks
 import Utilities
 import YouTubeSDK
-import DesignSystem
 
 #if canImport(SpotifySDK)
     import SpotifySDK
 #endif
 
 public struct SearchView: View {
-    @Environment(AppServices.self) private var appServices
-    @Environment(SearchServices.self) private var searchServices
-    @Environment(PlaybackServices.self) private var playbackServices
-    @Environment(LibraryServices.self) private var libraryServices
-    @Environment(UserServices.self) private var userServices
+    @Environment(PlayerPresentationController.self) private var presentationController
+    @Environment(\.searchViewModel) private var searchViewModelOptional
+    @Environment(\.playerViewModel) private var playerViewModel
+
+    private var searchViewModel: any SearchViewModelInterface {
+        searchViewModelOptional!
+    }
+
+    private var centralMediaStore: CentralMediaStore {
+        CentralMediaStore(modelContainer: modelContext.container)
+    }
+    @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.router) private var router
-    
-    private var searchViewModel: any SearchViewModelInterface { searchServices.searchViewModel }
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
-    private var centralMediaStore: CentralMediaStore { libraryServices.centralMediaStore }
-    private var presentationController: PlayerPresentationController { appServices.playerPresentationController }
     #if canImport(SpotifySDK)
-    private var spotifyCoordinator: SpotifySessionCoordinator { userServices.spotifySessionCoordinator }
     #endif
 
     @FocusState private var isSearchFocused: Bool
-    @State private var isSearchPresentationActive: Bool = false
-    @State private var showNonPlayableAlert: Bool = false
-    @State private var nonPlayableMessage: String = ""
-    @State private var isImportingSpotifyPlaylistID: String?
-    @State private var actionAlertMessage: String = ""
-    @State private var showActionAlert: Bool = false
+    @State private var viewModel = SearchStateViewModel()
 
     public init() {}
 
@@ -46,11 +46,41 @@ public struct SearchView: View {
     }
 
     public var body: some View {
+        content
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             ZStack {
                 switch searchViewModel.state {
                 case .idle:
-                    ContentUnavailableView("Search for something", systemImage: "magnifyingglass")
+                    if searchViewModel.recentSearches.isEmpty {
+                        ContentUnavailableView(
+                            "Search for something", systemImage: "magnifyingglass")
+                    } else {
+                        List {
+                            Section {
+                                ForEach(searchViewModel.recentSearches, id: \.self) { recent in
+                                    Button {
+                                        searchViewModel.applySuggestion(recent)
+                                    } label: {
+                                        Label(recent, systemImage: "clock")
+                                            .foregroundStyle(.primary)
+                                    }
+                                }
+                                .onDelete { indexSet in
+                                    for index in indexSet {
+                                        let query = searchViewModel.recentSearches[index]
+                                        searchViewModel.removeRecentSearch(query)
+                                    }
+                                }
+                            } header: {
+                                SearchSectionHeader(title: "Recent Searches", subtitle: "")
+                            }
+                        }
+                        .listStyle(.plain)
+                        .contentMargins(.bottom, 140)
+                    }
 
                 case .loading:
                     ProgressView("Searching…")
@@ -65,30 +95,62 @@ public struct SearchView: View {
                     SearchResultsList(
                         searchViewModel: searchViewModel,
                         playerViewModel: playerViewModel,
-                        isImportingSpotifyPlaylistID: $isImportingSpotifyPlaylistID,
-                        showNonPlayableAlert: $showNonPlayableAlert,
-                        nonPlayableMessage: $nonPlayableMessage,
+                        isImportingSpotifyPlaylistID: $viewModel.isImportingSpotifyPlaylistID,
+                        showNonPlayableAlert: $viewModel.showNonPlayableAlert,
+                        nonPlayableMessage: $viewModel.nonPlayableMessage,
                         onRowSelection: handleRowSelection
                     )
+                }
+                
+                // Custom Inverted Suggestions Overlay
+                if isSearchFocused && !searchViewModel.searchText.isEmpty && !searchViewModel.suggestions.isEmpty {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(searchViewModel.suggestions.reversed(), id: \.self) { suggestion in
+                                Button {
+                                    searchViewModel.applySuggestion(suggestion)
+                                    isSearchFocused = false
+                                } label: {
+                                    HStack {
+                                        Label(suggestion, systemImage: "magnifyingglass")
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                    }
+                                    .padding()
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .scaleEffect(x: 1, y: -1)
+                                
+                                Divider()
+                                    .scaleEffect(x: 1, y: -1)
+                            }
+                        }
+                    }
+                    #if os(iOS)
+                    .background(Color(uiColor: .systemBackground))
+                    #else
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    #endif
+                    .scaleEffect(x: 1, y: -1)
+                    .zIndex(100)
                 }
             }
         }
         .onSubmit(of: .search) {
             isSearchFocused = false
-            isSearchPresentationActive = false
+            viewModel.isSearchPresentationActive = false
         }
-        .safeAreaPadding(.top, 20)
         .optionalSearchable(
             text: searchTextBinding,
             isFocused: $isSearchFocused,
-            isPresented: $isSearchPresentationActive,
-            suggestions: searchViewModel.suggestions,
-            onSuggestionTap: { suggestion in
-                searchViewModel.applySuggestion(suggestion)
-            }
+            isPresented: $viewModel.isSearchPresentationActive
         )
-        .alert(actionAlertMessage, isPresented: $showActionAlert) {
+        .alert(viewModel.actionAlertMessage, isPresented: $viewModel.showActionAlert) {
             Button("OK", role: .cancel) {}
+        }
+        .onAppear {
+            searchViewModel.loadRecentSearches()
         }
     }
 
@@ -96,7 +158,7 @@ public struct SearchView: View {
 
     private func handleRowSelection(_ item: FederatedSearchItem) {
         hideKeyboard()
-        
+
         switch item.payload {
         case .youtubeMusic(let song):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
@@ -120,11 +182,17 @@ public struct SearchView: View {
             Task {
                 await handleSpotifyPlaylistTap(playlist)
             }
+
+        case .providerSDKTrack:
+            // ProviderSDK tracks resolve via the same external stream path as Spotify.
+            Task {
+                await playProviderSDKTrack(item)
+            }
         }
     }
 
     private var playlistLibraryStore: PlaylistLibraryStore {
-        PlaylistLibraryStore(context: modelContext)
+        PlaylistLibraryStore(modelContainer: modelContext.container)
     }
 
     #if canImport(SpotifySDK)
@@ -133,7 +201,12 @@ public struct SearchView: View {
             return SpotifyPlaylistImportService(
                 sdk: sdk,
                 playlistStore: playlistLibraryStore,
-                centralStore: centralMediaStore
+                onSpotifyPlaylistImported: { [container = modelContext.container] playlist in
+                    let centralMediaStore = CentralMediaStore(modelContainer: container)
+                    Task {
+                        _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
+                    }
+                }
             )
         }
     #endif
@@ -143,7 +216,8 @@ public struct SearchView: View {
             guard let selectedPayload = try await searchViewModel.resolveExternalStream(for: item)
             else {
                 throw FederatedSearchError.noPlayableStream(
-                    "Unable to resolve a YouTube-backed stream for this Spotify track.")
+                    "Unable to resolve a YouTube-backed stream for this Spotify track."
+                )
             }
 
             guard
@@ -153,46 +227,77 @@ public struct SearchView: View {
                 )
             else {
                 throw FederatedSearchError.noPlayableStream(
-                    "Unable to build the Spotify playback track.")
+                    "Unable to build the Spotify playback track."
+                )
             }
 
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
             playerViewModel.load(external: selectedTrack, preserveQueue: false)
             presentationController.expand()
         } catch {
-            nonPlayableMessage = error.localizedDescription
-            showNonPlayableAlert = true
+            viewModel.nonPlayableMessage = error.localizedDescription
+            viewModel.showNonPlayableAlert = true
+        }
+    }
+
+    private func playProviderSDKTrack(_ item: FederatedSearchItem) async {
+        do {
+            guard let selectedPayload = try await searchViewModel.resolveExternalStream(for: item)
+            else {
+                throw FederatedSearchError.noPlayableStream(
+                    "Unable to resolve a stream for this track."
+                )
+            }
+
+            guard
+                let selectedTrack = makeExternalQueueTrack(
+                    for: item,
+                    preResolvedPayload: selectedPayload
+                )
+            else {
+                throw FederatedSearchError.noPlayableStream(
+                    "Unable to build the playback track."
+                )
+            }
+
+            searchViewModel.recordSuccessfulPlayFromCurrentQuery()
+            playerViewModel.load(external: selectedTrack, preserveQueue: false)
+            presentationController.expand()
+        } catch {
+            viewModel.nonPlayableMessage = error.localizedDescription
+            viewModel.showNonPlayableAlert = true
         }
     }
 
     private func handleSpotifyPlaylistTap(_ playlist: SpotifySearchPlaylist) async {
         #if canImport(SpotifySDK)
-            if let existing = playlistLibraryStore.playlist(
-                sourceProvider: .spotify, sourcePlaylistID: playlist.id)
-            {
+            if let existing = await playlistLibraryStore.playlistSnapshot(
+                sourceProvider: .spotify, sourcePlaylistID: playlist.id
+            ) {
                 router.navigate(to: .playlist(id: existing.playlistID))
                 return
             }
 
             guard let importService = spotifyPlaylistImportService else {
-                actionAlertMessage = "Spotify is not connected. Open Settings and sign in first."
-                showActionAlert = true
+                viewModel.actionAlertMessage =
+                    "Spotify is not connected. Open Settings and sign in first."
+                viewModel.showActionAlert = true
                 return
             }
 
-            isImportingSpotifyPlaylistID = playlist.id
-            defer { isImportingSpotifyPlaylistID = nil }
+            viewModel.isImportingSpotifyPlaylistID = playlist.id
+            defer { viewModel.isImportingSpotifyPlaylistID = nil }
 
             do {
-                let imported = try await importService.importPlaylist(id: playlist.id)
-                router.navigate(to: .playlist(id: imported.playlistID))
+                let playlistID = try await importService.importPlaylist(id: playlist.id)
+                router.navigate(to: .playlist(id: playlistID))
             } catch {
-                actionAlertMessage = error.localizedDescription
-                showActionAlert = true
+                viewModel.actionAlertMessage = error.localizedDescription
+                viewModel.showActionAlert = true
             }
         #else
-            actionAlertMessage = "Spotify playlist import is unavailable on this target."
-            showActionAlert = true
+            viewModel.actionAlertMessage = "Spotify playlist import is unavailable on this target."
+            viewModel.showActionAlert = true
         #endif
     }
 
@@ -200,7 +305,7 @@ public struct SearchView: View {
         searchViewModel.searchScope = .music
         searchViewModel.searchText = artist.name
         isSearchFocused = true
-        isSearchPresentationActive = true
+        viewModel.isSearchPresentationActive = true
     }
 
     /// Upserts a SwiftData Artist stub from a Spotify search result, then navigates natively.
@@ -227,7 +332,10 @@ public struct SearchView: View {
             displayName: spotifyArtist.name,
             normalizedName: spotifyArtist.name.lowercased(),
             artworkURLString: spotifyArtist.artworkURL?.absoluteString,
-            genresJSONString: spotifyArtist.genres.isEmpty ? nil : (try? String(data: JSONEncoder().encode(spotifyArtist.genres), encoding: .utf8)) ?? nil,
+            genresJSONString: spotifyArtist.genres.isEmpty
+                ? nil
+                : (try? String(data: JSONEncoder().encode(spotifyArtist.genres), encoding: .utf8))
+                    ?? nil,
             spotifyArtistID: spotifyArtist.id
         )
         modelContext.insert(stub)
@@ -243,7 +351,7 @@ public struct SearchView: View {
         from items: [FederatedSearchItem],
         selectedItemID: String,
         selectedPayload: ExternalStreamPayload
-    ) -> [Services.ExternalQueueTrack] {
+    ) -> [ExternalQueueTrack] {
         let tracks = items.compactMap { entry in
             makeExternalQueueTrack(
                 for: entry,
@@ -252,7 +360,7 @@ public struct SearchView: View {
         }
 
         if tracks.isEmpty {
-            let fallbackTrack = Services.ExternalQueueTrack(
+            let fallbackTrack = ExternalQueueTrack(
                 mediaID: selectedPayload.mediaID,
                 title: selectedPayload.title,
                 artist: selectedPayload.artist,
@@ -274,9 +382,9 @@ public struct SearchView: View {
     private func makeExternalQueueTrack(
         for item: FederatedSearchItem,
         preResolvedPayload: ExternalStreamPayload? = nil
-    ) -> Services.ExternalQueueTrack? {
+    ) -> ExternalQueueTrack? {
         switch item.payload {
-        case .spotify, .youtubeMusic, .youtubeVideo:
+        case .spotify, .youtubeMusic, .youtubeVideo, .providerSDKTrack:
             break
         case .spotifyArtist, .spotifyPlaylist:
             return nil
@@ -284,7 +392,7 @@ public struct SearchView: View {
 
         let mediaID = preResolvedPayload?.mediaID ?? item.id
 
-        return Services.ExternalQueueTrack(
+        return ExternalQueueTrack(
             mediaID: mediaID,
             title: preResolvedPayload?.title ?? item.title,
             artist: preResolvedPayload?.artist ?? item.displayArtist,
@@ -301,7 +409,8 @@ public struct SearchView: View {
                 guard let payload = try await searchViewModel.resolveExternalStream(for: item)
                 else {
                     throw FederatedSearchError.noPlayableStream(
-                        "Unable to resolve a playable stream for this track.")
+                        "Unable to resolve a playable stream for this track."
+                    )
                 }
                 return payload
             }
@@ -328,17 +437,27 @@ private struct SearchResultsList: View {
 
         List {
             // MARK: Spotify Tracks
+
             if hasSpotifyTracks {
                 Section {
-                    ForEach(searchViewModel.spotifyTrackResults) { item in
-                        Button {
-                            onRowSelection(item)
-                        } label: {
-                            SearchTrackRow(
-                                item: item, fallback: searchViewModel.hiddenFallbackMap[item.id]
-                            )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(searchViewModel.spotifyTrackResults) { item in
+                                Button {
+                                    onRowSelection(item)
+                                } label: {
+                                    TrackCard(
+                                        trackName: item.title,
+                                        artistName: item.subtitle,
+                                        duration: item.displayDuration ?? "",
+                                        artworkURL: item.artworkURL,
+                                        artworkColor: .blue
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 8)
                     }
                 } header: {
                     SearchSectionHeader(title: "Tracks", subtitle: "From Spotify")
@@ -346,6 +465,7 @@ private struct SearchResultsList: View {
             }
 
             // MARK: Spotify Artists
+
             if hasSpotifyArtists {
                 Section {
                     ForEach(searchViewModel.spotifyArtistResults) { item in
@@ -362,6 +482,7 @@ private struct SearchResultsList: View {
             }
 
             // MARK: Spotify Playlists
+
             if hasSpotifyPlaylists {
                 Section {
                     ForEach(searchViewModel.spotifyPlaylistResults) { item in
@@ -371,7 +492,8 @@ private struct SearchResultsList: View {
                         } label: {
                             SearchPlaylistRow(
                                 item: item,
-                                isImporting: isImportingSpotifyPlaylistID == playlistID)
+                                isImporting: isImportingSpotifyPlaylistID == playlistID
+                            )
                         }
                         .buttonStyle(.plain)
                         .disabled(isImportingSpotifyPlaylistID == playlistID)
@@ -382,6 +504,7 @@ private struct SearchResultsList: View {
             }
 
             // MARK: Additional Results
+
             if hasHiddenTopResults {
                 Section {
                     if searchViewModel.unifiedTopResults.isEmpty {
@@ -389,38 +512,60 @@ private struct SearchResultsList: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(searchViewModel.unifiedTopResults) { item in
-                            Button {
-                                onRowSelection(item)
-                            } label: {
-                                SearchFederatedRow(item: item)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: 12) {
+                                ForEach(searchViewModel.unifiedTopResults) { item in
+                                    Button {
+                                        onRowSelection(item)
+                                    } label: {
+                                        TrackCard(
+                                            trackName: item.title,
+                                            artistName: item.subtitle,
+                                            duration: item.displayDuration ?? "",
+                                            artworkURL: item.artworkURL,
+                                            artworkColor: .blue
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
                             }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, 8)
                         }
                     }
                 } header: {
-                    SearchSectionHeader(title: "Top Results", subtitle: "From YouTube")
+                    SearchSectionHeader(title: "Top Results", subtitle: "Unified Search")
                 }
             }
 
             // MARK: You Might Like
+
             if !searchViewModel.youMightLikeResults.isEmpty {
                 Section {
-                    ForEach(searchViewModel.youMightLikeResults) { item in
-                        Button {
-                            onRowSelection(item)
-                        } label: {
-                            SearchFederatedRow(item: item)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: 12) {
+                            ForEach(searchViewModel.youMightLikeResults) { item in
+                                Button {
+                                    onRowSelection(item)
+                                } label: {
+                                    TrackCard(
+                                        trackName: item.title,
+                                        artistName: item.subtitle,
+                                        duration: item.displayDuration ?? "",
+                                        artworkURL: item.artworkURL,
+                                        artworkColor: .blue
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 8)
                     }
                 } header: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("You Might Like")
                         if let anchorTitle =
                             (searchViewModel.spotifyTrackResults.first
-                            ?? searchViewModel.unifiedTopResults.first)?.title
-                        {
+                            ?? searchViewModel.unifiedTopResults.first)?.title {
                             Text("Similar to \"\(anchorTitle)\"")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -430,7 +575,8 @@ private struct SearchResultsList: View {
             }
 
             // MARK: Empty Spotify state
-            if hasSpotify == false && hasHiddenTopResults == false {
+
+            if hasSpotify == false, hasHiddenTopResults == false {
                 Section {
                     Label(
                         "Connect Spotify in Settings for richer results.",

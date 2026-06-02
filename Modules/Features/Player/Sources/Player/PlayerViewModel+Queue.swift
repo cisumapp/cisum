@@ -5,11 +5,11 @@
 
 import Foundation
 import Models
-import Services
+import Radio
+import Utilities
 import YouTubeSDK
 
 extension PlayerViewModel {
-
     // MARK: - Queue Management
 
     func seedRadioQueue(from seedSong: YouTubeMusicSong) {
@@ -20,37 +20,37 @@ extension PlayerViewModel {
         radioAutoplayTask = Task { @MainActor [weak self] in
             guard let self else { return }
 
-            let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+            let cachedSession = radioSessionStore.session(forSeedVideoID: seedVideoID)
             if let cachedSession,
-               self.shouldReuseCachedRadioSession(cachedSession),
-               self.currentVideoId == seedVideoID {
-                self.applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
-                self.scheduleRadioContinuationIfNeeded()
+               shouldReuseCachedRadioSession(cachedSession),
+               currentVideoId == seedVideoID {
+                applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
+                scheduleRadioContinuationIfNeeded()
                 return
             }
 
             do {
-                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
-                guard !Task.isCancelled, self.currentVideoId == seedVideoID else { return }
+                let radio = try await youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled, currentVideoId == seedVideoID else { return }
 
-                self.radioPlaylistID = radio.playlistId
-                self.radioContinuationToken = radio.continuationToken
+                radioPlaylistID = radio.playlistId
+                radioContinuationToken = radio.continuationToken
 
-                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
-                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
-                guard !Task.isCancelled, self.currentVideoId == seedVideoID else { return }
+                var tracks = buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await hydrateSeedRadioTracksIfNeeded(tracks, playlistID: radioPlaylistID)
+                guard !Task.isCancelled, currentVideoId == seedVideoID else { return }
 
-                self.applyRadioTracksToQueue(tracks, seedVideoID: seedVideoID)
-                self.scheduleRadioContinuationIfNeeded()
+                applyRadioTracksToQueue(tracks, seedVideoID: seedVideoID)
+                scheduleRadioContinuationIfNeeded()
             } catch {
                 guard !Task.isCancelled else { return }
                 if let cachedSession,
-                   self.currentVideoId == seedVideoID,
+                   currentVideoId == seedVideoID,
                    !cachedSession.tracks.isEmpty {
-                    self.applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
-                    self.scheduleRadioContinuationIfNeeded()
+                    applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
+                    scheduleRadioContinuationIfNeeded()
                 }
-                self.logPlayback("Radio seed failed for id=\(seedVideoID): \(error.localizedDescription)")
+                logPlayback("Radio seed failed for id=\(seedVideoID): \(error.localizedDescription)")
             }
         }
     }
@@ -60,7 +60,6 @@ extension PlayerViewModel {
         resolvedPayload: ExternalStreamPayload,
         expectedCurrentMediaID: String
     ) {
-
         let title = normalizedMusicDisplayTitle(resolvedPayload.title, artist: resolvedPayload.artist)
         let artist = normalizedMusicDisplayArtist(resolvedPayload.artist, title: resolvedPayload.title)
         let query = radioSeedQuery(title: title, artist: artist)
@@ -69,58 +68,59 @@ extension PlayerViewModel {
         radioAutoplayTask?.cancel()
         radioAutoplayTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            guard self.currentVideoId == expectedCurrentMediaID else { return }
+            guard currentVideoId == expectedCurrentMediaID else { return }
 
             do {
-                let searchResults = try await self.youtube.music.search(query)
+                let searchResults = try await youtube.music.search(query)
                 guard !Task.isCancelled,
-                      self.currentVideoId == expectedCurrentMediaID,
-                      let seedSong = self.bestRadioSeedSong(
-                        from: searchResults,
-                        title: title,
-                        artist: artist
-                      ) else {
+                      currentVideoId == expectedCurrentMediaID,
+                      let seedSong = bestRadioSeedSong(
+                          from: searchResults,
+                          title: title,
+                          artist: artist
+                      )
+                else {
                     return
                 }
 
                 let seedVideoID = seedSong.videoId
-                self.radioSeedVideoID = seedVideoID
+                radioSeedVideoID = seedVideoID
                 let leadingEntry = PlaybackQueueEntry.external(externalTrack)
-                let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+                let cachedSession = radioSessionStore.session(forSeedVideoID: seedVideoID)
 
                 if let cachedSession,
-                   self.shouldReuseCachedRadioSession(cachedSession),
-                   self.currentVideoId == expectedCurrentMediaID {
-                    self.applyCachedRadioSession(
+                   shouldReuseCachedRadioSession(cachedSession),
+                   currentVideoId == expectedCurrentMediaID {
+                    applyCachedRadioSession(
                         cachedSession,
                         fallbackSeed: seedSong,
                         leadingEntry: leadingEntry,
                         currentMediaID: expectedCurrentMediaID
                     )
-                    self.scheduleRadioContinuationIfNeeded()
+                    scheduleRadioContinuationIfNeeded()
                     return
                 }
 
-                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                let radio = try await youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.radioPlaylistID = radio.playlistId
-                self.radioContinuationToken = radio.continuationToken
+                radioPlaylistID = radio.playlistId
+                radioContinuationToken = radio.continuationToken
 
-                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
-                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                var tracks = buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await hydrateSeedRadioTracksIfNeeded(tracks, playlistID: radioPlaylistID)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.applyRadioTracksToQueue(
+                applyRadioTracksToQueue(
                     tracks,
                     seedVideoID: seedVideoID,
                     leadingEntry: leadingEntry,
                     currentMediaID: expectedCurrentMediaID
                 )
-                self.scheduleRadioContinuationIfNeeded()
+                scheduleRadioContinuationIfNeeded()
             } catch {
                 guard !Task.isCancelled else { return }
-                self.logPlayback("External radio seed failed for query=\(query): \(error.localizedDescription)")
+                logPlayback("External radio seed failed for query=\(query): \(error.localizedDescription)")
             }
         }
     }
@@ -137,82 +137,83 @@ extension PlayerViewModel {
         radioAutoplayTask?.cancel()
         radioAutoplayTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            guard self.currentVideoId == expectedCurrentMediaID else { return }
+            guard currentVideoId == expectedCurrentMediaID else { return }
 
             do {
-                let radio = try await self.youtube.music.getRadio(videoId: video.id)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                let radio = try await youtube.music.getRadio(videoId: video.id)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.radioPlaylistID = radio.playlistId
-                self.radioContinuationToken = radio.continuationToken
+                radioPlaylistID = radio.playlistId
+                radioContinuationToken = radio.continuationToken
 
-                var tracks = self.buildSeededRadioTracks(seedSong: nil, radioItems: radio.items)
-                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                var tracks = buildSeededRadioTracks(seedSong: nil, radioItems: radio.items)
+                tracks = await hydrateSeedRadioTracksIfNeeded(tracks, playlistID: radioPlaylistID)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.applyRadioTracksToQueue(
+                applyRadioTracksToQueue(
                     tracks,
                     seedVideoID: video.id,
                     leadingEntry: leadingEntry,
                     currentMediaID: expectedCurrentMediaID
                 )
-                self.scheduleRadioContinuationIfNeeded()
+                scheduleRadioContinuationIfNeeded()
                 return
             } catch {
-                self.logPlayback("Video direct radio seed failed for id=\(video.id): \(error.localizedDescription)")
+                logPlayback("Video direct radio seed failed for id=\(video.id): \(error.localizedDescription)")
             }
 
             guard !query.isEmpty else { return }
 
             do {
-                let searchResults = try await self.youtube.music.search(query)
+                let searchResults = try await youtube.music.search(query)
                 guard !Task.isCancelled,
-                      self.currentVideoId == expectedCurrentMediaID,
-                      let seedSong = self.bestRadioSeedSong(
-                        from: searchResults,
-                        title: displayTitle,
-                        artist: displayArtist
-                      ) else {
+                      currentVideoId == expectedCurrentMediaID,
+                      let seedSong = bestRadioSeedSong(
+                          from: searchResults,
+                          title: displayTitle,
+                          artist: displayArtist
+                      )
+                else {
                     return
                 }
 
                 let seedVideoID = seedSong.videoId
-                self.radioSeedVideoID = seedVideoID
-                let cachedSession = self.radioSessionStore.session(forSeedVideoID: seedVideoID)
+                radioSeedVideoID = seedVideoID
+                let cachedSession = radioSessionStore.session(forSeedVideoID: seedVideoID)
 
                 if let cachedSession,
-                   self.shouldReuseCachedRadioSession(cachedSession),
-                   self.currentVideoId == expectedCurrentMediaID {
-                    self.applyCachedRadioSession(
+                   shouldReuseCachedRadioSession(cachedSession),
+                   currentVideoId == expectedCurrentMediaID {
+                    applyCachedRadioSession(
                         cachedSession,
                         fallbackSeed: seedSong,
                         leadingEntry: leadingEntry,
                         currentMediaID: expectedCurrentMediaID
                     )
-                    self.scheduleRadioContinuationIfNeeded()
+                    scheduleRadioContinuationIfNeeded()
                     return
                 }
 
-                let radio = try await self.youtube.music.getRadio(videoId: seedVideoID)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                let radio = try await youtube.music.getRadio(videoId: seedVideoID)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.radioPlaylistID = radio.playlistId
-                self.radioContinuationToken = radio.continuationToken
+                radioPlaylistID = radio.playlistId
+                radioContinuationToken = radio.continuationToken
 
-                var tracks = self.buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
-                tracks = await self.hydrateSeedRadioTracksIfNeeded(tracks, playlistID: self.radioPlaylistID)
-                guard !Task.isCancelled, self.currentVideoId == expectedCurrentMediaID else { return }
+                var tracks = buildSeededRadioTracks(seedSong: seedSong, radioItems: radio.items)
+                tracks = await hydrateSeedRadioTracksIfNeeded(tracks, playlistID: radioPlaylistID)
+                guard !Task.isCancelled, currentVideoId == expectedCurrentMediaID else { return }
 
-                self.applyRadioTracksToQueue(
+                applyRadioTracksToQueue(
                     tracks,
                     seedVideoID: seedVideoID,
                     leadingEntry: leadingEntry,
                     currentMediaID: expectedCurrentMediaID
                 )
-                self.scheduleRadioContinuationIfNeeded()
+                scheduleRadioContinuationIfNeeded()
             } catch {
                 guard !Task.isCancelled else { return }
-                self.logPlayback("Video metadata radio seed failed for query=\(query): \(error.localizedDescription)")
+                logPlayback("Video metadata radio seed failed for query=\(query): \(error.localizedDescription)")
             }
         }
     }
@@ -221,7 +222,7 @@ extension PlayerViewModel {
         let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedArtist = artist.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if !normalizedTitle.isEmpty && !normalizedArtist.isEmpty {
+        if !normalizedTitle.isEmpty, !normalizedArtist.isEmpty {
             return "\(normalizedTitle) \(normalizedArtist)"
         }
         if !normalizedTitle.isEmpty {
@@ -265,7 +266,8 @@ extension PlayerViewModel {
         }
 
         guard let playlistID = playlistID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !playlistID.isEmpty else {
+              !playlistID.isEmpty
+        else {
             return tracks
         }
 
@@ -353,17 +355,19 @@ extension PlayerViewModel {
             }
         }
 
+        entries = deduplicateEntries(entries)
+
         playbackQueue = entries
         queueCount = entries.count
         queueSource = .radioAutoplay
         queuePosition = 0
 
         let expectedMediaID = currentMediaID ?? seedVideoID
-        if expectedMediaID == self.currentVideoId {
+        if expectedMediaID == currentVideoId {
             logPlayback("Successfully seeded radio for \(expectedMediaID) with \(tracks.count) tracks")
         }
 
-        let serializableTracks = tracks.map { $0.persisted }
+        let serializableTracks = tracks.map(\.persisted)
         let session = RadioSessionStore.Session(
             seedVideoID: seedVideoID,
             playlistID: radioPlaylistID,
@@ -376,7 +380,7 @@ extension PlayerViewModel {
     func scheduleRadioContinuationIfNeeded() {
         guard let token = radioContinuationToken, !token.isEmpty else { return }
         guard queueSource == .radioAutoplay else { return }
-        
+
         let remaining = queueCount - (queuePosition ?? 0)
         guard remaining <= 5 else { return } // RadioAutoplayPolicy.queueLowWatermark
 
@@ -392,53 +396,71 @@ extension PlayerViewModel {
             defer { self.isLoadingRadioContinuation = false }
 
             do {
-                let radio = try await self.youtube.music.getRadioContinuation(token: token)
+                let radio = try await youtube.music.getRadioContinuation(token: token)
                 guard !Task.isCancelled else { return }
 
-                self.radioContinuationToken = radio.continuationToken
-                let newTracks = self.buildSeededRadioTracks(seedSong: nil, radioItems: radio.items)
-                
+                radioContinuationToken = radio.continuationToken
+                let newTracks = buildSeededRadioTracks(seedSong: nil, radioItems: radio.items)
+
                 guard !newTracks.isEmpty else { return }
 
                 let entries = newTracks.map { PlaybackQueueEntry.cachedRadio($0) }
-                self.playbackQueue.append(contentsOf: entries)
-                self.queueCount = self.playbackQueue.count
-                
-                if let seedID = self.radioSeedVideoID {
-                    let cachedTracks = newTracks.map { $0.persisted }
-                    if let existingSession = self.radioSessionStore.session(forSeedVideoID: seedID) {
+                let existingFingerprints = Set(playbackQueue.map(\.fingerprint))
+                let uniqueEntries = entries.filter { !existingFingerprints.contains($0.fingerprint) }
+
+                playbackQueue.append(contentsOf: deduplicateEntries(uniqueEntries))
+                queueCount = playbackQueue.count
+
+                if let seedID = radioSeedVideoID {
+                    let cachedTracks = newTracks.map(\.persisted)
+                    if let existingSession = radioSessionStore.session(forSeedVideoID: seedID) {
                         let mergedTracks = existingSession.tracks + cachedTracks
                         let newSession = RadioSessionStore.Session(
                             seedVideoID: seedID,
                             playlistID: existingSession.playlistID,
-                            continuationToken: self.radioContinuationToken,
+                            continuationToken: radioContinuationToken,
                             tracks: mergedTracks
                         )
-                        self.radioSessionStore.save(session: newSession)
+                        radioSessionStore.save(session: newSession)
                     }
                 }
-                
-                self.logPlayback("Appended \(newTracks.count) tracks via radio continuation")
-                
+
+                logPlayback("Appended \(newTracks.count) tracks via radio continuation")
+
             } catch {
                 guard !Task.isCancelled else { return }
-                self.logPlayback("Radio continuation failed: \(error.localizedDescription)")
+                logPlayback("Radio continuation failed: \(error.localizedDescription)")
             }
         }
     }
 
     func buildSeededRadioTracks(seedSong: YouTubeMusicSong?, radioItems: [YouTubeMusicSong]) -> [CachedRadioTrack] {
         var tracks = radioItems.map { CachedRadioTrack(song: $0) }
-        
+
         let seedID = seedSong?.videoId ?? radioSeedVideoID
         if let seedID, let first = tracks.first, first.videoID == seedID {
             tracks.removeFirst()
         }
-        
+
         if tracks.isEmpty, let seedSong {
             tracks = [CachedRadioTrack(song: seedSong)]
         }
-        
+
         return tracks
+    }
+
+    private func deduplicateEntries(_ entries: [PlaybackQueueEntry]) -> [PlaybackQueueEntry] {
+        var seenMediaIDs = Set<String>()
+        var seenFingerprints = Set<String>()
+        var unique: [PlaybackQueueEntry] = []
+        for entry in entries {
+            let isNewMediaID = seenMediaIDs.insert(entry.mediaID).inserted
+            let isNewFingerprint = seenFingerprints.insert(entry.fingerprint).inserted
+            
+            if isNewMediaID && isNewFingerprint {
+                unique.append(entry)
+            }
+        }
+        return unique
     }
 }

@@ -1,19 +1,21 @@
+import Aesthetics
 import Foundation
 import Player
-import Services
+import Plugins
+import Radio
 
 public final class PlaybackDomain {
-    internal let playerViewModel: PlayerViewModel
-    internal let playbackControlSettings: PlaybackControlSettings
-    internal let playbackMetricsStore: PlaybackMetricsStore
+    let playerViewModel: PlayerViewModel
+    let playbackControlSettings: PlaybackControlSettings
+    let playbackMetricsStore: PlaybackMetricsStore
     #if os(iOS)
-    internal let systemVolumeController: SystemVolumeController
-    internal let volumeButtonSkipController: VolumeButtonSkipController
+    let systemVolumeController: SystemVolumeController
+    let volumeButtonSkipController: VolumeButtonSkipController
     #endif
-    internal let radioSessionStore: RadioSessionStore
-    internal let artworkVideoProcessor: ArtworkVideoProcessor
+    let radioSessionStore: RadioSessionStore
+    let artworkVideoProcessor: ArtworkVideoProcessor
     #if os(iOS)
-    internal let artworkColorExtractor: ImageColorExtractor
+    let artworkColorExtractor: ImageColorExtractor
     #endif
 
     #if os(iOS)

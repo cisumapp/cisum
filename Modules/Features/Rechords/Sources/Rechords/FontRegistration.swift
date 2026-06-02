@@ -10,14 +10,16 @@ import SwiftUI
 
 #if canImport(UIKit)
 import UIKit
+
 typealias PlatformUIFont = UIFont
 #elseif os(macOS)
 import AppKit
+
 typealias PlatformUIFont = NSFont
 #endif
 
 public enum FontRegistration {
-    nonisolated(unsafe) private static var registered = false
+    private nonisolated(unsafe) static var registered = false
 
     public static func registerFonts() {
         guard !registered else { return }

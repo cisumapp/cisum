@@ -1,17 +1,15 @@
 //
-//  cisumBackwardButton.swift
+//  PreviousButton.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 05/05/25.
 //
 
 import SwiftUI
-import Services
 
 struct PreviousButton: View {
-@Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
-    
+    @Environment(\.playerViewModel) private var playerViewModel
+
     @State private var transparency: Double = 0.0
 
     var body: some View {
@@ -37,6 +35,5 @@ struct PreviousButton: View {
         .accessibilityLabel("Skip Backward")
         .disabled(!playerViewModel.canSkipBackward)
         .opacity(playerViewModel.canSkipBackward ? 1 : 0.5)
-
     }
 }

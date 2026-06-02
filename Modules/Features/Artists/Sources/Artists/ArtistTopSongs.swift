@@ -5,23 +5,24 @@
 //  Created by Aarav Gupta on 01/05/26.
 //
 
-import SwiftUI
-import SwiftData
 import Models
+import SwiftData
+import SwiftUI
+import Tracks
 
 struct ArtistTopSongs: View {
     let artist: Artist
     let onPlayTrack: (Int) -> Void
-    
+
     @Query private var topTracks: [Song]
-    
+
     init(artist: Artist, onPlayTrack: @escaping (Int) -> Void) {
         self.artist = artist
         self.onPlayTrack = onPlayTrack
         let artistID = artist.artistID
         _topTracks = Query(filter: #Predicate<Song> { $0.primaryArtistID == artistID })
     }
-    
+
     var body: some View {
         if !topTracks.isEmpty {
             VStack(alignment: .leading) {
@@ -34,63 +35,33 @@ struct ArtistTopSongs: View {
                 }
                 .bold()
                 .padding(.bottom)
-                
+
                 ForEach(Array(topTracks.enumerated()), id: \.element.songID) { index, track in
                     Button {
                         onPlayTrack(index)
                     } label: {
-                        VStack {
-                            HStack {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 50, height: 50)
-                                    .overlay {
-                                        if let artwork = track.artworkURLString ?? artist.artworkURLString, let url = URL(string: artwork) {
-                                            AsyncImage(url: url) { phase in
-                                                if let image = phase.image {
-                                                    image.resizable().scaledToFill()
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                                
-                                Text(track.title)
-                                    .lineLimit(1)
-                                
-                                Spacer()
-                                
-                                HStack(spacing: 16) {
-                                    if track.isExplicit {
-                                        Image(systemName: "e.square.fill")
-                                            .foregroundStyle(.secondary)
-                                            .font(.system(size: 14))
-                                    }
-                                    
-                                    Menu {
-                                        Button {
-                                            
-                                        } label: {
-                                            Text("Download")
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                    }
-                                    .menuStyle(.button)
-                                    .buttonStyle(.plain)
-                                }
-                                .font(.system(size: 20))
-                            }
-                            .fontWeight(.semibold)
-                        }
+                        TrackListItem(
+                            trackName: track.title,
+                            artistName: track.primaryArtistName ?? artist.displayName,
+                            duration: formatDuration(track.durationSeconds),
+                            artworkURL: (track.artworkURLString ?? artist.artworkURLString).flatMap { URL(string: $0) },
+                            isExplicit: track.isExplicit
+                        )
                     }
                     .buttonStyle(.plain)
-                    
+
                     Divider()
                         .padding(.horizontal)
                 }
             }
             .padding()
         }
+    }
+
+    private func formatDuration(_ seconds: Double?) -> String {
+        guard let seconds else { return "" }
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return "\(mins):\(String(format: "%02d", secs))"
     }
 }

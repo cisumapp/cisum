@@ -14,7 +14,7 @@ let package = Package(
         .library(
             name: "Rechords",
             targets: ["Rechords"]
-        ),
+        )
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -22,9 +22,9 @@ let package = Package(
         .target(
             name: "Rechords",
             resources: [
-                .copy("Resources"),
+                .copy("Resources")
             ]
-        ),
+        )
     ],
     swiftLanguageModes: [.v6]
 )

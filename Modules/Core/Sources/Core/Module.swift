@@ -1,34 +1,36 @@
-import SwiftUI
-import DesignSystem
-import Home
-import Discover
-import Library
-import Player
-import Search
-import Services
-import Profile
-import Plugins
-import SwiftData
-import Models
-import YouTubeSDK
-import Authentication
-import Artists
+import Aesthetics
 import Albums
+import Artists
+import Authentication
+import Caching
+import Discover
+import Home
+import Library
+import Models
+import Networking
+import Player
 import Playlists
+import Plugins
+import Profile
+import Search
+import SwiftData
+import SwiftUI
+import Utilities
+import YouTubeSDK
 
 @MainActor
 public final class cisumModule {
-
     // MARK: - Feature Modules
 
-    internal let home: HomeModule
-    internal let discover: DiscoverModule
-    internal let library: LibraryModule
-    internal let player: PlayerModule
-    internal let search: SearchModule
-    internal let profile: ProfileModule
+    let home: HomeModule
+    let discover: DiscoverModule
+    let library: LibraryModule
+    let player: PlayerModule
+    let search: SearchModule
+    let profile: ProfileModule
 
     // MARK: - Dependencies
+
     public let navigationState: NavigationState
     private let appRouter: AppRouter
     public let container: ServicesContainer
@@ -49,10 +51,20 @@ public final class cisumModule {
 
     public func handleScenePhaseChange(_ phase: ScenePhase) {
         player.handleScenePhaseChange(phase)
-        
+
         if phase != .active {
             coreDomain.prefetchSettings.flushPendingWrites()
             playbackDomain.playbackControlSettings.flushPendingWrites()
+        }
+    }
+
+    public func handleIncomingURL(_ url: URL) {
+        Task {
+            do {
+                _ = try await ProviderManifestStore.shared.importManifest(from: url)
+            } catch {
+                print("Failed to import provider manifest: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -83,6 +95,7 @@ public final class cisumModule {
             PluginsView()
                 .environment(container)
                 .environment(container.playbackServices.streamingProviderSettings)
+                .environment(ProviderManifestStore.shared)
         )
     }
 
@@ -91,7 +104,33 @@ public final class cisumModule {
     }
 
     public var loginView: AnyView {
-        AnyView(LoginView().environment(container.userServices))
+        let authService = container.userServices.authService
+        let supabaseService = container.userServices.supabaseService
+        let analyticsService = container.userServices.analyticsService
+        let view = LoginView { isSignup in
+            guard let user = authService.user else { return }
+            do {
+                try await supabaseService.syncUserFromClerk(
+                    clerkUserId: user.id,
+                    email: user.emailAddresses.first?.emailAddress,
+                    fullName: user.fullName,
+                    username: user.username,
+                    imageUrl: user.imageUrl
+                )
+            } catch {
+                print("Failed to sync: \(error.localizedDescription)")
+            }
+            analyticsService.identify(userId: user.id, properties: [
+                "email": user.emailAddresses.first?.emailAddress ?? "",
+                "name": user.fullName,
+                "signup": isSignup
+            ])
+            analyticsService.captureEvent(
+                isSignup ? "user_signed_up" : "user_signed_in",
+                properties: ["email": user.emailAddresses.first?.emailAddress ?? ""]
+            )
+        }
+        return AnyView(view.environment(authService))
     }
 
     public var spotifyLoginView: AnyView {
@@ -100,6 +139,20 @@ public final class cisumModule {
         #else
         AnyView(EmptyView())
         #endif
+    }
+
+    public var youtubeLoginView: AnyView {
+        let view = YouTubeOAuthDeviceFlowView { [weak appRouter] _ in
+            Task { @MainActor in
+                _ = await YouTube.shared.ensureAccessToken()
+                appRouter?.pop()
+            }
+        } onCancel: { [weak appRouter] in
+            Task { @MainActor in
+                appRouter?.pop()
+            }
+        }
+        return AnyView(view)
     }
 
     public func playlistDetailView(for id: String) -> AnyView {
@@ -138,6 +191,10 @@ public final class cisumModule {
         player.currentVideoId
     }
 
+    public var playerViewModel: any PlayerViewModelInterface {
+        container.playbackServices.playerViewModel
+    }
+
     public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> AnyView {
         AnyView(player.miniPlayer(isExpanded: isExpanded, namespace: namespace))
     }
@@ -154,32 +211,40 @@ public final class cisumModule {
 
     // MARK: - Root View
 
+    public func applyEnvironment(to view: some View) -> some View {
+        view
+            .environment(container)
+            .environment(container.coreServices)
+            .environment(container.playbackServices)
+            .environment(container.searchServices)
+            .environment(container.libraryServices)
+            .environment(container.userServices)
+            .environment(container.providerServices)
+            .environment(container.appServices)
+            .environment(container.app.playerPresentationController)
+            .environment(container.app.searchOverlayController)
+            .environment(\.playerViewModel, container.playbackServices.playerViewModel)
+            .environment(\.searchViewModel, container.searchServices.searchViewModel)
+            .environment(\.youtube, container.providerServices.youtube)
+            .environment(container.userServices.authService)
+            .environment(container.userServices.spotifySessionCoordinator)
+            .environment(container.userServices.supabaseService)
+            .environment(container.userServices.analyticsService)
+
+
+            .environment(container.playbackServices.lastFMSettings)
+            .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
+            .environment(container.playbackServices.streamingProviderSettings)
+    }
+
     @ViewBuilder
     public var rootView: some View {
         let authService = container.userServices.authService
         if authService.isAuthenticated || authService.isGuestMode {
-            DesignSystem.RootView(playerOverlayState: .init()) {
-                RootView(module: self)
-                    .environment(self.container)
-                    .environment(self.container.coreServices)
-                    .environment(self.container.playbackServices)
-                    .environment(self.container.searchServices)
-                    .environment(self.container.libraryServices)
-                    .environment(self.container.userServices)
-                    .environment(self.container.providerServices)
-                    .environment(self.container.appServices)
+            Aesthetics.RootView(playerOverlayState: .init()) {
+                self.applyEnvironment(to: RootView(module: self))
             } overlayWrapper: { overlay in
-                AnyView(
-                    overlay
-                        .environment(self.container)
-                        .environment(self.container.coreServices)
-                        .environment(self.container.playbackServices)
-                        .environment(self.container.searchServices)
-                        .environment(self.container.libraryServices)
-                        .environment(self.container.userServices)
-                        .environment(self.container.providerServices)
-                        .environment(self.container.appServices)
-                )
+                AnyView(self.applyEnvironment(to: overlay))
             }
         } else {
             loginView
@@ -191,18 +256,18 @@ public final class cisumModule {
     public init() {
         let navigationState = NavigationState()
         let appRouter = AppRouter()
-        
+
         appRouter.onTabSwitch = { [weak navigationState] tab in
             navigationState?.selectedTab = tab
         }
-        
+
         appRouter.onPush = { [weak navigationState] route in
             guard let state = navigationState else { return }
             var path = state.tabPaths[state.selectedTab] ?? NavigationPath()
             path.append(route)
             state.tabPaths[state.selectedTab] = path
         }
-        
+
         appRouter.onPop = { [weak navigationState] in
             guard let state = navigationState else { return }
             var path = state.tabPaths[state.selectedTab] ?? NavigationPath()
@@ -211,15 +276,15 @@ public final class cisumModule {
                 state.tabPaths[state.selectedTab] = path
             }
         }
-        
+
         self.navigationState = navigationState
         self.appRouter = appRouter
-        
+
         YouTubeSDKConfig.storage = KeychainYouTubeStorage()
         let youtube = YouTube.shared
         let container = AppBootstrap.makeDependenciesOrFallback(youtube: youtube, router: appRouter)
         self.container = container
-        
+
         // 1. Store Interfaces
         self.coreDomain = container.core
         self.playbackDomain = container.playback
@@ -232,11 +297,11 @@ public final class cisumModule {
         self.home = HomeModule(youtube: youtube)
         self.discover = DiscoverModule()
         self.library = LibraryModule()
-        
+
         self.player = PlayerModule(
             dependencies: PlayerDependencies(viewModel: container.playback.playerViewModel)
         )
-        
+
         self.profile = ProfileModule(
             prefetchSettings: container.core.prefetchSettings,
             networkMonitor: container.core.networkMonitor,
@@ -244,7 +309,7 @@ public final class cisumModule {
             streamingProviderSettings: container.playback.streamingProviderSettings,
             lastFMSettings: container.playbackServices.lastFMSettings
         )
-        
+
         self.search = SearchModule(
             dependencies: SearchDependencies(
                 youtube: container.app.youtube,

@@ -20,3 +20,7 @@ DerivedData/
 # Optional: logs
 *.log
 /.agents
+/scripts
+/migration
+/Launch_cisum.app_2026-05-31_16.00.17_B25DCF6F.trace
+/Skills

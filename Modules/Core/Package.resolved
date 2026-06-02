@@ -1,5 +1,5 @@
 {
-  "originHash" : "2dcd053eb8e28c11b04694d1d11f14c920d74b5100878781d87ceeb0d84ac00c",
+  "originHash" : "a7e1909f49cecbbb8c27ea25180f815fce235b0766130744cf22b42197294ea0",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
       "state" : {
-        "revision" : "c152c1915f60c51e4afa0752656993ee5b3c63db",
-        "version" : "8.8.1"
+        "revision" : "cf8be20d07654570554c8a8a4952bc8a5766a8b0",
+        "version" : "8.9.0"
       }
     },
     {
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/marmelroy/PhoneNumberKit",
       "state" : {
-        "revision" : "2d547ffe38f61009219e34e5378d2aa4c13b6e51",
-        "version" : "4.2.12"
+        "revision" : "169ab10234347fb19b37441f2867ace896a284b0",
+        "version" : "4.3.0"
       }
     },
     {

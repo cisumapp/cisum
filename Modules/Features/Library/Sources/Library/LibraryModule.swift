@@ -1,5 +1,5 @@
-import SwiftUI
 import Playlists
+import SwiftUI
 
 public final class LibraryModule {
     public init() {}

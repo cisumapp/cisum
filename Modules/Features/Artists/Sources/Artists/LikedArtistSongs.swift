@@ -8,9 +8,7 @@
 import SwiftUI
 
 struct LikedArtistSongs: View {
-    var body: some View {
-        
-    }
+    var body: some View {}
 }
 
 #Preview {

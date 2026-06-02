@@ -1,7 +1,8 @@
-import Utilities
 import Foundation
 import MediaPlayer
+import Networking
 import SwiftUI
+import Utilities
 
 #if os(iOS)
 import AVFoundation
@@ -20,8 +21,7 @@ extension PlayerViewModel {
         let videoCacheID: String
     }
 
-
-#if os(iOS)
+    #if os(iOS)
     struct NowPlayingState: Equatable {
         var mediaID: String?
         var title: String = "Not Playing"
@@ -63,62 +63,73 @@ extension PlayerViewModel {
 
         artworkLoadTask = Task { [weak self] in
             guard let self else { return }
-            #if canImport(iTunesKit)
-            let itunes = self.itunes
-            #endif
             if Task.isCancelled { return }
 
-            if let persistedArtwork = await self.loadPersistentArtworkIfAvailable(for: mediaID) {
-                guard self.currentVideoId == mediaID else { return }
-                self.applyArtwork(persistedArtwork, for: mediaID, cacheInMemory: true)
-                self.updateNowPlayingMetadata(force: true)
+            // 1. Persistent cache — instant hit, no network
+            if let persistedArtwork = await loadPersistentArtworkIfAvailable(for: mediaID) {
+                guard currentVideoId == mediaID, !Task.isCancelled else { return }
+                applyArtwork(persistedArtwork, for: mediaID, cacheInMemory: true)
+                updateNowPlayingMetadata(force: true)
                 return
             }
 
-            let fallbackTask = Task {
-                await Self.fetchArtworkResource(from: fallbackArtworkURL)
-            }
-            let highQualityTask = Task<CachedNowPlayingArtworkResource?, Never> {
-                if let cachedURL = self.mediaCacheStore.cachedHighQualityArtworkURL(
-                    for: mediaID,
-                    maxAge: CachePolicy.highQualityArtworkTTL
-                ) {
-                    if let cachedArtwork = await Self.fetchArtworkResource(from: cachedURL) {
-                        return cachedArtwork
-                    }
+            // 2. Resolve the best artwork URL from all available sources
+            guard let bestURL = await resolveBestArtworkURL(
+                mediaID: mediaID,
+                title: artworkTitle,
+                artist: artworkArtist,
+                fallbackURL: fallbackArtworkURL
+            ) else { return }
+            guard currentVideoId == mediaID, !Task.isCancelled else { return }
+
+            // 3. Download the best artwork
+            guard let artwork = await Self.fetchArtworkResource(from: bestURL) else {
+                if bestURL != fallbackArtworkURL {
+                    guard let fallbackArtwork = await Self.fetchArtworkResource(from: fallbackArtworkURL) else { return }
+                    guard currentVideoId == mediaID, !Task.isCancelled else { return }
+                    applyArtwork(fallbackArtwork, for: mediaID, cacheInMemory: false)
+                    updateNowPlayingMetadata(force: true)
                 }
-
-                #if canImport(iTunesKit)
-                if let highQualityURL = await Self.resolveHighQualityArtworkURL(
-                    using: itunes,
-                    title: artworkTitle,
-                    artist: artworkArtist
-                ) {
-                    self.mediaCacheStore.saveHighQualityArtworkURL(highQualityURL, for: mediaID)
-                    return await Self.fetchArtworkResource(from: highQualityURL)
-                }
-                #endif
-
-                return nil
+                return
             }
+            guard currentVideoId == mediaID, !Task.isCancelled else { return }
 
-            if let fallbackArtwork = await fallbackTask.value {
-                guard self.currentVideoId == mediaID else { return }
-                guard self.currentArtworkMediaID != mediaID else { return }
-
-                self.applyArtwork(fallbackArtwork, for: mediaID, cacheInMemory: false)
-                self.updateNowPlayingMetadata(force: true)
-                await self.persistArtwork(fallbackArtwork, mediaID: mediaID)
-            }
-
-            if let highQualityArtwork = await highQualityTask.value {
-                guard self.currentVideoId == mediaID else { return }
-
-                self.applyArtwork(highQualityArtwork, for: mediaID, cacheInMemory: true)
-                self.updateNowPlayingMetadata(force: true)
-                await self.persistArtwork(highQualityArtwork, mediaID: mediaID)
-            }
+            // 4. Apply once — no visual swap from fallback-to-high-quality
+            applyArtwork(artwork, for: mediaID, cacheInMemory: true)
+            updateNowPlayingMetadata(force: true)
+            await persistArtwork(artwork, mediaID: mediaID)
         }
+    }
+
+    private func resolveBestArtworkURL(
+        mediaID: String,
+        title: String,
+        artist: String,
+        fallbackURL: URL?
+    ) async -> URL? {
+        if let cachedURL = await mediaCacheStore.cachedHighQualityArtworkURL(
+            for: mediaID,
+            maxAge: CachePolicy.highQualityArtworkTTL
+        ) {
+            return cachedURL
+        }
+
+        if let payloadURL = externalPayloadCache[mediaID]?.artworkURL {
+            return payloadURL
+        }
+
+        #if canImport(iTunesKit)
+        if let itunesURL = await Self.resolveHighQualityArtworkURL(
+            using: itunes,
+            title: title,
+            artist: artist
+        ) {
+            await mediaCacheStore.saveHighQualityArtworkURL(itunesURL, for: mediaID)
+            return itunesURL
+        }
+        #endif
+
+        return fallbackURL
     }
 
     private func currentElapsedTimeSnapshot() -> Double {
@@ -164,11 +175,35 @@ extension PlayerViewModel {
             info[MPMediaItemPropertyArtwork] = mediaItemArtwork
         }
 
+        if #available(iOS 26.0, *) {
+            let tallArtworkKey = "MPNowPlayingInfoProperty3x4AnimatedArtwork"
+
+            if let videoURL = animatedArtworkVideoURL {
+                let supportedKeys = MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys
+                let artworkID = nowPlayingState.mediaID ?? UUID().uuidString
+
+                if supportedKeys.contains(tallArtworkKey) {
+                    let tallArtwork = Self.makeAnimatedArtwork(
+                        mediaID: artworkID,
+                        videoURL: videoURL,
+                        previewData: currentArtworkResource?.data
+                    )
+                    info[tallArtworkKey] = tallArtwork
+                } else {
+                    info[tallArtworkKey] = nil
+                }
+            } else {
+                info[tallArtworkKey] = nil
+            }
+        }
+
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        if #available(iOS 13.0, *) {
+        #if os(macOS)
+        if #available(macOS 10.12.2, *) {
             MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
         }
+        #endif
 
         lastPublishedNowPlayingState = nowPlayingState
     }
@@ -180,6 +215,7 @@ extension PlayerViewModel {
             return
         }
 
+        cacheAccessOrder[mediaID] = Date()
         applyArtwork(cachedArtwork, for: mediaID, cacheInMemory: false)
     }
 
@@ -195,13 +231,24 @@ extension PlayerViewModel {
 
         if cacheInMemory {
             artworkCache[mediaID] = artwork
+            if artworkCache.count > 50 {
+                let sorted = artworkCache.keys.sorted { lhs, rhs in
+                    (cacheAccessOrder[lhs] ?? Date.distantPast) < (cacheAccessOrder[rhs] ?? Date.distantPast)
+                }
+                let overage = sorted.prefix(artworkCache.count - 50)
+                for key in overage {
+                    artworkCache.removeValue(forKey: key)
+                    cacheAccessOrder.removeValue(forKey: key)
+                }
+            }
+            cacheAccessOrder[mediaID] = Date()
         }
     }
 
     private func updateAccentColor(from artwork: CachedNowPlayingArtworkResource, mediaID: String) {
         if let cachedAccent = artworkAccentCache[mediaID],
            cachedAccent.artworkURL == artwork.url {
-            applyAccentColor(cachedAccent.color)
+            applyCurrentAccentColor(cachedAccent.color)
             return
         }
 
@@ -215,21 +262,24 @@ extension PlayerViewModel {
             let extractedPalette = await artworkColorExtractor.extractPalette(from: artworkData, cacheKey: artworkURL.absoluteString)
 
             guard !Task.isCancelled else { return }
-            guard self.currentVideoId == mediaID else { return }
+            guard currentVideoId == mediaID else { return }
 
-            self.artworkPaletteCache[mediaID] = (artworkURL: artworkURL, palette: extractedPalette)
-            self.applyAccentColor(extractedPalette?.dominant ?? .accentColor)
+            artworkPaletteCache[mediaID] = (artworkURL: artworkURL, palette: extractedPalette)
+            let currentAccentColor = extractedPalette?.dominant ?? .cisumAccent
+            artworkAccentCache[mediaID] = (artworkURL: artworkURL, color: currentAccentColor)
+            applyCurrentAccentColor(currentAccentColor)
         }
     }
 
-    private func applyAccentColor(_ color: Color) {
+    private func applyCurrentAccentColor(_ color: Color) {
         currentAccentColor = color
         Color.updateDynamicAccent(color)
     }
 
     private func loadPersistentArtworkIfAvailable(for mediaID: String) async -> CachedNowPlayingArtworkResource? {
         guard let cachedArtwork = await mediaCacheStore.cachedLocalArtworkData(for: mediaID),
-              let image = UIImage(data: cachedArtwork.data) else {
+              let image = UIImage(data: cachedArtwork.data)
+        else {
             return nil
         }
 
@@ -249,7 +299,7 @@ extension PlayerViewModel {
     }
 
     #if canImport(iTunesKit)
-    nonisolated private static func resolveHighQualityArtworkURL(using itunes: iTunesKit, title: String, artist: String) async -> URL? {
+    private nonisolated static func resolveHighQualityArtworkURL(using itunes: iTunesKit, title: String, artist: String) async -> URL? {
         do {
             let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
             let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
@@ -277,9 +327,9 @@ extension PlayerViewModel {
             albumName: albumName,
             artistName: nil as String?
         )
-        let localAlbumCacheKeys = [localAlbumArtistCacheKey, localAlbumOnlyCacheKey].compactMap { $0 }
+        let localAlbumCacheKeys = [localAlbumArtistCacheKey, localAlbumOnlyCacheKey].compactMap(\.self)
 
-        if let cachedURL = mediaCacheStore.cachedMotionArtworkSourceURL(
+        if let cachedURL = await mediaCacheStore.cachedMotionArtworkSourceURL(
             for: mediaID,
             maxAge: CachePolicy.motionArtworkSourceTTL
         ) {
@@ -294,12 +344,12 @@ extension PlayerViewModel {
             )
         }
 
-        if let albumHit = mediaCacheStore.cachedMotionArtworkSourceURL(
+        if let albumHit = await mediaCacheStore.cachedMotionArtworkSourceURL(
             forAlbumKeys: localAlbumCacheKeys,
             maxAge: CachePolicy.motionArtworkSourceTTL
         ) {
             logAnimatedArtwork("Motion artwork source cache hit (album key=\(albumHit.albumKey)) for id=\(mediaID)")
-            mediaCacheStore.saveMotionArtworkSourceURL(albumHit.url, for: mediaID)
+            await mediaCacheStore.saveMotionArtworkSourceURL(albumHit.url, for: mediaID)
             return MotionArtworkSourceResolution(
                 sourceHLSURL: albumHit.url,
                 videoCacheID: motionArtworkVideoCacheID(
@@ -312,7 +362,7 @@ extension PlayerViewModel {
 
         #if canImport(iTunesKit)
         guard let resolution = await Self.resolveMotionArtwork(
-            using: self.itunes,
+            using: itunes,
             title: searchTitle,
             artist: searchArtist
         ) else {
@@ -322,7 +372,7 @@ extension PlayerViewModel {
         return nil
         #endif
 
-        mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, for: mediaID)
+        await mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, for: mediaID)
 
         var albumKeysToPersist = localAlbumCacheKeys
         let collectionCacheKey = motionArtworkCollectionCacheKey(collectionID: resolution.collectionID)
@@ -333,7 +383,7 @@ extension PlayerViewModel {
         if let catalogAlbumCacheKey {
             albumKeysToPersist.append(catalogAlbumCacheKey)
         }
-        mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, forAlbumKeys: albumKeysToPersist)
+        await mediaCacheStore.saveMotionArtworkSourceURL(resolution.sourceURL, forAlbumKeys: albumKeysToPersist)
 
         let selectedAlbumKey = catalogAlbumCacheKey
             ?? collectionCacheKey
@@ -353,7 +403,7 @@ extension PlayerViewModel {
     }
 
     #if canImport(iTunesKit)
-    nonisolated private static func resolveMotionArtwork(
+    private nonisolated static func resolveMotionArtwork(
         using itunes: iTunesKit,
         title: String,
         artist: String
@@ -369,11 +419,11 @@ extension PlayerViewModel {
     }
     #endif
 
-    nonisolated private static func fetchArtworkResource(from url: URL?) async -> CachedNowPlayingArtworkResource? {
+    private nonisolated static func fetchArtworkResource(from url: URL?) async -> CachedNowPlayingArtworkResource? {
         guard let url else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let data = try await NetworkingClient.shared.downloadData(url: url)
             guard let image = UIImage(data: data) else { return nil }
             return CachedNowPlayingArtworkResource(url: url, data: data, size: image.size)
         } catch {
@@ -381,7 +431,7 @@ extension PlayerViewModel {
         }
     }
 
-    nonisolated private static func makeMediaItemArtwork(from resource: CachedNowPlayingArtworkResource) -> MPMediaItemArtwork? {
+    private nonisolated static func makeMediaItemArtwork(from resource: CachedNowPlayingArtworkResource) -> MPMediaItemArtwork? {
         let imageData = resource.data
         let boundsSize = resource.size
 
@@ -391,7 +441,7 @@ extension PlayerViewModel {
     }
 
     @available(iOS 26.0, *)
-    nonisolated private static func makeAnimatedArtwork(
+    private nonisolated static func makeAnimatedArtwork(
         mediaID: String,
         videoURL: URL,
         previewData: Data?
@@ -405,7 +455,8 @@ extension PlayerViewModel {
             artworkID: artworkID,
             previewImageRequestHandler: { requestedSize in
                 guard let previewData,
-                      let image = UIImage(data: previewData) else {
+                      let image = UIImage(data: previewData)
+                else {
                     return nil
                 }
 
@@ -421,7 +472,7 @@ extension PlayerViewModel {
     }
 
     @available(iOS 26.0, *)
-    nonisolated private static func makeAnimatedArtworkPreviewImage(
+    private nonisolated static func makeAnimatedArtworkPreviewImage(
         from image: UIImage,
         requestedSize: CGSize
     ) -> UIImage {
@@ -433,7 +484,8 @@ extension PlayerViewModel {
         guard targetSize.width > 0,
               targetSize.height > 0,
               image.size.width > 0,
-              image.size.height > 0 else {
+              image.size.height > 0
+        else {
             return image
         }
 
@@ -471,7 +523,7 @@ extension PlayerViewModel {
     }
 
     @available(iOS 26.0, *)
-    nonisolated private static func normalizedAnimatedArtworkPreviewSize(
+    private nonisolated static func normalizedAnimatedArtworkPreviewSize(
         _ requestedSize: CGSize,
         fallbackSize: CGSize
     ) -> CGSize {
@@ -491,10 +543,10 @@ extension PlayerViewModel {
 
         return CGSize(width: 512, height: 512)
     }
-#else
-    func updateNowPlayingMetadata(force: Bool = true) {}
-    func updateNowPlayingPlaybackInfo(force: Bool = false) {}
-    func loadNowPlayingArtwork(for mediaID: String, title: String, artist: String, fallbackURL: URL?) {}
+    #else
+    func updateNowPlayingMetadata(force _: Bool = true) {}
+    func updateNowPlayingPlaybackInfo(force _: Bool = false) {}
+    func loadNowPlayingArtwork(for _: String, title _: String, artist _: String, fallbackURL _: URL?) {}
     func resolveMotionArtworkSource(
         for mediaID: String,
         title: String,
@@ -507,5 +559,5 @@ extension PlayerViewModel {
         _ = albumName
         return nil
     }
-#endif
+    #endif
 }

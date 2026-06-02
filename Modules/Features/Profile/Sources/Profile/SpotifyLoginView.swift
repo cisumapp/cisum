@@ -1,7 +1,6 @@
 import SwiftUI
-import Services
-
 #if canImport(SpotifySDK)
+import Plugins
 import SpotifySDK
 
 public struct SpotifyLoginView: View {
@@ -27,14 +26,14 @@ public struct SpotifyLoginView: View {
             } else {
                 VStack(spacing: 16) {
                     ProgressView()
-                        .tint(Color(red: 30/255, green: 215/255, blue: 96/255))
+                        .tint(Color(red: 30 / 255, green: 215 / 255, blue: 96 / 255))
                     Text("Preparing Spotify session…")
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(Color.black)
+        .background(Color.cisumBg)
         .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {

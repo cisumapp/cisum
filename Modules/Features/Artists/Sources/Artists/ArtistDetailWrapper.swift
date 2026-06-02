@@ -1,7 +1,7 @@
 #if os(iOS)
-import SwiftUI
-import SwiftData
 import Models
+import SwiftData
+import SwiftUI
 
 public struct ArtistDetailWrapper: View {
     public let artistID: String

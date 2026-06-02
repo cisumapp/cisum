@@ -1,5 +1,5 @@
 //
-//  cisumMiniPlayerProgress.swift
+//  MiniPlayerProgress.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 04/05/25.
@@ -7,10 +7,9 @@
 
 #if os(iOS)
 
-import SwiftUI
-import Services
+import Aesthetics
 import CoreGraphics
-import DesignSystem
+import SwiftUI
 
 struct cisumMiniPlayerProgress: View {
     @Binding var currentTime: Double
@@ -30,7 +29,6 @@ struct cisumMiniPlayerProgress: View {
             .frame(height: 55)
             .transformEffect(.identity)
             .allowsHitTesting(false)
-
     }
 }
 

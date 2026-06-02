@@ -1,16 +1,17 @@
+import Aesthetics
 import Foundation
-import YouTubeSDK
-import DesignSystem
-import Services
+import Player
+import Search
 import SwiftData
 import Utilities
+import YouTubeSDK
 
 public final class AppDomain {
-    internal let youtube: YouTube
-    internal let router: Router
-    internal let modelContainer: ModelContainer
-    internal let playerPresentationController: PlayerPresentationController
-    internal let searchOverlayController: SearchOverlayController
+    let youtube: YouTube
+    let router: Router
+    let modelContainer: ModelContainer
+    let playerPresentationController: PlayerPresentationController
+    let searchOverlayController: SearchOverlayController
 
     public init(
         youtube: YouTube,

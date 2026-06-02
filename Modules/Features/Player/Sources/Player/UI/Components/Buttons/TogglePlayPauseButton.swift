@@ -1,20 +1,16 @@
 //
-//  cisumPlayButton.swift
+//  TogglePlayPauseButton.swift
 //  cisum
 //
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 05/05/25.
 //
 
 import SwiftUI
-import Services
 
 struct TogglePlayPauseButton: View {
-@Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
-    
-    @State private var transparency: Double = 0.0
+    @Environment(\.playerViewModel) private var playerViewModel
 
-    
+    @State private var transparency: Double = 0.0
 
     var body: some View {
         Button {
@@ -39,6 +35,5 @@ struct TogglePlayPauseButton: View {
         .sensoryFeedback(.selection, trigger: playerViewModel.isPlaying)
         .accessibilityLabel(playerViewModel.isPlaying ? "Pause" : "Play")
         .padding(.horizontal, -25)
-
     }
 }

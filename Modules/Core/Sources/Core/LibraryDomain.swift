@@ -1,13 +1,16 @@
+import Caching
 import Foundation
-import Services
+import Library
 import Models
+import Player
+import Playlists
 
 public final class LibraryDomain {
-    internal let playlistLibraryStore: PlaylistLibraryStore
-    internal let playlistImportJobStore: PlaylistImportJobStore
-    internal let centralMediaStore: CentralMediaStore
-    internal let mediaCacheStore: MediaCacheStore
-    internal let metadataCache: any VideoMetadataCaching
+    let playlistLibraryStore: PlaylistLibraryStore
+    let playlistImportJobStore: PlaylistImportJobStore
+    let centralMediaStore: CentralMediaStore
+    let mediaCacheStore: MediaCacheStore
+    let metadataCache: any VideoMetadataCaching
 
     public init(
         playlistLibraryStore: PlaylistLibraryStore,

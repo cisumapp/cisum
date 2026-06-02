@@ -1,15 +1,26 @@
 import Foundation
-import SwiftData
 import Models
+import Observation
+import Search
+import SwiftData
 
-@MainActor
-public final class SearchHistoryStore {
-    private let context: ModelContext
+public struct SearchHistoryEntrySnapshot: Sendable {
+    public let query: String
+    public let searchCount: Int
+    public let successfulPlayCount: Int
+    public let lastSearchedAt: Date
 
-    public init(context: ModelContext) {
-        self.context = context
+    public init(query: String, searchCount: Int, successfulPlayCount: Int, lastSearchedAt: Date) {
+        self.query = query
+        self.searchCount = searchCount
+        self.successfulPlayCount = successfulPlayCount
+        self.lastSearchedAt = lastSearchedAt
     }
+}
 
+
+@ModelActor
+public actor SearchHistoryStore {
     public func recordSearch(query: String) {
         let normalized = normalizedQuery(query)
         guard !normalized.isEmpty else { return }
@@ -26,9 +37,9 @@ public final class SearchHistoryStore {
                 successfulPlayCount: 0,
                 lastSearchedAt: .now
             )
-            context.insert(entry)
+            modelContext.insert(entry)
         }
-        try? context.save()
+        try? modelContext.save()
     }
 
     public func recordSuccessfulPlay(query: String) {
@@ -38,44 +49,52 @@ public final class SearchHistoryStore {
         if let existing = fetchEntry(for: normalized) {
             existing.successfulPlayCount += 1
             existing.lastSearchedAt = .now
-            try? context.save()
+            try? modelContext.save()
         }
     }
 
-    public func topCandidates(prefix: String, limit: Int = 20) -> [SearchHistoryEntry] {
+    public func removeSearch(query: String) {
+        let normalized = normalizedQuery(query)
+        if let existing = fetchEntry(for: normalized) {
+            modelContext.delete(existing)
+            try? modelContext.save()
+        }
+    }
+
+    public func topCandidates(prefix: String, limit: Int = 20) -> [SearchHistoryEntrySnapshot] {
         guard limit > 0 else { return [] }
 
         let normalizedPrefix = normalizedQuery(prefix)
-        let batchFetchLimit = max(limit * 5, 50)
-
-        var batchDescriptor = FetchDescriptor<SearchHistoryEntry>(
-            sortBy: rankingSortDescriptors
-        )
-        batchDescriptor.fetchLimit = batchFetchLimit
-
-        let rankedBatch = (try? context.fetch(batchDescriptor)) ?? []
-        let filteredBatch = rankedBatch.filter { entry in
-            normalizedPrefix.isEmpty || entry.normalizedQuery.contains(normalizedPrefix)
+        let descriptor = if normalizedPrefix.isEmpty {
+            FetchDescriptor<SearchHistoryEntry>(sortBy: rankingSortDescriptors)
+        } else {
+            FetchDescriptor<SearchHistoryEntry>(
+                predicate: #Predicate<SearchHistoryEntry> { entry in
+                    entry.normalizedQuery.contains(normalizedPrefix)
+                },
+                sortBy: rankingSortDescriptors
+            )
         }
 
-        // Fast path: top-ranked batch already yielded enough matches.
-        if filteredBatch.count >= limit || rankedBatch.count < batchFetchLimit {
-            return Array(filteredBatch.prefix(limit))
+        var limitedDescriptor = descriptor
+        limitedDescriptor.fetchLimit = limit
+        let entries = (try? modelContext.fetch(limitedDescriptor)) ?? []
+        return entries.map {
+            SearchHistoryEntrySnapshot(
+                query: $0.query,
+                searchCount: $0.searchCount,
+                successfulPlayCount: $0.successfulPlayCount,
+                lastSearchedAt: $0.lastSearchedAt
+            )
         }
-
-        // Fallback for rare prefixes that only appear in lower-ranked history.
-        let allDescriptor = FetchDescriptor<SearchHistoryEntry>(sortBy: rankingSortDescriptors)
-        let allEntries = (try? context.fetch(allDescriptor)) ?? []
-        let filteredAll = allEntries.filter { entry in
-            normalizedPrefix.isEmpty || entry.normalizedQuery.contains(normalizedPrefix)
-        }
-
-        return Array(filteredAll.prefix(limit))
     }
 
     private func fetchEntry(for normalized: String) -> SearchHistoryEntry? {
-        let descriptor = FetchDescriptor<SearchHistoryEntry>()
-        return (try? context.fetch(descriptor))?.first(where: { $0.normalizedQuery == normalized })
+        var descriptor = FetchDescriptor<SearchHistoryEntry>(
+            predicate: #Predicate { $0.normalizedQuery == normalized }
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
     }
 
     private func normalizedQuery(_ query: String) -> String {

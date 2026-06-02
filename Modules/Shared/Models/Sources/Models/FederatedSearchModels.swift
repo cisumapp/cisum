@@ -1,12 +1,17 @@
 import Foundation
+import ProviderSDK
 import YouTubeSDK
 
 public enum FederatedService: String, CaseIterable, Identifiable, Sendable {
     case youtube = "YouTube"
     case youtubeMusic = "YouTube Music"
     case spotify = "Spotify"
+    /// All ProviderSDK-backed providers (SoundCloud, Tidal, Qobuz, Deezer, etc.)
+    case providerSDK = "Songs"
 
-    public var id: FederatedService { self }
+    public var id: FederatedService {
+        self
+    }
 }
 
 public enum FederatedSectionState: Equatable, Sendable {
@@ -21,7 +26,9 @@ public struct FederatedSearchSection: Identifiable, Sendable {
     public var state: FederatedSectionState
     public var items: [FederatedSearchItem]
 
-    public var id: FederatedService { service }
+    public var id: FederatedService {
+        service
+    }
 
     public init(service: FederatedService, state: FederatedSectionState, items: [FederatedSearchItem]) {
         self.service = service
@@ -44,8 +51,9 @@ public struct SpotifySearchTrack: Identifiable, Sendable {
     public let artworkURL: URL?
     public let durationSeconds: TimeInterval
     public let previewURL: URL?
+    public let isrc: String?
 
-    public init(id: String, title: String, artistName: String, albumName: String?, artworkURL: URL?, durationSeconds: TimeInterval, previewURL: URL?) {
+    public init(id: String, title: String, artistName: String, albumName: String?, artworkURL: URL?, durationSeconds: TimeInterval, previewURL: URL?, isrc: String? = nil) {
         self.id = id
         self.title = title
         self.artistName = artistName
@@ -53,6 +61,7 @@ public struct SpotifySearchTrack: Identifiable, Sendable {
         self.artworkURL = artworkURL
         self.durationSeconds = durationSeconds
         self.previewURL = previewURL
+        self.isrc = isrc
     }
 }
 
@@ -62,6 +71,8 @@ public enum FederatedSearchPayload: Sendable {
     case spotify(SpotifySearchTrack)
     case spotifyArtist(SpotifySearchArtist)
     case spotifyPlaylist(SpotifySearchPlaylist)
+    /// A track resolved from one of the ProviderSDK providers (SoundCloud, Tidal, Qobuz, Deezer, etc.).
+    case providerSDKTrack(Track)
 }
 
 public struct FederatedSearchItem: Identifiable, Sendable {
@@ -92,11 +103,13 @@ public struct FederatedSearchItem: Identifiable, Sendable {
     public nonisolated var service: FederatedService {
         switch payload {
         case .youtubeVideo:
-            return .youtube
+            .youtube
         case .youtubeMusic:
-            return .youtubeMusic
+            .youtubeMusic
         case .spotify, .spotifyArtist, .spotifyPlaylist:
-            return .spotify
+            .spotify
+        case .providerSDKTrack:
+            .providerSDK
         }
     }
 
@@ -147,12 +160,12 @@ public enum FederatedSearchError: LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .providerUnavailable(let message):
-            return message
+        case let .providerUnavailable(message):
+            message
         case .spotifyCredentialsMissing:
-            return "Spotify is not connected. Sign in via Settings → Spotify to enable full-quality search."
-        case .noPlayableStream(let message):
-            return message
+            "Spotify is not connected. Sign in via Settings → Spotify to enable full-quality search."
+        case let .noPlayableStream(message):
+            message
         }
     }
 }

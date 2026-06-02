@@ -5,7 +5,7 @@
 //  Created by Aarav Gupta on 05/12/25.
 //
 
-import DesignSystem
+import Aesthetics
 import SwiftUI
 
 #if os(iOS)
@@ -50,7 +50,6 @@ struct iOSTabView<SelectionValue: Hashable>: View {
         self.accentColor = accentColor
     }
 
-
     var body: some View {
         Group {
             if #available(iOS 26.0, *) {
@@ -82,7 +81,6 @@ struct iOSTabView<SelectionValue: Hashable>: View {
                 isSearchExpanded = isSearchSelected
             }
         }
-
     }
 
     private func isSearchTabSelection(_ value: SelectionValue) -> Bool {
@@ -90,6 +88,7 @@ struct iOSTabView<SelectionValue: Hashable>: View {
     }
 
     // MARK: - Native TabView (iOS 26+)
+
     @available(iOS 26.0, *)
     private var NativeTabView: some View {
         SwiftUI.TabView(selection: $selection) {
@@ -109,12 +108,12 @@ struct iOSTabView<SelectionValue: Hashable>: View {
     }
 
     // MARK: - TabView (iOS 17+)
+
     private var iOS26TabView: some View {
         ZStack {
             ZStack {
                 if let searchTab = tabs.first(where: { $0.role == .search }),
-                    selection == searchTab.value
-                {
+                   selection == searchTab.value {
                     searchTab.content
                 } else {
                     ForEach(tabs.filter { $0.role != .search }) { tab in

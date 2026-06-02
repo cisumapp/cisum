@@ -1,19 +1,14 @@
 import Foundation
+import Models
+import Search
 import SwiftData
 import YouTubeSDK
-import Models
 
-@MainActor
-public final class SearchCacheHintStore {
+@ModelActor
+public actor SearchCacheHintStore {
     public enum Scope: String, Sendable {
         case music
         case video
-    }
-
-    private let context: ModelContext
-
-    public init(context: ModelContext) {
-        self.context = context
     }
 
     public func cachedTopVideoIDs(
@@ -26,7 +21,8 @@ public final class SearchCacheHintStore {
               let entry = fetchEntry(for: normalized, scope: scope),
               Date().timeIntervalSince(entry.updatedAt) <= maxAge,
               let ids = decodeVideoIDs(from: entry.topVideoIDsData),
-              !ids.isEmpty else {
+              !ids.isEmpty
+        else {
             return []
         }
 
@@ -57,7 +53,7 @@ public final class SearchCacheHintStore {
         topLimit: Int = 8
     ) {
         let ids = results.compactMap { result -> String? in
-            if case .video(let video) = result {
+            if case let .video(video) = result {
                 return video.id
             }
             return nil
@@ -80,7 +76,7 @@ public final class SearchCacheHintStore {
 
         for entry in entries {
             if now.timeIntervalSince(entry.updatedAt) > maxAge {
-                context.delete(entry)
+                modelContext.delete(entry)
             }
         }
 
@@ -91,7 +87,7 @@ public final class SearchCacheHintStore {
 
             if sorted.count > maxEntries {
                 for entry in sorted.dropFirst(maxEntries) {
-                    context.delete(entry)
+                    modelContext.delete(entry)
                 }
             }
         }
@@ -105,7 +101,8 @@ public final class SearchCacheHintStore {
 
         let uniqueIDs = deduplicatedIDs(from: topVideoIDs)
         guard !uniqueIDs.isEmpty,
-              let encoded = encodeVideoIDs(uniqueIDs) else {
+              let encoded = encodeVideoIDs(uniqueIDs)
+        else {
             return
         }
 
@@ -127,7 +124,7 @@ public final class SearchCacheHintStore {
             scopeRawValue: scope.rawValue,
             topVideoIDsData: Data()
         )
-        context.insert(created)
+        modelContext.insert(created)
         return created
     }
 
@@ -137,12 +134,12 @@ public final class SearchCacheHintStore {
             predicate: #Predicate { $0.cacheKey == key }
         )
         descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        return try? modelContext.fetch(descriptor).first
     }
 
     private func allEntries() -> [SearchCacheHintEntry] {
         let descriptor = FetchDescriptor<SearchCacheHintEntry>()
-        return (try? context.fetch(descriptor)) ?? []
+        return (try? modelContext.fetch(descriptor)) ?? []
     }
 
     private func normalizedQuery(_ query: String) -> String {
@@ -177,6 +174,6 @@ public final class SearchCacheHintStore {
     }
 
     private func saveContext() {
-        try? context.save()
+        try? modelContext.save()
     }
 }

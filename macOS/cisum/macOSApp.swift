@@ -6,38 +6,45 @@
 //
 
 import Core
-import SwiftUI
-import YouTubeSDK
+import Models
+import Player
+import Search
 import SwiftData
-import Services
+import SwiftUI
 import Utilities
+import YouTubeSDK
 
 @main
 struct macOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    
+
     private let youtube = YouTube.shared
     private let cisum = cisumModule()
     @State private var searchOverlay = SearchOverlayController()
-    
+
     var body: some Scene {
         WindowGroup {
             cisum.rootView
+                .environment(\.playerViewModel, cisum.playerViewModel)
                 .environment(searchOverlay)
                 .tint(cisum.playerAccentColor)
                 .background {
                     backgroundFill
                 }
+                .onOpenURL { url in
+                    cisum.handleIncomingURL(url)
+                }
                 .clipShape(.rect(cornerRadius: 26, style: .continuous))
                 .removeWindowDecorations()
                 .modelContainer(cisum.modelContainer)
         }
-        .onChange(of: scenePhase) { oldPhase, newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
             cisum.handleScenePhaseChange(newPhase)
         }
-        
+
         Settings {
             cisum.settingsView
+                .environment(\.playerViewModel, cisum.playerViewModel)
         }
     }
 
@@ -55,23 +62,22 @@ struct macOSApp: App {
 
 extension View {
     func removeWindowDecorations() -> some View {
-        self
-            .background(WindowModifier())
+        background(WindowModifier())
     }
 }
 
 struct WindowModifier: NSViewRepresentable {
-    func makeNSView(context: Context) -> some NSView {
+    func makeNSView(context _: Context) -> some NSView {
         let view = NSView()
-        
+
         Task { @MainActor in
             configureWindow(for: view)
         }
-        
+
         return view
     }
-    
-    func updateNSView(_ nsView: NSViewType, context: Context) {
+
+    func updateNSView(_ nsView: NSViewType, context _: Context) {
         Task { @MainActor in
             configureWindow(for: nsView)
         }

@@ -6,16 +6,16 @@
 //
 
 import ActivityKit
-import WidgetKit
 import SwiftUI
+import WidgetKit
 
 struct LyricsAttributes: ActivityAttributes {
-    public struct ContentState: Codable, Hashable {
-        // Dynamic stateful properties about your activity go here!
+    struct ContentState: Codable, Hashable {
+        /// Dynamic stateful properties about your activity go here!
         var emoji: String
     }
 
-    // Fixed non-changing properties about your activity go here!
+    /// Fixed non-changing properties about your activity go here!
     var name: String
 }
 
@@ -56,24 +56,24 @@ struct LyricsLiveActivity: Widget {
     }
 }
 
-extension LyricsAttributes {
-    fileprivate static var preview: LyricsAttributes {
+private extension LyricsAttributes {
+    static var preview: LyricsAttributes {
         LyricsAttributes(name: "World")
     }
 }
 
-extension LyricsAttributes.ContentState {
-    fileprivate static var smiley: LyricsAttributes.ContentState {
+private extension LyricsAttributes.ContentState {
+    static var smiley: LyricsAttributes.ContentState {
         LyricsAttributes.ContentState(emoji: "😀")
-     }
-     
-     fileprivate static var starEyes: LyricsAttributes.ContentState {
-         LyricsAttributes.ContentState(emoji: "🤩")
-     }
+    }
+
+    static var starEyes: LyricsAttributes.ContentState {
+        LyricsAttributes.ContentState(emoji: "🤩")
+    }
 }
 
 #Preview("Notification", as: .content, using: LyricsAttributes.preview) {
-   LyricsLiveActivity()
+    LyricsLiveActivity()
 } contentStates: {
     LyricsAttributes.ContentState.smiley
     LyricsAttributes.ContentState.starEyes

@@ -9,7 +9,7 @@ public enum MediaProvider: String, Codable, CaseIterable, Sendable {
     case spotify
     case tidal
     case qobuz
-    
+
     // others
     case kuwo
     case kugou
@@ -27,4 +27,3 @@ public enum PlaylistSource: String, Codable, CaseIterable, Sendable {
     case qobuz
     case unknown
 }
-

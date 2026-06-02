@@ -1,21 +1,19 @@
 //
-//  DynamicPlayerIsland.swift
+//  DynamicPlayerIsland+macOS.swift
 //  cisum
 //
 //  Created by Aarav Gupta on 13/03/26.
 //
 
+import Aesthetics
 import Kingfisher
 import SwiftUI
-import Services
-import DesignSystem
 
 #if os(macOS)
 public struct DynamicPlayerIsland: View {
-@Environment(PlaybackServices.self) private var playbackServices
-    private var playerViewModel: any PlayerViewModelInterface { playbackServices.playerViewModel }
+    @Environment(\.playerViewModel) private var playerViewModel
     @Environment(\.isDynamicPlayerExpanded) private var isDynamicPlayerExpanded
-    
+
     public init() {}
 
     @State private var isHovering = false
@@ -24,10 +22,8 @@ public struct DynamicPlayerIsland: View {
 
     var isMiniPlayerExpanded: Bool {
         get { isDynamicPlayerExpanded.wrappedValue }
-        nonmutating set { isDynamicPlayerExpanded.wrappedValue = isLyricsExpanded }
+        nonmutating set { isDynamicPlayerExpanded.wrappedValue = newValue }
     }
-
-    
 
     public var body: some View {
         surface
@@ -44,18 +40,17 @@ public struct DynamicPlayerIsland: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             .animation(.playerExpandAnimation, value: presentationState)
             .environment(\.isDynamicPlayerExpanded, $isLyricsExpanded)
-
     }
 }
 
-extension DynamicPlayerIsland {
-    fileprivate enum PresentationState {
+fileprivate extension DynamicPlayerIsland {
+    enum PresentationState {
         case compact
         case controls
         case lyrics
     }
 
-    fileprivate enum Layout {
+    enum Layout {
         static let compactWidth: CGFloat = 260
         static let compactHeight: CGFloat = 60
         static let expandedWidth: CGFloat = 300
@@ -63,7 +58,7 @@ extension DynamicPlayerIsland {
         static let lyricsWidth: CGFloat = 425
     }
 
-    fileprivate var presentationState: PresentationState {
+    var presentationState: PresentationState {
         if isLyricsExpanded {
             return .lyrics
         }
@@ -71,35 +66,36 @@ extension DynamicPlayerIsland {
         return isHovering ? .controls : .compact
     }
 
-    fileprivate var panelWidth: CGFloat {
+    var panelWidth: CGFloat {
         switch presentationState {
         case .compact:
-            return Layout.compactWidth
+            Layout.compactWidth
         case .controls:
-            return Layout.expandedWidth
+            Layout.expandedWidth
         case .lyrics:
-            return Layout.lyricsWidth
+            Layout.lyricsWidth
         }
     }
 
-    fileprivate var panelHeight: CGFloat {
+    var panelHeight: CGFloat {
         switch presentationState {
         case .compact:
-            return Layout.compactHeight
+            Layout.compactHeight
         case .controls:
-            return Layout.expandedHeight
+            Layout.expandedHeight
         case .lyrics:
-            return .infinity
+            .infinity
         }
     }
 
     @ViewBuilder
-    fileprivate var surface: some View {
+    var surface: some View {
         if #available(macOS 26.0, *) {
             RoundedRectangle(cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50))
                 .glassEffect(
                     .regular,
-                    in: .rect(cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50)))
+                    in: .rect(cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50))
+                )
         } else {
             RoundedRectangle(
                 cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50), style: .circular
@@ -109,7 +105,7 @@ extension DynamicPlayerIsland {
     }
 
     @ViewBuilder
-    fileprivate var islandContent: some View {
+    var islandContent: some View {
         switch presentationState {
         case .compact:
             compactContent
@@ -120,7 +116,7 @@ extension DynamicPlayerIsland {
         }
     }
 
-    fileprivate var compactContent: some View {
+    var compactContent: some View {
         HStack(spacing: 10) {
             artwork(size: 44, cornerRadius: 22)
 
@@ -135,13 +131,13 @@ extension DynamicPlayerIsland {
 
             Image(systemName: "waveform")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
     }
 
-    fileprivate var controlsContent: some View {
+    var controlsContent: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 artwork(size: 48, cornerRadius: 10)
@@ -161,7 +157,7 @@ extension DynamicPlayerIsland {
         .padding(12)
     }
 
-    fileprivate var lyricsContent: some View {
+    var lyricsContent: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
                 artwork(size: 48, cornerRadius: 10)
@@ -185,11 +181,11 @@ extension DynamicPlayerIsland {
         .padding(12)
     }
 
-    fileprivate func artwork(size: CGFloat, cornerRadius: CGFloat) -> some View {
+    func artwork(size: CGFloat, cornerRadius: CGFloat) -> some View {
         KFImage(playerViewModel.currentImageURL)
             .placeholder {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.white.opacity(0.2))
+                    .fill(Color.cisumChromeSubtle)
             }
             .downsampling(size: CGSize(width: size * 2, height: size * 2))
             .resizable()
@@ -198,12 +194,12 @@ extension DynamicPlayerIsland {
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(.white.opacity(0.15), lineWidth: 1)
+                    .stroke(Color.cisumChromeBorder, lineWidth: 1)
             }
             .matchedGeometryEffect(id: "Artwork", in: namespace)
     }
 
-    fileprivate func songInfo(
+    func songInfo(
         titleFont: Font,
         artistFont: Font,
         titleLineLimit: Int,
@@ -212,19 +208,19 @@ extension DynamicPlayerIsland {
         VStack(alignment: .leading, spacing: 2) {
             Text(nowPlayingTitle)
                 .font(titleFont)
-                .foregroundStyle(.white.opacity(0.97))
+                .foregroundStyle(.primary)
                 .lineLimit(titleLineLimit)
 
             Text(nowPlayingArtist)
                 .font(artistFont)
-                .foregroundStyle(.white.opacity(0.76))
+                .foregroundStyle(.secondary)
                 .lineLimit(artistLineLimit)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .matchedGeometryEffect(id: "SongInfo", in: namespace)
     }
 
-    fileprivate var playbackProgress: some View {
+    var playbackProgress: some View {
         MusicProgressScrubber(
             mediaID: playerViewModel.currentVideoId,
             currentTime: playerViewModel.currentTime,
@@ -235,7 +231,7 @@ extension DynamicPlayerIsland {
         )
     }
 
-    fileprivate var playbackControls: some View {
+    var playbackControls: some View {
         HStack(spacing: 26) {
             lyricsToggle
 
@@ -247,10 +243,10 @@ extension DynamicPlayerIsland {
 
             volumeButton
         }
-        .foregroundStyle(.white.opacity(0.95))
+        .foregroundStyle(.primary)
     }
 
-    fileprivate var lyricsLines: some View {
+    var lyricsLines: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 6) {
                 if !playerViewModel.syncedLyricsLines.isEmpty {
@@ -260,7 +256,7 @@ extension DynamicPlayerIsland {
 
                         Text(line.text)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(isCurrentLyric ? 0.98 : 0.68))
+                            .foregroundStyle(.primary.opacity(isCurrentLyric ? 0.98 : 0.68))
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -268,7 +264,7 @@ extension DynamicPlayerIsland {
                     ForEach(Array(displayLyrics.enumerated()), id: \.offset) { _, line in
                         Text(line)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.68))
+                            .foregroundStyle(.primary.opacity(0.68))
                             .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -279,17 +275,17 @@ extension DynamicPlayerIsland {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    fileprivate var nowPlayingTitle: String {
+    var nowPlayingTitle: String {
         let cleaned = playerViewModel.currentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? "Not Playing" : cleaned
     }
 
-    fileprivate var nowPlayingArtist: String {
+    var nowPlayingArtist: String {
         let cleaned = playerViewModel.currentArtist.trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? "Unknown Artist" : cleaned
     }
 
-    fileprivate var displayLyrics: [String] {
+    var displayLyrics: [String] {
         let syncedLines = playerViewModel.syncedLyricsLines
             .map(\.text)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -301,9 +297,9 @@ extension DynamicPlayerIsland {
         if let plainLyricsText = playerViewModel.plainLyricsText {
             let plainLines =
                 plainLyricsText
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
             if !plainLines.isEmpty {
                 return plainLines
             }
@@ -312,14 +308,14 @@ extension DynamicPlayerIsland {
         switch playerViewModel.lyricsState {
         case .loading:
             return ["Loading lyrics..."]
-        case .unavailable(let message):
+        case let .unavailable(message):
             return [message]
         default:
             return ["Lyrics unavailable for this track."]
         }
     }
 
-    fileprivate var lyricsToggle: some View {
+    var lyricsToggle: some View {
         Button {
             withAnimation(.playerExpandAnimation) {
                 isLyricsExpanded.toggle()
@@ -332,7 +328,7 @@ extension DynamicPlayerIsland {
         .accessibilityLabel(isLyricsExpanded ? "Hide lyrics" : "Show lyrics")
     }
 
-    fileprivate var previous: some View {
+    var previous: some View {
         Button {
             playerViewModel.skipToPrevious()
         } label: {
@@ -345,7 +341,7 @@ extension DynamicPlayerIsland {
         .accessibilityLabel("Previous")
     }
 
-    fileprivate var togglePlayPause: some View {
+    var togglePlayPause: some View {
         Button {
             playerViewModel.togglePlayPause()
         } label: {
@@ -358,7 +354,7 @@ extension DynamicPlayerIsland {
         .accessibilityLabel(playerViewModel.isPlaying ? "Pause" : "Play")
     }
 
-    fileprivate var next: some View {
+    var next: some View {
         Button {
             playerViewModel.skipToNext()
         } label: {
@@ -371,9 +367,8 @@ extension DynamicPlayerIsland {
         .accessibilityLabel("Next")
     }
 
-    fileprivate var volumeButton: some View {
-        Button {
-        } label: {
+    var volumeButton: some View {
+        Button {} label: {
             Image(systemName: "speaker.wave.2.fill")
                 .font(.system(size: 18, weight: .semibold))
         }

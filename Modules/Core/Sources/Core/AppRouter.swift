@@ -1,5 +1,5 @@
+import Aesthetics
 import SwiftUI
-import DesignSystem
 import Utilities
 
 @Observable
@@ -19,11 +19,11 @@ public final class AppRouter: Router {
             onTabSwitch?(.library)
         case .search:
             onTabSwitch?(.search)
-        case .profile, .settings, .plugins, .playlist, .artist, .album, .login, .spotifyLogin:
+        case .profile, .settings, .plugins, .playlist, .artist, .album, .login, .spotifyLogin, .youtubeLogin:
             onPush?(route)
         }
     }
-    
+
     public func pop() {
         onPop?()
     }

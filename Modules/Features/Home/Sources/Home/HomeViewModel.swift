@@ -1,4 +1,5 @@
 import Utilities
+
 //
 //  HomeViewModel.swift
 //  cisum
@@ -9,6 +10,29 @@ import Utilities
 import Foundation
 import Observation
 import YouTubeSDK
+
+private class HomeFeedCache {
+    let topSongs: [HomeFeedItem]
+    let trending: [HomeFeedItem]
+    let items: [HomeFeedItem]
+    let continuationToken: String?
+    let loadedContinuationPages: Int
+    let seenItemKeys: Set<String>
+    let timestamp: Date
+
+    init(topSongs: [HomeFeedItem], trending: [HomeFeedItem], items: [HomeFeedItem], continuationToken: String?, loadedContinuationPages: Int, seenItemKeys: Set<String>, timestamp: Date) {
+        self.topSongs = topSongs
+        self.trending = trending
+        self.items = items
+        self.continuationToken = continuationToken
+        self.loadedContinuationPages = loadedContinuationPages
+        self.seenItemKeys = seenItemKeys
+        self.timestamp = timestamp
+    }
+}
+
+@MainActor
+private var sharedHomeCache: HomeFeedCache?
 
 @Observable
 @MainActor
@@ -26,6 +50,8 @@ final class HomeViewModel {
     private var lastPaginationTriggerAt: Date?
     private var lastPaginationTriggerToken: String?
 
+    var topSongs: [HomeFeedItem] = []
+    var trending: [HomeFeedItem] = []
     var items: [HomeFeedItem] = []
     var isLoading = false
     var isLoadingMore = false
@@ -50,7 +76,9 @@ final class HomeViewModel {
         await loadInitialFeed(force: true)
     }
 
-    func loadMoreIfNeeded(currentIndex: Int, totalCount: Int) {
+    func loadMoreIfNeeded(currentItem: HomeFeedItem) {
+        guard let currentIndex = items.firstIndex(where: { $0.id == currentItem.id }) else { return }
+        let totalCount = items.count
         guard totalCount > 0 else { return }
         let triggerIndex = max(totalCount - Pagination.threshold, 0)
         guard currentIndex >= triggerIndex else { return }
@@ -79,7 +107,19 @@ final class HomeViewModel {
 
     private func loadInitialFeed(force: Bool) async {
         if isLoading { return }
-        if didLoadInitialFeed && !force { return }
+        if didLoadInitialFeed, !force { return }
+        
+        if !force, let cache = sharedHomeCache, Date().timeIntervalSince(cache.timestamp) < 3600 {
+            self.topSongs = cache.topSongs
+            self.trending = cache.trending
+            self.items = cache.items
+            self.continuationToken = cache.continuationToken
+            self.loadedContinuationPages = cache.loadedContinuationPages
+            self.seenItemKeys = cache.seenItemKeys
+            self.isLoading = false
+            self.didLoadInitialFeed = true
+            return
+        }
 
         isLoading = true
         errorMessage = nil
@@ -88,6 +128,8 @@ final class HomeViewModel {
             loadedContinuationPages = 0
             continuationToken = nil
             seenItemKeys.removeAll(keepingCapacity: true)
+            topSongs.removeAll(keepingCapacity: true)
+            trending.removeAll(keepingCapacity: true)
         }
 
         defer {
@@ -100,21 +142,31 @@ final class HomeViewModel {
 
         async let musicSectionsResult = fetchMusicSections()
         async let mainHomeResult = fetchMainHomeContinuation()
+        async let topSongsResult = fetchTopSongs()
+        async let trendingResult = fetchTrending()
 
         switch await musicSectionsResult {
-        case .success(let musicSections):
+        case let .success(musicSections):
             mergedItems.append(contentsOf: mapMusicSections(musicSections))
-        case .failure(let error):
+        case let .failure(error):
             latestError = error
         }
 
         switch await mainHomeResult {
-        case .success(let homeContinuation):
+        case let .success(homeContinuation):
             continuationToken = homeContinuation.continuationToken
             mergedItems.append(contentsOf: mapMainItems(homeContinuation.items))
-        case .failure(let error):
+        case let .failure(error):
             continuationToken = nil
             latestError = latestError ?? error
+        }
+
+        if case let .success(songs) = await topSongsResult {
+            topSongs = songs.map { $0.asHomeFeedItem }
+        }
+
+        if case let .success(trends) = await trendingResult {
+            trending = trends.map { $0.asHomeFeedItem }
         }
 
         let hasItems = mergeItems(mergedItems, replacing: true)
@@ -128,6 +180,16 @@ final class HomeViewModel {
         if continuationToken == nil {
             footerMessage = "No more Home pages are available right now."
         }
+
+        sharedHomeCache = HomeFeedCache(
+            topSongs: topSongs,
+            trending: trending,
+            items: items,
+            continuationToken: continuationToken,
+            loadedContinuationPages: loadedContinuationPages,
+            seenItemKeys: seenItemKeys,
+            timestamp: Date()
+        )
     }
 
     private func fetchMusicSections() async -> Result<[YouTubeMusicSection], Error> {
@@ -143,6 +205,24 @@ final class HomeViewModel {
         do {
             let continuation = try await youtube.main.getHome()
             return .success(continuation)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func fetchTopSongs() async -> Result<[YouTubeChartItem], Error> {
+        do {
+            let songs = try await youtube.charts.getTopSongs(country: "US")
+            return .success(songs)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    private func fetchTrending() async -> Result<[YouTubeChartItem], Error> {
+        do {
+            let items = try await youtube.charts.getTrending(country: "US")
+            return .success(items)
         } catch {
             return .failure(error)
         }
@@ -167,13 +247,23 @@ final class HomeViewModel {
             loadedContinuationPages += 1
 
             let appended = mergeItems(mapMainItems(continuation.items), replacing: false)
-            if !appended && continuationToken == nil {
+            if !appended, continuationToken == nil {
                 footerMessage = "You're all caught up."
             }
 
             if loadedContinuationPages >= Pagination.maxPages {
                 footerMessage = "Showing the latest music recommendations for now."
             }
+
+            sharedHomeCache = HomeFeedCache(
+                topSongs: topSongs,
+                trending: trending,
+                items: items,
+                continuationToken: continuationToken,
+                loadedContinuationPages: loadedContinuationPages,
+                seenItemKeys: seenItemKeys,
+                timestamp: sharedHomeCache?.timestamp ?? Date()
+            )
         } catch {
             continuationToken = nil
             if items.isEmpty {
@@ -187,14 +277,14 @@ final class HomeViewModel {
     private func mapMusicSections(_ sections: [YouTubeMusicSection]) -> [HomeFeedItem] {
         sections.flatMap(\.items).compactMap { item in
             switch item {
-            case .song(let song):
-                return .musicSong(song)
-            case .album(let album):
-                return .musicAlbum(album)
-            case .artist(let artist):
-                return .musicArtist(artist)
-            case .playlist(let playlist):
-                return .musicPlaylist(playlist)
+            case let .song(song):
+                .musicSong(song)
+            case let .album(album):
+                .musicAlbum(album)
+            case let .artist(artist):
+                .musicArtist(artist)
+            case let .playlist(playlist):
+                .musicPlaylist(playlist)
             }
         }
     }
@@ -238,26 +328,26 @@ enum HomeFeedItem: Identifiable {
 
     var stableKey: String {
         switch self {
-        case .musicSong(let song):
-            return "media:\(song.videoId)"
-        case .musicAlbum(let album):
-            return "album:\(album.id)"
-        case .musicArtist(let artist):
-            return "artist:\(artist.id)"
-        case .musicPlaylist(let playlist):
-            return "playlist:\(playlist.id)"
-        case .main(let item):
+        case let .musicSong(song):
+            "media:\(song.videoId)"
+        case let .musicAlbum(album):
+            "album:\(album.id)"
+        case let .musicArtist(artist):
+            "artist:\(artist.id)"
+        case let .musicPlaylist(playlist):
+            "playlist:\(playlist.id)"
+        case let .main(item):
             switch item {
-            case .video(let video):
-                return "media:\(video.id)"
-            case .song(let song):
-                return "media:\(song.videoId)"
-            case .playlist(let playlist):
-                return "playlist:\(playlist.id)"
-            case .channel(let channel):
-                return "channel:\(channel.id)"
-            case .shelf(let shelf):
-                return "shelf:\(shelf.title.lowercased())"
+            case let .video(video):
+                "media:\(video.id)"
+            case let .song(song):
+                "media:\(song.videoId)"
+            case let .playlist(playlist):
+                "playlist:\(playlist.id)"
+            case let .channel(channel):
+                "channel:\(channel.id)"
+            case let .shelf(shelf):
+                "shelf:\(shelf.title.lowercased())"
             }
         }
     }
@@ -268,6 +358,12 @@ struct HomeFeedDisplayItem: Identifiable, Equatable {
     let title: String
     let subtitle: String
     let symbolName: String
+    let artworkURL: URL?
+    let duration: String?
+
+    static func == (lhs: HomeFeedDisplayItem, rhs: HomeFeedDisplayItem) -> Bool {
+        lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle
+    }
 }
 
 extension HomeFeedItem {
@@ -275,15 +371,19 @@ extension HomeFeedItem {
         let title: String
         let subtitle: String
         let symbolName: String
+        let artworkURL: URL?
+        var formattedDuration: String?
 
         switch self {
-        case .musicSong(let song):
+        case let .musicSong(song):
             title = normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
             let album = song.album ?? "Single"
             subtitle = "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
             symbolName = "music.note"
+            artworkURL = song.thumbnailURL
+            formattedDuration = song.duration.map { Self.formatDuration($0) }
 
-        case .musicAlbum(let album):
+        case let .musicAlbum(album):
             title = normalizedMusicDisplayTitle(album.title, artist: album.artist)
             let artist = album.artist ?? "Album"
             if let year = album.year, !year.isEmpty {
@@ -292,13 +392,17 @@ extension HomeFeedItem {
                 subtitle = artist
             }
             symbolName = "square.stack.fill"
+            artworkURL = album.thumbnailURL
+            formattedDuration = nil
 
-        case .musicArtist(let artist):
+        case let .musicArtist(artist):
             title = normalizedMusicDisplayTitle(artist.name)
             subtitle = artist.subscriberCount ?? "Artist"
             symbolName = "person.crop.square"
+            artworkURL = artist.thumbnailURL
+            formattedDuration = nil
 
-        case .musicPlaylist(let playlist):
+        case let .musicPlaylist(playlist):
             title = normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
             let author = playlist.author ?? "Playlist"
             if let count = playlist.count, !count.isEmpty {
@@ -307,34 +411,50 @@ extension HomeFeedItem {
                 subtitle = author
             }
             symbolName = "music.note.list"
+            artworkURL = playlist.thumbnailURL
+            formattedDuration = nil
 
-        case .main(let sourceItem):
+        case let .main(sourceItem):
             switch sourceItem {
-            case .video(let video):
+            case let .video(video):
                 title = normalizedMusicDisplayTitle(video.title, artist: video.author)
                 subtitle = normalizedMusicDisplayArtist(video.author, title: video.title)
                 symbolName = "play.rectangle.fill"
+                artworkURL = video.thumbnailURL.flatMap { URL(string: $0) }
+                if let secs = Double(video.lengthInSeconds) {
+                    formattedDuration = Self.formatDuration(secs)
+                } else {
+                    formattedDuration = nil
+                }
 
-            case .song(let song):
+            case let .song(song):
                 title = normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay)
                 let album = song.album ?? "Single"
                 subtitle = "\(normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title)) • \(album)"
                 symbolName = "music.note"
+                artworkURL = song.thumbnailURL
+                formattedDuration = song.duration.map { Self.formatDuration($0) }
 
-            case .playlist(let playlist):
+            case let .playlist(playlist):
                 title = normalizedMusicDisplayTitle(playlist.title, artist: playlist.author)
                 subtitle = playlist.author ?? "Playlist"
                 symbolName = "music.note.list"
+                artworkURL = playlist.thumbnailURL
+                formattedDuration = nil
 
-            case .channel(let channel):
+            case let .channel(channel):
                 title = normalizedMusicDisplayTitle(channel.title)
                 subtitle = channel.subscriberCount ?? "Channel"
                 symbolName = "person.crop.circle"
+                artworkURL = channel.thumbnailURL
+                formattedDuration = nil
 
-            case .shelf(let shelf):
+            case let .shelf(shelf):
                 title = normalizedMusicDisplayTitle(shelf.title)
                 subtitle = "\(shelf.items.count) item\(shelf.items.count == 1 ? "" : "s")"
                 symbolName = "square.grid.2x2.fill"
+                artworkURL = nil
+                formattedDuration = nil
             }
         }
 
@@ -342,7 +462,31 @@ extension HomeFeedItem {
             id: stableKey,
             title: title,
             subtitle: subtitle,
-            symbolName: symbolName
+            symbolName: symbolName,
+            artworkURL: artworkURL,
+            duration: formattedDuration
         )
+    }
+
+    private static func formatDuration(_ seconds: TimeInterval) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return "\(mins):\(String(format: "%02d", secs))"
+    }
+}
+
+extension YouTubeChartItem {
+    var asHomeFeedItem: HomeFeedItem {
+        let song = YouTubeMusicSong(
+            id: self.id,
+            title: self.title,
+            artists: [self.subtitle],
+            album: nil,
+            duration: nil,
+            thumbnailURL: self.thumbnailURL,
+            videoId: self.id,
+            isExplicit: false
+        )
+        return .musicSong(song)
     }
 }

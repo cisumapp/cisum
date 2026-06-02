@@ -1,15 +1,23 @@
+import Aesthetics
+import ClerkKit
 import SwiftUI
-import Services
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 public struct LoginView: View {
     enum Step {
         case email, password, profile
     }
 
-    @Environment(UserServices.self) private var userServices
+    @Environment(AuthService.self) private var authService
+    public var onLoginSuccess: ((_ signup: Bool) async -> Void)?
 
     @State private var step: Step = .email
     @State private var isNewUser = false
+    @State private var isOAuthFlow = false
     @State private var email = ""
     @State private var password = ""
     @State private var firstName = ""
@@ -17,15 +25,13 @@ public struct LoginView: View {
     @State private var username = ""
     @State private var errorMessage: String?
 
-    private var authService: AuthService { userServices.authService }
-    private var supabaseService: SupabaseService { userServices.supabaseService }
-    private var analyticsService: AnalyticsService { userServices.analyticsService }
+    private static let bg = Color.cisumBg
+    private static let fieldBg = Color.cisumSurface
+    private static let highlights = Color.cisumAccent
 
-    private static let bg = Color(red: 32/255, green: 34/255, blue: 46/255)
-    private static let fieldBg = Color(red: 40/255, green: 43/255, blue: 58/255)
-    private static let highlights = Color(red: 162/255, green: 133/255, blue: 80/255)
-
-    public init() {}
+    public init(onLoginSuccess: ((_ signup: Bool) async -> Void)? = nil) {
+        self.onLoginSuccess = onLoginSuccess
+    }
 
     public var body: some View {
         ZStack {
@@ -44,16 +50,16 @@ public struct LoginView: View {
                             } label: {
                                 Image(systemName: "chevron.left")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                             }
                             .transition(.opacity.combined(with: .scale(scale: 0.8)))
                         }
 
                         Text(title)
                             .font(.title2)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                             .fontWeight(.bold)
-                            .fontWidth(.expanded)
+//                            .fontWidth(.expanded)
                             .contentTransition(.numericText())
                     }
 
@@ -83,9 +89,9 @@ public struct LoginView: View {
                     socialSection
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                
+
                 Spacer()
-                
+
                 if step == .email {
                     continueAsGuest
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -95,7 +101,6 @@ public struct LoginView: View {
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: step)
         .onChange(of: email) { _, _ in isNewUser = false }
-        .onAppear { prefetchHomeData() }
         .loginTabBarHidden()
     }
 
@@ -106,15 +111,15 @@ public struct LoginView: View {
             fieldLabel("Email")
             TextField("", text: $email)
                 .textFieldStyle(.plain)
-                #if os(iOS)
+            #if os(iOS)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
-                #endif
+            #endif
                 .textContentType(.emailAddress)
                 .padding(12)
                 .background(Self.fieldBg)
                 .cornerRadius(6)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
         }
     }
 
@@ -127,7 +132,7 @@ public struct LoginView: View {
                 .padding(12)
                 .background(Self.fieldBg)
                 .cornerRadius(6)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
         }
     }
 
@@ -137,37 +142,37 @@ public struct LoginView: View {
                 fieldLabel("First Name")
                 TextField("First", text: $firstName)
                     .textFieldStyle(.plain)
-                    #if os(iOS)
+                #if os(iOS)
                     .textInputAutocapitalization(.words)
-                    #endif
+                #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Last Name")
                 TextField("Last", text: $lastName)
                     .textFieldStyle(.plain)
-                    #if os(iOS)
+                #if os(iOS)
                     .textInputAutocapitalization(.words)
-                    #endif
+                #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Username")
                 TextField("@username", text: $username)
                     .textFieldStyle(.plain)
-                    #if os(iOS)
+                #if os(iOS)
                     .textInputAutocapitalization(.never)
-                    #endif
+                #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
             }
         }
     }
@@ -178,8 +183,8 @@ public struct LoginView: View {
         Text(text)
             .font(.title2)
             .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .fontWidth(.expanded)
+            .foregroundStyle(.primary)
+//            .fontWidth(.expanded)
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -202,7 +207,7 @@ public struct LoginView: View {
             Group {
                 if authService.isLoading {
                     HStack(spacing: 8) {
-                        ProgressView().progressViewStyle(.circular).tint(.white)
+                        ProgressView().progressViewStyle(.circular).tint(.primary)
                         Text(loadingLabel)
                     }
                 } else {
@@ -211,11 +216,11 @@ public struct LoginView: View {
                 }
             }
             .font(.system(size: 16, weight: .semibold))
-            .fontWidth(.expanded)
+//            .fontWidth(.expanded)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(isActionDisabled ? Self.highlights.opacity(0.4) : Self.highlights)
-            .foregroundColor(.white)
+            .foregroundColor(.primary)
             .cornerRadius(50)
             .disabled(isActionDisabled)
             .animation(.easeInOut(duration: 0.2), value: isActionDisabled)
@@ -226,44 +231,34 @@ public struct LoginView: View {
     private var socialSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 1)
-                Text("or").foregroundColor(.gray).font(.system(size: 14))
-                Rectangle().fill(Color.gray.opacity(0.3)).frame(height: 1)
+                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                Text("or").foregroundColor(.secondary).font(.system(size: 14))
+                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
             }
 
-            Button(action: handleAppleSignIn) {
-                HStack {
-                    Image(systemName: "applelogo").font(.system(size: 20))
-                    Text("Continue with Apple").font(.system(size: 16, weight: .semibold))
-                }
+            AppleSignInButton(action: handleAppleSignIn)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.white)
-                .foregroundColor(.black)
-                .cornerRadius(50)
-                .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
+                .frame(height: 52) // Approximate height for standard buttons
 
             Button(action: handleGoogleSignIn) {
                 HStack {
                     Image("googlelogo")
                         .resizable()
                         .frame(width: 18, height: 18)
-                    
+
                     Text("Continue with Google").font(.system(size: 16, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Color.white)
-                .foregroundColor(.black)
+                .background(Self.fieldBg)
+                .foregroundColor(.primary)
                 .cornerRadius(50)
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
         }
     }
-    
+
     private var continueAsGuest: some View {
         Button(action: { authService.enterGuestMode() }) {
             Text("Continue as guest")
@@ -279,25 +274,25 @@ public struct LoginView: View {
 
     private var title: String {
         switch step {
-        case .email:    ""
+        case .email: ""
         case .password: isNewUser ? "Create a password" : "Enter your password"
-        case .profile:  "Almost there"
+        case .profile: "Almost there"
         }
     }
 
     private var actionLabel: String {
         switch step {
-        case .email:    "Next"
+        case .email: "Next"
         case .password: "Continue"
-        case .profile:  "Create Account"
+        case .profile: "Create Account"
         }
     }
 
     private var loadingLabel: String {
         switch step {
-        case .email:    "Next"
+        case .email: "Next"
         case .password: isNewUser ? "Continue" : "Signing In..."
-        case .profile:  "Creating Account..."
+        case .profile: "Creating Account..."
         }
     }
 
@@ -342,7 +337,11 @@ public struct LoginView: View {
         case .password:
             attemptSignIn()
         case .profile:
-            signUp()
+            if isOAuthFlow {
+                completeOAuthSignUp()
+            } else {
+                signUp()
+            }
         }
     }
 
@@ -351,11 +350,11 @@ public struct LoginView: View {
             let result = await authService.signInWithEmailPassword(email: email, password: password)
             switch result {
             case .success:
-                await syncAndTrack(signup: false)
-            case .accountNotFound:
+                if let onLoginSuccess { await onLoginSuccess(false) }
+            case .accountNotFound, .needsProfile:
                 isNewUser = true
                 withAnimation { step = .profile }
-            case .failed(let message):
+            case let .failed(message):
                 errorMessage = message
             }
         }
@@ -367,67 +366,72 @@ public struct LoginView: View {
                 email: email, password: password,
                 firstName: firstName, lastName: lastName.isEmpty ? nil : lastName
             )
-            if ok { await syncAndTrack(signup: true) }
-            else { errorMessage = authService.error?.localizedDescription ?? "Sign-up failed" }
+            if ok {
+                if let onLoginSuccess { await onLoginSuccess(true) }
+            } else { errorMessage = authService.error?.localizedDescription ?? "Sign-up failed" }
+        }
+    }
+
+    private func completeOAuthSignUp() {
+        Task {
+            let result = await authService.completeOAuthSignUp(username: username, firstName: firstName, lastName: lastName)
+            switch result {
+            case .success:
+                if let onLoginSuccess { await onLoginSuccess(true) }
+            case let .failed(message):
+                errorMessage = message
+            case .accountNotFound, .needsProfile:
+                errorMessage = "An unexpected error occurred during OAuth profile completion."
+            }
         }
     }
 
     private func handleAppleSignIn() {
         errorMessage = nil
         Task {
-            let ok = await authService.signInWithApple()
-            if ok { await syncAndTrack(signup: false) }
-            else { errorMessage = authService.error?.localizedDescription ?? "Apple sign-in failed" }
+            let result = await authService.signInWithApple()
+            switch result {
+            case .success:
+                if let onLoginSuccess { await onLoginSuccess(false) }
+            case .needsProfile:
+                isNewUser = true
+                isOAuthFlow = true
+                withAnimation { step = .profile }
+            case .accountNotFound:
+                break
+            case let .failed(message):
+                errorMessage = message
+            }
         }
     }
 
     private func handleGoogleSignIn() {
         errorMessage = nil
         Task {
-            let ok = await authService.signInWithGoogle()
-            if ok { await syncAndTrack(signup: false) }
-            else { errorMessage = authService.error?.localizedDescription ?? "Google sign-in failed" }
-        }
-    }
-
-    private func syncAndTrack(signup: Bool) async {
-        guard let user = authService.user else { return }
-        do {
-            try await supabaseService.syncUserFromClerk(
-                clerkUserId: user.id,
-                email: user.emailAddresses.first?.emailAddress,
-                fullName: user.fullName,
-                username: user.username,
-                imageUrl: user.imageUrl
-            )
-        } catch {
-            errorMessage = "Failed to sync: \(error.localizedDescription)"
-            return
-        }
-        analyticsService.identify(userId: user.id, properties: [
-            "email": user.emailAddresses.first?.emailAddress ?? "",
-            "name": user.fullName,
-            "signup": signup
-        ])
-        analyticsService.captureEvent(
-            signup ? "user_signed_up" : "user_signed_in",
-            properties: ["email": email]
-        )
-    }
-
-    private func prefetchHomeData() {
-        Task.detached(priority: .utility) {
-            // await homeDataService.prefetch()
+            let result = await authService.signInWithGoogle()
+            switch result {
+            case .success:
+                if let onLoginSuccess { await onLoginSuccess(false) }
+            case .needsProfile:
+                isNewUser = true
+                isOAuthFlow = true
+                withAnimation { step = .profile }
+            case .accountNotFound:
+                break
+            case let .failed(message):
+                errorMessage = message
+            }
         }
     }
 }
 
 // MARK: - View Modifiers
+
 private extension View {
     @ViewBuilder
     func loginTabBarHidden() -> some View {
         #if os(iOS)
-        self.toolbar(.hidden, for: .tabBar)
+        toolbar(.hidden, for: .tabBar)
         #else
         self
         #endif
@@ -436,10 +440,5 @@ private extension View {
 
 #Preview {
     LoginView()
-        .environment(UserServices(
-            spotifySessionCoordinator: SpotifySessionCoordinator(),
-            authService: AuthService(checksSessionOnInit: false),
-            supabaseService: SupabaseService(),
-            analyticsService: AnalyticsService()
-        ))
+        .environment(AuthService(checksSessionOnInit: false))
 }
