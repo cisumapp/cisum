@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "qobuz",
+    "name": "Qobuz",
+    "version": "1.0.0",
+    "description": "Qobuz search manifest with high-resolution quality metadata.",
+    "documentationURL": "https://developer.qobuz.com/"
+  },
+  "capabilities": {
+    "search": true,
+    "streaming": true,
+    "album_lookup": true,
+    "artist_lookup": true,
+    "playlist_lookup": false,
+    "lyrics": false,
+    "isrc_lookup": true
+  },
+  "supportedQualities": [
+    "standard",
+    "high",
+    "lossless",
+    "hiResLossless"
+  ],
+  "supportedCodecs": [
+    "flac",
+    "aac"
+  ],
+  "network": {
+    "baseURL": "https://www.qobuz.com/api.json/0.2",
+    "headers": {
+      "Accept": "application/json"
+    }
+  },
+  "search": {
+    "tracks": {
+      "path": "/track/search",
+      "method": "GET",
+      "parameters": {
+        "query": "{{query}}",
+        "limit": "{{limit}}",
+        "offset": "{{offset}}"
+      },
+      "response": {
+        "items": "tracks.items",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "performer.name",
+          "duration": "duration"
+        }
+      }
+    },
+    "albums": {
+      "path": "/album/search",
+      "method": "GET",
+      "parameters": {
+        "query": "{{query}}",
+        "limit": "{{limit}}",
+        "offset": "{{offset}}"
+      },
+      "response": {
+        "items": "albums.items",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "artist.name"
+        }
+      }
+    }
+  },
+  "authentication": {
+    "type": "apiKey",
+    "requires": false
+  },
+  "features": {
+    "editorial_search": true,
+    "booklets": true,
+    "hires_metadata": true
+  },
+  "rateLimit": 120,
+  "hasGeographicalRestrictions": true,
+  "nativeProvider": "QobuzProvider",
+  "secrets": {
+    "app_id": "312369995",
+    "user_token": "xDkvXFh-sRSrmN-s5rSdL4Dooppx4Q7G6VgnviHcxpBBv_RHxKmCKx1_XANKmz6IDVBtgBcwQHFWJgJObLpiJw",
+    "fallback_user_token": "XX7seyZt4OaHGPgksFUldL2Ig0cH6jqcKSAfOAiAGBzw1HosDl9vfQTGRQEo2zkkcwP9ADc3L20nYNaI0l7E4g",
+    "qobuz_secret": "e79f8b9be485692b0e5f9dd895826368"
+  }
+}

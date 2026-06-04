@@ -21,13 +21,19 @@ public struct SettingsView: View {
         avgResolveMs: 0,
         avgTapToPlayMs: 0,
         resolveSampleCount: 0,
-        tapToPlaySampleCount: 0
+        tapToPlaySampleCount: 0,
+        totalStallCount: 0
     )
 
     @State private var isSigningOut: Bool = false
 
     public var body: some View {
         Form {
+            Section("Player") {
+                // add toggle for vinyl
+                // add slider for managing vinyl speed
+            }
+
             Section("Prefetch") {
                 Toggle("Adaptive Prefetch", isOn: Bindable(settings).adaptivePrefetchEnabled)
 
@@ -175,8 +181,10 @@ public struct SettingsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.cisumBg.ignoresSafeArea())
         .navigationTitle("Settings")
-        .contentMargins(.bottom, 140)
+        .contentMargins(.bottom, 50)
         .task {
             await refreshMetrics()
         }

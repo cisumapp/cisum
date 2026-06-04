@@ -37,13 +37,14 @@ struct PlayerBackground: View {
                                 accentColor: playerViewModel.currentAccentColor,
                                 content: {
                                     KFImage(playerViewModel.currentImageURL)
-                                        .downsampling(size: CGSize(width: 1400, height: 1400))
+                                        .downsampling(size: CGSize(width: 300, height: 300))
                                         .resizable()
                                         .scaledToFill()
                                 },
                                 previous: {
                                     if let pvm = playerViewModel as? PlayerViewModel, let previous = pvm.previousQueuePreviewItem {
                                         KFImage(previous.artworkURL)
+                                            .downsampling(size: CGSize(width: 120, height: 120))
                                             .resizable()
                                             .scaledToFill()
                                     } else {
@@ -53,6 +54,7 @@ struct PlayerBackground: View {
                                 upnext: {
                                     if let pvm = playerViewModel as? PlayerViewModel, let next = pvm.nextQueuePreviewItem {
                                         KFImage(next.artworkURL)
+                                            .downsampling(size: CGSize(width: 120, height: 120))
                                             .resizable()
                                             .scaledToFill()
                                     } else {

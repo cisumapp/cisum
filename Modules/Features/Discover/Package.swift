@@ -6,10 +6,10 @@ let package = Package(
     name: "Discover",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
-        .library(name: "Discover", targets: ["Discover"])
+        .library(name: "Discover", targets: ["Discover"]),
     ],
     dependencies: [
         .package(path: "../../Shared/Aesthetics"),
@@ -17,7 +17,7 @@ let package = Package(
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
         .package(path: "../Player"),
-        .package(path: "../Tracks")
+        .package(path: "../Tracks"),
     ],
     targets: [
         .target(
@@ -28,9 +28,9 @@ let package = Package(
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "Player", package: "Player"),
-                .product(name: "Tracks", package: "Tracks")
+                .product(name: "Tracks", package: "Tracks"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

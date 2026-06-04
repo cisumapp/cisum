@@ -6,10 +6,10 @@ let package = Package(
     name: "Profile",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
-        .library(name: "Profile", targets: ["Profile"])
+        .library(name: "Profile", targets: ["Profile"]),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
@@ -23,7 +23,7 @@ let package = Package(
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
-        .package(url: "https://github.com/PostHog/posthog-ios.git", .upToNextMajor(from: "3.0.0"))
+        .package(url: "https://github.com/PostHog/posthog-ios.git", .upToNextMajor(from: "3.0.0")),
     ],
     targets: [
         .target(
@@ -40,9 +40,9 @@ let package = Package(
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "SpotifySDK", package: "SpotifySDK"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
-                .product(name: "PostHog", package: "posthog-ios")
+                .product(name: "PostHog", package: "posthog-ios"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

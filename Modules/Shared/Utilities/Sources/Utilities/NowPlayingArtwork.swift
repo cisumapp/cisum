@@ -20,7 +20,7 @@ public nonisolated func normalizedITunesArtworkURL(from artworkURLString: String
     let candidates = [
         decoded.replacingOccurrences(of: "100x100", with: "1500x1500"),
         decoded.replacingOccurrences(of: "100bb", with: "1500bb"),
-        decoded.replacingOccurrences(of: "%7Bw%7Dx%7Bh%7Dbb.%7Bf%7D", with: "1500x1500bb.jpg")
+        decoded.replacingOccurrences(of: "%7Bw%7Dx%7Bh%7Dbb.%7Bf%7D", with: "1500x1500bb.jpg"),
     ]
 
     for candidate in candidates {
@@ -67,7 +67,8 @@ public nonisolated func motionArtworkCatalogAlbumCacheKey(catalogAlbumID: String
 
 public nonisolated func motionArtworkVideoCacheID(mediaID: String, albumCacheKey: String?, sourceURL: URL) -> String {
     if let albumCacheKey,
-       !albumCacheKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+       !albumCacheKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
         return "album-\(stableMotionArtworkHash(albumCacheKey))"
     }
 

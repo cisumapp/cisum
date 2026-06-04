@@ -30,6 +30,10 @@ public final class Song {
 
     public var youtubeVideoID: String?
     public var youtubeMusicVideoID: String?
+    public var tidalID: String?
+    public var qobuzID: String?
+    public var soundcloudID: String?
+    public var deezerID: String?
 
     public var appleMusicSongID: String?
 
@@ -39,6 +43,12 @@ public final class Song {
 
     public var createdAt: Date
     public var updatedAt: Date
+
+    @Relationship(deleteRule: .nullify)
+    public var artist: Artist?
+
+    @Relationship(deleteRule: .nullify)
+    public var album: Album?
 
     public init(
         songID: String = UUID().uuidString,
@@ -57,6 +67,10 @@ public final class Song {
         spotifyPreviewURLString: String? = nil,
         youtubeVideoID: String? = nil,
         youtubeMusicVideoID: String? = nil,
+        tidalID: String? = nil,
+        qobuzID: String? = nil,
+        soundcloudID: String? = nil,
+        deezerID: String? = nil,
         appleMusicSongID: String? = nil,
         preferredFallbackProviderRawValue: String? = nil,
         cachedFallbackMediaID: String? = nil,
@@ -80,6 +94,10 @@ public final class Song {
         self.spotifyPreviewURLString = spotifyPreviewURLString
         self.youtubeVideoID = youtubeVideoID
         self.youtubeMusicVideoID = youtubeMusicVideoID
+        self.tidalID = tidalID
+        self.qobuzID = qobuzID
+        self.soundcloudID = soundcloudID
+        self.deezerID = deezerID
         self.appleMusicSongID = appleMusicSongID
         self.preferredFallbackProviderRawValue = preferredFallbackProviderRawValue
         self.cachedFallbackMediaID = cachedFallbackMediaID

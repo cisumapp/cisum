@@ -32,7 +32,7 @@ public struct PluginsView: View {
                 Button("Apply Now") {
                     PluginsLog.info("Applying playback configuration from PluginsView", context: [
                         "provider_sdk_enabled": String(providerSDKEnabled),
-                        "youtube_fallback_enabled": String(youtubeFallbackEnabled)
+                        "youtube_fallback_enabled": String(youtubeFallbackEnabled),
                     ])
                     applyPlaybackConfiguration()
                 }
@@ -69,7 +69,7 @@ public struct PluginsView: View {
                         ForEach(Self.sampleManifests) { sample in
                             Button(sample.label) {
                                 PluginsLog.info("Import bundled manifest button tapped", context: [
-                                    "file_name": sample.fileName
+                                    "file_name": sample.fileName,
                                 ])
                                 Task { await importBundledManifest(sample.fileName) }
                             }
@@ -85,7 +85,7 @@ public struct PluginsView: View {
                 HStack {
                     Button {
                         PluginsLog.info("Import manifest button tapped", context: [
-                            "url": manifestURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+                            "url": manifestURLString.trimmingCharacters(in: .whitespacesAndNewlines),
                         ])
                         Task { await importManifest() }
                     } label: {
@@ -158,6 +158,8 @@ public struct PluginsView: View {
                 LabeledContent("YouTube Fallback", value: youtubeFallbackEnabled ? "Enabled" : "Disabled")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.cisumBg.ignoresSafeArea())
         .navigationTitle("Plugins")
         .onAppear {
             applyPlaybackConfiguration()
@@ -180,10 +182,11 @@ public struct PluginsView: View {
     }
 
     private static let sampleManifests: [SampleManifest] = [
+        .init(fileName: "soundcloud", label: "SoundCloud"),
         .init(fileName: "tidal", label: "TIDAL"),
         .init(fileName: "qobuz", label: "Qobuz"),
         .init(fileName: "deezer", label: "Deezer"),
-        .init(fileName: "kuwo", label: "Kuwo")
+        .init(fileName: "kuwo", label: "Kuwo"),
     ]
 
     private var shareURL: URL? {
@@ -235,13 +238,13 @@ public struct PluginsView: View {
             let manifest = try await manifestStore.importManifest(from: url)
             PluginsLog.info("Manifest import completed", context: [
                 "provider_id": manifest.id,
-                "provider_name": manifest.name
+                "provider_name": manifest.name,
             ])
         } catch {
             manifestStore.setErrorMessage(error.localizedDescription)
             PluginsLog.error("Manifest import failed", context: [
                 "url": url.absoluteString,
-                "error": error.localizedDescription
+                "error": error.localizedDescription,
             ])
         }
     }
@@ -259,20 +262,20 @@ public struct PluginsView: View {
 
         PluginsLog.info("Importing bundled manifest", context: [
             "file_name": fileName,
-            "url": url.absoluteString
+            "url": url.absoluteString,
         ])
 
         do {
             let manifest = try await manifestStore.importManifest(from: url)
             PluginsLog.info("Bundled manifest import completed", context: [
                 "provider_id": manifest.id,
-                "provider_name": manifest.name
+                "provider_name": manifest.name,
             ])
         } catch {
             manifestStore.setErrorMessage(error.localizedDescription)
             PluginsLog.error("Bundled manifest import failed", context: [
                 "file_name": fileName,
-                "error": error.localizedDescription
+                "error": error.localizedDescription,
             ])
         }
     }
@@ -288,7 +291,7 @@ public struct PluginsView: View {
     private func applyPlaybackConfiguration() {
         PluginsLog.debug("Applying playback configuration", context: [
             "provider_sdk_enabled": String(providerSDKEnabled),
-            "youtube_fallback_enabled": String(youtubeFallbackEnabled)
+            "youtube_fallback_enabled": String(youtubeFallbackEnabled),
         ])
         Plugins.reconfigurePlaybackURLResolver(
             includeProviderSDK: providerSDKEnabled,

@@ -197,7 +197,7 @@ private nonisolated func musicNoiseKeywords() -> [String] {
         "audio",
         "music video",
         "mv",
-        "provided to youtube by"
+        "provided to youtube by",
     ]
 }
 
@@ -207,7 +207,8 @@ private nonisolated func artistNoiseKeywords() -> [String] {
 
 public nonisolated func resolvedMusicRegionCode() -> String {
     if let code = Locale.current.region?.identifier.trimmingCharacters(in: .whitespacesAndNewlines),
-       code.count == 2 {
+       code.count == 2
+    {
         return code.uppercased()
     }
     return "ZZ"
@@ -221,13 +222,15 @@ public nonisolated func resolvedInnerTubeRegionCode() -> String? {
 public nonisolated func resolvedInnerTubeLanguageCode() -> String {
     if #available(iOS 16.0, macOS 13.0, *) {
         if let code = Locale.current.language.languageCode?.identifier,
-           !code.isEmpty {
+           !code.isEmpty
+        {
             return code.lowercased()
         }
     }
 
     if let legacyCode = Locale.current.languageCode,
-       !legacyCode.isEmpty {
+       !legacyCode.isEmpty
+    {
         return legacyCode.lowercased()
     }
 
@@ -272,7 +275,7 @@ public nonisolated func isLikelyArtistChannelName(_ channelName: String) -> Bool
         "records",
         "music",
         "band",
-        "orchestra"
+        "orchestra",
     ]
 
     let blockedSignals = [
@@ -281,7 +284,7 @@ public nonisolated func isLikelyArtistChannelName(_ channelName: String) -> Bool
         "reaction",
         "review",
         "tutorial",
-        "vlog"
+        "vlog",
     ]
 
     if blockedSignals.contains(where: { normalizedName.contains($0) }) {
@@ -306,7 +309,7 @@ public nonisolated func isLikelyMusicMetadata(title: String, secondaryText: Stri
         "interview",
         "tutorial",
         "gameplay",
-        "gaming"
+        "gaming",
     ]
 
     if blockedSignals.contains(where: { merged.contains($0) }) {
@@ -329,7 +332,7 @@ public nonisolated func isLikelyMusicMetadata(title: String, secondaryText: Stri
         "feat.",
         "ft.",
         "vevo",
-        "topic"
+        "topic",
     ]
 
     if positiveSignals.contains(where: { merged.contains($0) }) {

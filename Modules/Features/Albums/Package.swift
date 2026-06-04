@@ -7,14 +7,14 @@ let package = Package(
     name: "Albums",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Albums",
             targets: ["Albums"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../Shared/Aesthetics"),
@@ -22,7 +22,7 @@ let package = Package(
         .package(path: "../Tracks"),
         .package(path: "../Player"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0"))
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -35,12 +35,12 @@ let package = Package(
                 .product(name: "Tracks", package: "Tracks"),
                 .product(name: "Player", package: "Player"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-                .product(name: "Kingfisher", package: "Kingfisher")
+                .product(name: "Kingfisher", package: "Kingfisher"),
             ]
         ),
         .testTarget(
             name: "AlbumsTests",
             dependencies: ["Albums"]
-        )
+        ),
     ]
 )

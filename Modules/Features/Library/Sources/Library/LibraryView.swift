@@ -18,7 +18,8 @@ public struct LibraryView: View {
 
     @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
     @Environment(\.router) private var envRouter
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.playlistLibraryStore) private var playlistLibraryStore
+    @Environment(\.centralMediaStore) private var centralMediaStore
     @Query(sort: \Playlist.updatedAt, order: .reverse) private var playlists: [Playlist]
 
     enum ImportProvider: String, CaseIterable, Identifiable {
@@ -32,6 +33,11 @@ public struct LibraryView: View {
     @State private var viewModel = LibraryViewModel()
     @State private var scrollOffset: CGFloat = 0
 
+    // Precomputed sorted arrays to avoid O(n log n) on every render
+    @State private var sortedShelfPlaylists: [Playlist] = []
+    @State private var sortedRecentPlaylists: [Playlist] = []
+    @State private var cachedPinnedPlaylist: Playlist?
+
     public var body: some View {
         NavigationBarView(
             title: "Library",
@@ -39,7 +45,7 @@ public struct LibraryView: View {
             customActions: [
                 ProfileMenuCustomAction(title: "Import Playlist") {
                     viewModel.isPresentingImportPicker = true
-                }
+                },
             ]
         ) {
             content
@@ -50,19 +56,19 @@ public struct LibraryView: View {
         LazyVStack(alignment: .leading, spacing: 18) {
             LibraryPinsSectionView(
                 isExpanded: $viewModel.isPinsExpanded,
-                pinnedPlaylist: pinnedPlaylist,
+                pinnedPlaylist: cachedPinnedPlaylist,
                 onNavigate: { envRouter.navigate(to: .playlist(id: $0.playlistID)) },
                 onDelete: deleteImportedPlaylist,
                 fallbackSymbolProvider: fallbackSymbol,
                 fallbackGradientProvider: fallbackGradient
             )
             .equatable()
-            
+
             sectionDivider
-            
+
             LibraryPlaylistsShelfSectionView(
                 isExpanded: $viewModel.isPlaylistsExpanded,
-                shelfPlaylists: shelfPlaylists,
+                shelfPlaylists: sortedShelfPlaylists,
                 isCompactShelfMode: viewModel.isCompactShelfMode,
                 isAuthenticated: spotifyCoordinator.isAuthenticated,
                 isSyncingLikedSongs: viewModel.isSyncingLikedSongs,
@@ -76,12 +82,12 @@ public struct LibraryView: View {
                 songsLabelProvider: songsLabel
             )
             .equatable()
-            
+
             sectionDivider
-            
+
             LibraryRecentlyAddedSectionView(
                 isExpanded: $viewModel.isRecentlyAddedExpanded,
-                recentlyAddedPlaylists: recentlyAddedPlaylists,
+                recentlyAddedPlaylists: sortedRecentPlaylists,
                 isCompactShelfMode: viewModel.isCompactShelfMode,
                 onNavigate: { envRouter.navigate(to: .playlist(id: $0.playlistID)) },
                 onDelete: deleteImportedPlaylist,
@@ -91,7 +97,7 @@ public struct LibraryView: View {
             )
             .equatable()
         }
-        .contentMargins(.bottom, 140)
+        .safeAreaPadding(.bottom, 140)
         // YouTube import sheet
         .sheet(isPresented: $viewModel.isPresentingYouTubeImport) {
             YouTubePlaylistImportSheet { importedPlaylistID in
@@ -99,14 +105,14 @@ public struct LibraryView: View {
             }
         }
         // Spotify import sheet
-#if canImport(SpotifySDK)
+        #if canImport(SpotifySDK)
         .sheet(isPresented: $viewModel.isPresentingSpotifyImport) {
             SpotifyPlaylistImportSheet { importedPlaylistID in
                 envRouter.navigate(to: .playlist(id: importedPlaylistID))
             }
             .environment(spotifyCoordinator)
         }
-#endif
+        #endif
         // Provider picker confirmation dialog
         .confirmationDialog(
             "Add Playlist", isPresented: $viewModel.isPresentingImportPicker, titleVisibility: .visible
@@ -114,11 +120,11 @@ public struct LibraryView: View {
             Button("YouTube Playlist") {
                 viewModel.isPresentingYouTubeImport = true
             }
-#if canImport(SpotifySDK)
+            #if canImport(SpotifySDK)
             Button("Spotify Playlist") {
                 viewModel.isPresentingSpotifyImport = true
             }
-#endif
+            #endif
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Choose where to import a playlist from.")
@@ -132,6 +138,15 @@ public struct LibraryView: View {
         }
         .task(id: spotifyCoordinator.sessionRevision) {
             await refreshSpotifySnapshot()
+        }
+        .onChange(of: playlists.count) { _, _ in
+            updateSortedPlaylists()
+        }
+        .onChange(of: viewModel.shelfSortMode) { _, _ in
+            updateSortedPlaylists()
+        }
+        .onAppear {
+            updateSortedPlaylists()
         }
     }
 
@@ -155,26 +170,26 @@ public struct LibraryView: View {
                     )
             }
             .buttonStyle(.plain)
-            
+
             Text("Library")
                 .font(.system(size: 20, weight: .semibold, design: .default))
                 .foregroundStyle(.primary)
-            
+
             Spacer(minLength: 12)
-            
+
             HStack(spacing: 10) {
                 headerControlButton(icon: "arrow.up.arrow.down") {
                     viewModel.toggleShelfSortMode()
                 }
-                
+
                 headerControlButton(icon: "line.3.horizontal.decrease") {
                     viewModel.isCompactShelfMode.toggle()
                 }
-                
+
                 headerControlButton(icon: "plus") {
                     viewModel.isPresentingImportPicker = true
                 }
-                
+
                 headerControlButton(icon: "magnifyingglass") {
                     envRouter.navigate(to: .search)
                 }
@@ -192,31 +207,26 @@ public struct LibraryView: View {
         }
     }
 
-    private var shelfPlaylists: [Playlist] {
-        switch viewModel.shelfSortMode {
+    private func updateSortedPlaylists() {
+        // Shelf playlists - mode-dependent sort
+        sortedShelfPlaylists = switch viewModel.shelfSortMode {
         case .alphabetical:
-            playlists.sorted {
-                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
+            playlists.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .recent:
-            playlists.sorted {
-                ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt)
-            }
+            playlists.sorted { ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt) }
         }
-    }
 
-    private var recentlyAddedPlaylists: [Playlist] {
-        playlists.sorted {
+        // Recently added - always by date
+        sortedRecentPlaylists = playlists.sorted {
             ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt)
         }
-    }
 
-    private var pinnedPlaylist: Playlist? {
-        playlists.sorted {
+        // Pinned - most recently played/imported
+        cachedPinnedPlaylist = playlists.max {
             let lhsDate = $0.lastPlayedAt ?? $0.importedAt ?? $0.createdAt
             let rhsDate = $1.lastPlayedAt ?? $1.importedAt ?? $1.createdAt
-            return lhsDate > rhsDate
-        }.first
+            return lhsDate < rhsDate
+        }
     }
 
     private var shelfCardSize: CGFloat {
@@ -293,7 +303,10 @@ public struct LibraryView: View {
     }
 
     private func deleteImportedPlaylist(_ playlist: Playlist) {
-        PlaylistLibraryStore(modelContainer: modelContext.container).deletePlaylist(playlistID: playlist.playlistID)
+        let playlistID = playlist.playlistID
+        Task {
+            await playlistLibraryStore?.deletePlaylist(playlistID: playlistID)
+        }
     }
 
     private func openLikedSongs() async {
@@ -315,18 +328,16 @@ public struct LibraryView: View {
         #endif
     }
 
-    private var playlistStore: PlaylistLibraryStore {
-        PlaylistLibraryStore(modelContainer: modelContext.container)
-    }
-
     private var spotifyImportService: SpotifyPlaylistImportService? {
         #if canImport(SpotifySDK)
-        guard let sdk = spotifyCoordinator.sdk else { return nil }
+        guard let sdk = spotifyCoordinator.sdk,
+              let playlistLibraryStore,
+              let centralMediaStore
+        else { return nil }
         return SpotifyPlaylistImportService(
             sdk: sdk,
-            playlistStore: playlistStore,
-            onSpotifyPlaylistImported: { [container = modelContext.container] playlist in
-                let centralMediaStore = CentralMediaStore(modelContainer: container)
+            playlistStore: playlistLibraryStore,
+            onSpotifyPlaylistImported: { playlist in
                 Task {
                     _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
                 }
@@ -366,7 +377,7 @@ public struct LibraryView: View {
             return LinearGradient(
                 colors: [
                     Color(red: 0.96, green: 0.81, blue: 0.56),
-                    Color(red: 0.42, green: 0.49, blue: 0.74)
+                    Color(red: 0.42, green: 0.49, blue: 0.74),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -377,7 +388,7 @@ public struct LibraryView: View {
             return LinearGradient(
                 colors: [
                     Color(red: 0.98, green: 0.92, blue: 0.84),
-                    Color(red: 0.90, green: 0.94, blue: 0.98)
+                    Color(red: 0.90, green: 0.94, blue: 0.98),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -388,7 +399,7 @@ public struct LibraryView: View {
             return LinearGradient(
                 colors: [
                     Color(red: 0.22, green: 0.17, blue: 0.14),
-                    Color(red: 0.08, green: 0.07, blue: 0.07)
+                    Color(red: 0.08, green: 0.07, blue: 0.07),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -399,7 +410,7 @@ public struct LibraryView: View {
             LinearGradient(
                 colors: [
                     Color(red: 0.92, green: 0.84, blue: 0.67),
-                    Color(red: 0.44, green: 0.52, blue: 0.75)
+                    Color(red: 0.44, green: 0.52, blue: 0.75),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -407,7 +418,7 @@ public struct LibraryView: View {
             LinearGradient(
                 colors: [
                     Color(red: 0.85, green: 0.88, blue: 0.93),
-                    Color(red: 0.44, green: 0.50, blue: 0.68)
+                    Color(red: 0.44, green: 0.50, blue: 0.68),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -415,7 +426,7 @@ public struct LibraryView: View {
             LinearGradient(
                 colors: [
                     Color(red: 0.24, green: 0.24, blue: 0.26),
-                    Color(red: 0.62, green: 0.61, blue: 0.58)
+                    Color(red: 0.62, green: 0.61, blue: 0.58),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -423,11 +434,11 @@ public struct LibraryView: View {
             LinearGradient(
                 colors: [
                     Color(red: 0.89, green: 0.78, blue: 0.62),
-                    Color(red: 0.34, green: 0.42, blue: 0.60)
+                    Color(red: 0.34, green: 0.42, blue: 0.60),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
-            )
+            ),
         ]
 
         let seed = title.unicodeScalars.reduce(into: 0) { result, scalar in
@@ -885,6 +896,7 @@ private struct LibraryPlaylistsShelfSectionView: View, Equatable {
                 }
             }
         }
+        .padding(.horizontal)
     }
 }
 
@@ -945,6 +957,7 @@ private struct LibraryRecentlyAddedSectionView: View, Equatable {
                 }
             }
         }
+        .padding(.horizontal)
     }
 }
 

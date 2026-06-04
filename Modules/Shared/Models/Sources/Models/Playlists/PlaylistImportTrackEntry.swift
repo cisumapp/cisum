@@ -25,7 +25,16 @@ public final class PlaylistImportTrackEntry {
 
     public var stateRawValue: String
     public var selectedCandidateID: String?
-    public var resolvedMediaID: String?
+
+    public var youtubeID: String?
+    public var youtubeMusicID: String?
+    public var spotifyID: String?
+    public var tidalID: String?
+    public var qobuzID: String?
+    public var soundcloudID: String?
+    public var deezerID: String?
+    public var appleMusicID: String?
+
     public var confidenceScore: Double?
     public var needsReview: Bool
 
@@ -45,7 +54,14 @@ public final class PlaylistImportTrackEntry {
         durationSeconds: Double? = nil,
         state: PlaylistImportTrackState = .pending,
         selectedCandidateID: String? = nil,
-        resolvedMediaID: String? = nil,
+        youtubeID: String? = nil,
+        youtubeMusicID: String? = nil,
+        spotifyID: String? = nil,
+        tidalID: String? = nil,
+        qobuzID: String? = nil,
+        soundcloudID: String? = nil,
+        deezerID: String? = nil,
+        appleMusicID: String? = nil,
         confidenceScore: Double? = nil,
         needsReview: Bool = false,
         errorCode: String? = nil,
@@ -63,7 +79,14 @@ public final class PlaylistImportTrackEntry {
         self.durationSeconds = durationSeconds
         self.stateRawValue = state.rawValue
         self.selectedCandidateID = selectedCandidateID
-        self.resolvedMediaID = resolvedMediaID
+        self.youtubeID = youtubeID
+        self.youtubeMusicID = youtubeMusicID
+        self.spotifyID = spotifyID
+        self.tidalID = tidalID
+        self.qobuzID = qobuzID
+        self.soundcloudID = soundcloudID
+        self.deezerID = deezerID
+        self.appleMusicID = appleMusicID
         self.confidenceScore = confidenceScore
         self.needsReview = needsReview
         self.errorCode = errorCode

@@ -11,20 +11,20 @@ let package = Package(
         .library(
             name: "Models",
             targets: ["Models"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-        .package(path: "../../../Packages/StreamingKit/ProviderSDK")
+        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
     ],
     targets: [
         .target(
             name: "Models",
             dependencies: [
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-                .product(name: "ProviderSDK", package: "ProviderSDK")
+                .product(name: "ProviderSDK", package: "ProviderSDK"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

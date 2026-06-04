@@ -30,70 +30,30 @@ public struct ArtistView: View {
                 (palette?.background ?? .pink)
 
                 ScrollView {
-                    if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
-                        KFImage(artworkURL)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: size.width, height: size.width)
-                            .clipped()
-                            .overlay {
-                                ZStack {
-                                    LinearGradient(colors: [(palette?.background ?? .pink), (palette?.background ?? .pink).opacity(0.2), .clear, .clear, .clear, .clear], startPoint: .bottom, endPoint: .top)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    ArtistArtworkHeader(
+                        artist: artist,
+                        palette: palette,
+                        size: size,
+                        onShuffle: {
+                            if !topTracks.isEmpty {
+                                playTracks(startingAt: Int.random(in: 0 ..< topTracks.count))
+                            }
+                        },
+                        onPlay: { playTracks(startingAt: 0) }
+                    )
+                    .task {
+                        if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
+                            let tinyURL = ImageColorExtractor.paletteURL(from: artworkURL)
+                            KingfisherManager.shared.retrieveImage(with: tinyURL) { result in
+                                guard case let .success(value) = result,
+                                      let data = value.image.pngData() else { return }
 
-                                    HStack {
-                                        Text(artist.displayName)
-                                            .font(.largeTitle)
-                                            .bold()
-                                            .foregroundStyle(palette?.title.safeTextColor(over: palette?.background ?? .black) ?? .white)
-
-                                        Spacer()
-
-                                        Button {
-                                            if !topTracks.isEmpty {
-                                                playTracks(startingAt: Int.random(in: 0 ..< topTracks.count))
-                                            }
-                                        } label: {
-                                            Image(systemName: "shuffle")
-                                                .padding()
-                                                .background(
-                                                    Circle()
-                                                        .foregroundStyle(.black.opacity(0.2))
-                                                )
-                                                .foregroundStyle(palette?.background ?? .black)
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        Button {
-                                            playTracks(startingAt: 0)
-                                        } label: {
-                                            Image(systemName: "play.fill")
-                                                .padding()
-                                                .background(
-                                                    Circle()
-                                                        .foregroundStyle(palette?.title.safeTextColor(over: palette?.background ?? .black) ?? .black)
-                                                )
-                                                .foregroundStyle(palette?.background ?? .white)
-                                                .foregroundStyle((palette?.dominant ?? .pink).opacity(0.4))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                                    .padding()
+                                Task {
+                                    let extractedPalette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: artworkURL.absoluteString)
+                                    await MainActor.run { palette = extractedPalette }
                                 }
                             }
-                            .task {
-                                let tinyURL = ImageColorExtractor.paletteURL(from: artworkURL)
-                                KingfisherManager.shared.retrieveImage(with: tinyURL) { result in
-                                    guard case let .success(value) = result,
-                                          let data = value.image.pngData() else { return }
-
-                                    Task {
-                                        let extractedPalette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: artworkURL.absoluteString)
-                                        await MainActor.run { palette = extractedPalette }
-                                    }
-                                }
-                            }
+                        }
                     }
 
                     ArtistTopSongs(artist: artist, onPlayTrack: { index in
@@ -177,6 +137,70 @@ public struct ArtistView: View {
 
         playerViewModel.setQueue(externalTracks, startIndex: index)
         playerPresentationController.expand()
+    }
+}
+
+// MARK: - Subviews
+
+private struct ArtistArtworkHeader: View {
+    let artist: Artist
+    let palette: ImageColorPalette?
+    let size: CGSize
+    let onShuffle: () -> Void
+    let onPlay: () -> Void
+
+    var body: some View {
+        if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
+            KFImage(artworkURL)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.width)
+                .clipped()
+                .overlay {
+                    ZStack {
+                        LinearGradient(colors: [(palette?.background ?? .pink), (palette?.background ?? .pink).opacity(0.2), .clear, .clear, .clear, .clear], startPoint: .bottom, endPoint: .top)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+
+                        HStack {
+                            Text(artist.displayName)
+                                .font(.largeTitle)
+                                .bold()
+                                .foregroundStyle(palette?.title.safeTextColor(over: palette?.background ?? .black) ?? .white)
+
+                            Spacer()
+
+                            Button {
+                                onShuffle()
+                            } label: {
+                                Image(systemName: "shuffle")
+                                    .padding()
+                                    .background(
+                                        Circle()
+                                            .foregroundStyle(.black.opacity(0.2))
+                                    )
+                                    .foregroundStyle(palette?.background ?? .black)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                onPlay()
+                            } label: {
+                                Image(systemName: "play.fill")
+                                    .padding()
+                                    .background(
+                                        Circle()
+                                            .foregroundStyle(palette?.title.safeTextColor(over: palette?.background ?? .black) ?? .black)
+                                    )
+                                    .foregroundStyle(palette?.background ?? .white)
+                                    .foregroundStyle((palette?.dominant ?? .pink).opacity(0.4))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .padding()
+                    }
+                }
+        }
     }
 }
 #endif

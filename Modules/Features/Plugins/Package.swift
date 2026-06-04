@@ -7,13 +7,13 @@ let package = Package(
     name: "Plugins",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(
             name: "Plugins",
             targets: ["Plugins"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
@@ -21,7 +21,7 @@ let package = Package(
         .package(path: "../../Shared/Networking"),
         .package(path: "../Authentication"),
         .package(path: "../../Shared/Caching"),
-        .package(path: "../Player")
+        .package(path: "../Player"),
     ],
     targets: [
         .target(
@@ -32,12 +32,12 @@ let package = Package(
                 .product(name: "Networking", package: "Networking"),
                 .product(name: "Authentication", package: "Authentication"),
                 .product(name: "Caching", package: "Caching"),
-                .product(name: "Player", package: "Player")
+                .product(name: "Player", package: "Player"),
             ],
             resources: [
-                .process("Resources")
+                .process("Resources"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

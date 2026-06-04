@@ -38,7 +38,7 @@ public enum Plugins {
         var providers: [any StreamResolutionProvider] = []
         PluginsLog.debug("Building playback providers", context: [
             "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback)
+            "include_youtube_fallback": String(includeYouTubeFallback),
         ])
 
         if includeProviderSDK {
@@ -76,7 +76,7 @@ public enum Plugins {
         cachedMetadataCache = metadataCache
         PluginsLog.info("Configuring playback URL resolver", context: [
             "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback)
+            "include_youtube_fallback": String(includeYouTubeFallback),
         ])
 
         let providerSDK = providerSDK ?? cachedProviderSDK ?? ProviderSDK()
@@ -85,7 +85,7 @@ public enum Plugins {
 
         if isReplacingProviderSDK {
             PluginsLog.info("ProviderSDK selected for playback resolver", context: [
-                "source": providerSDK === cachedProviderSDK ? "cached" : "new"
+                "source": providerSDK === cachedProviderSDK ? "cached" : "new",
             ])
         }
 
@@ -120,7 +120,7 @@ public enum Plugins {
 
         PluginsLog.info("Reconfiguring playback URL resolver", context: [
             "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback)
+            "include_youtube_fallback": String(includeYouTubeFallback),
         ])
         configurePlaybackURLResolver(
             youtube: youtube,

@@ -25,7 +25,6 @@ public struct LoginView: View {
     @State private var username = ""
     @State private var errorMessage: String?
 
-    private static let bg = Color.cisumBg
     private static let fieldBg = Color.cisumSurface
     private static let highlights = Color.cisumAccent
 
@@ -35,8 +34,6 @@ public struct LoginView: View {
 
     public var body: some View {
         ZStack {
-            Self.bg.ignoresSafeArea()
-
             VStack(spacing: 16) {
                 Spacer(minLength: 300)
 

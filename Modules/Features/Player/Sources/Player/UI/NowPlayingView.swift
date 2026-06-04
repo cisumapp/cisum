@@ -27,7 +27,7 @@ public struct NowPlayingView: View {
             header
 
             NowPlayingArtwork(
-                size: size, 
+                size: size,
                 artworkURL: playerViewModel.currentImageURL,
                 isLyricsVisible: playerViewModel.isLyricsVisible,
                 isQueueVisible: (playerViewModel as? PlayerViewModel)?.isQueueVisible ?? false

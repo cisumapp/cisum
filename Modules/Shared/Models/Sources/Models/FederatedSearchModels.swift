@@ -2,16 +2,15 @@ import Foundation
 import ProviderSDK
 import YouTubeSDK
 
-public enum FederatedService: String, CaseIterable, Identifiable, Sendable {
-    case youtube = "YouTube"
-    case youtubeMusic = "YouTube Music"
-    case spotify = "Spotify"
-    /// All ProviderSDK-backed providers (SoundCloud, Tidal, Qobuz, Deezer, etc.)
-    case providerSDK = "Songs"
+#if canImport(SpotifySDK)
+import SpotifySDK
+#endif
 
-    public var id: FederatedService {
-        self
-    }
+public enum FederatedService: String, Sendable, Codable {
+    case spotify
+    case youtubeMusic
+    case youtube
+    case providerSDK
 }
 
 public enum FederatedSectionState: Equatable, Sendable {
@@ -37,7 +36,7 @@ public struct FederatedSearchSection: Identifiable, Sendable {
     }
 
     public static var defaultSections: [FederatedSearchSection] {
-        FederatedService.allCases.map {
+        [.spotify, .youtubeMusic, .youtube, .providerSDK].map {
             FederatedSearchSection(service: $0, state: .idle, items: [])
         }
     }
@@ -65,6 +64,38 @@ public struct SpotifySearchTrack: Identifiable, Sendable {
     }
 }
 
+public struct SpotifySearchArtist: Identifiable, Sendable {
+    public let id: String
+    public let name: String
+    public let artworkURL: URL?
+    public let genres: [String]
+
+    public init(id: String, name: String, artworkURL: URL?, genres: [String]) {
+        self.id = id
+        self.name = name
+        self.artworkURL = artworkURL
+        self.genres = genres
+    }
+}
+
+public struct SpotifySearchPlaylist: Identifiable, Sendable {
+    public let id: String
+    public let uri: String
+    public let name: String
+    public let ownerName: String
+    public let artworkURL: URL?
+    public let totalTracks: Int?
+
+    public init(id: String, uri: String, name: String, ownerName: String, artworkURL: URL?, totalTracks: Int?) {
+        self.id = id
+        self.uri = uri
+        self.name = name
+        self.ownerName = ownerName
+        self.artworkURL = artworkURL
+        self.totalTracks = totalTracks
+    }
+}
+
 public enum FederatedSearchPayload: Sendable {
     case youtubeVideo(YouTubeVideo)
     case youtubeMusic(YouTubeMusicSong)
@@ -81,13 +112,25 @@ public struct FederatedSearchItem: Identifiable, Sendable {
     public let subtitle: String
     public let artworkURL: URL?
     public let durationSeconds: TimeInterval?
+    public let displayDuration: String?
     public let isPlayable: Bool
     public let isExplicit: Bool
     public let audioQualityLabel: String?
     public let audioCodecLabel: String?
     public let payload: FederatedSearchPayload
 
-    public init(id: String, title: String, subtitle: String, artworkURL: URL?, durationSeconds: TimeInterval?, isPlayable: Bool, isExplicit: Bool, audioQualityLabel: String?, audioCodecLabel: String?, payload: FederatedSearchPayload) {
+    public init(
+        id: String,
+        title: String,
+        subtitle: String,
+        artworkURL: URL?,
+        durationSeconds: TimeInterval?,
+        isPlayable: Bool,
+        isExplicit: Bool,
+        audioQualityLabel: String?,
+        audioCodecLabel: String?,
+        payload: FederatedSearchPayload
+    ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -98,9 +141,17 @@ public struct FederatedSearchItem: Identifiable, Sendable {
         self.audioQualityLabel = audioQualityLabel
         self.audioCodecLabel = audioCodecLabel
         self.payload = payload
+
+        if let seconds = durationSeconds {
+            let min = Int(seconds) / 60
+            let sec = Int(seconds) % 60
+            self.displayDuration = String(format: "%d:%02d", min, sec)
+        } else {
+            self.displayDuration = nil
+        }
     }
 
-    public nonisolated var service: FederatedService {
+    public var service: FederatedService {
         switch payload {
         case .youtubeVideo:
             .youtube
@@ -111,13 +162,6 @@ public struct FederatedSearchItem: Identifiable, Sendable {
         case .providerSDKTrack:
             .providerSDK
         }
-    }
-
-    public var displayDuration: String? {
-        guard let seconds = durationSeconds else { return nil }
-        let min = Int(seconds) / 60
-        let sec = Int(seconds) % 60
-        return String(format: "%d:%02d", min, sec)
     }
 
     public var displayArtist: String {
@@ -153,51 +197,19 @@ public struct ExternalStreamPayload: Sendable {
     }
 }
 
-public enum FederatedSearchError: LocalizedError, Sendable {
+public enum FederatedSearchError: Error, LocalizedError {
+    case noPlayableStream(String)
     case providerUnavailable(String)
     case spotifyCredentialsMissing
-    case noPlayableStream(String)
 
     public var errorDescription: String? {
         switch self {
+        case let .noPlayableStream(message):
+            message
         case let .providerUnavailable(message):
             message
         case .spotifyCredentialsMissing:
-            "Spotify is not connected. Sign in via Settings → Spotify to enable full-quality search."
-        case let .noPlayableStream(message):
-            message
+            "Spotify is not connected. Open Settings and sign in first."
         }
-    }
-}
-
-public struct SpotifySearchArtist: Identifiable, Sendable {
-    public let id: String
-    public let name: String
-    public let artworkURL: URL?
-    public let genres: [String]
-
-    public init(id: String, name: String, artworkURL: URL?, genres: [String]) {
-        self.id = id
-        self.name = name
-        self.artworkURL = artworkURL
-        self.genres = genres
-    }
-}
-
-public struct SpotifySearchPlaylist: Identifiable, Sendable {
-    public let id: String
-    public let uri: String
-    public let name: String
-    public let ownerName: String
-    public let artworkURL: URL?
-    public let totalTracks: Int?
-
-    public init(id: String, uri: String, name: String, ownerName: String, artworkURL: URL?, totalTracks: Int?) {
-        self.id = id
-        self.uri = uri
-        self.name = name
-        self.ownerName = ownerName
-        self.artworkURL = artworkURL
-        self.totalTracks = totalTracks
     }
 }

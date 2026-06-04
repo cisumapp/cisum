@@ -8,12 +8,12 @@
 import SwiftUI
 
 struct NavigationBarStyle {
-    // Define the style options
+    /// Define the style options
     enum StyleType {
         case standard
         case search
     }
-    
+
     // Core properties that define your style
     var styleType: StyleType
     var backgroundColor: Color
@@ -22,8 +22,8 @@ struct NavigationBarStyle {
     var showSearchBar: Bool
     var blurRadius: CGFloat
     var maskHeight: CGFloat
-    
-    // Predefined styles as static properties
+
+    /// Predefined styles as static properties
     static let standard = NavigationBarStyle(
         styleType: .standard,
         backgroundColor: .clear,
@@ -33,7 +33,7 @@ struct NavigationBarStyle {
         blurRadius: 10,
         maskHeight: 130
     )
-    
+
     static let search = NavigationBarStyle(
         styleType: .search,
         backgroundColor: .clear,

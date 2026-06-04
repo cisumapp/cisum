@@ -62,22 +62,22 @@ public final class PlaybackEngine {
 
             // Fallback sync in case KVO misses something
             let isActuallyPlaying = player.rate != 0
-            if self.isPlaying != isActuallyPlaying {
-                self.setIsPlaying(isActuallyPlaying)
+            if isPlaying != isActuallyPlaying {
+                setIsPlaying(isActuallyPlaying)
             }
 
             onProgressUpdate?()
         }
     }
-    
+
     private var rateObservation: NSKeyValueObservation?
     private func setupRateObserver() {
         rateObservation = player.observe(\.rate, options: [.initial, .new]) { [weak self] player, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let isActuallyPlaying = player.rate != 0
-                if self.isPlaying != isActuallyPlaying {
-                    self.setIsPlaying(isActuallyPlaying)
+                if isPlaying != isActuallyPlaying {
+                    setIsPlaying(isActuallyPlaying)
                 }
             }
         }
@@ -114,7 +114,7 @@ public final class PlaybackEngine {
             player.removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
-        
+
         rateObservation?.invalidate()
         rateObservation = nil
 

@@ -5,14 +5,14 @@
 //  Created by Aarav Gupta on 03/12/25.
 //
 
-public import Combine
 public import Aesthetics
+public import Combine
 public import Models
-import SwiftData
 import AVFoundation
 import AVKit
 import MediaPlayer
 import ProviderSDK
+import SwiftData
 import SwiftUI
 import Utilities
 
@@ -40,7 +40,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     public enum CachePolicy {
         public static let playbackURLTTL: TimeInterval = 60 * 2
         public static let playbackMinimumRemainingLifetime: TimeInterval = 60 * 3
-        public static let preparedYouTubeMaxAge: TimeInterval = 75
+        public static let preparedYouTubeMaxAge: TimeInterval = 300
         public static let highQualityArtworkTTL: TimeInterval = 60 * 60 * 24 * 14
         public static let motionArtworkSourceTTL: TimeInterval = 60 * 60 * 24
     }
@@ -68,7 +68,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         1080: 15_000_000,
         720: 8_000_000,
         480: 4_000_000,
-        360: 1_500_000
+        360: 1_500_000,
     ]
 
     public enum PlaybackQueueSource: String {
@@ -230,20 +230,21 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     public var queuePreviewItems: [QueuePreviewItem] = []
 
     private var timeObserver: Any?
-    var currentLoadTask: Task<Void, Never>?
-    var artworkLoadTask: Task<Void, Never>?
-    private var artworkVideoTask: Task<Void, Never>?
-    
+    @ObservationIgnored var currentLoadTask: Task<Void, Never>?
+    @ObservationIgnored var artworkLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var artworkVideoTask: Task<Void, Never>?
+
     private let queuePersistenceStore = QueuePersistenceStore()
     private var lastPersistedTime: TimeInterval = 0
 
     // MARK: - Telemetry
+
     public var pendingPlaybackTelemetryType: String?
     public var pendingPlaybackTelemetryStartedAt: Date?
-    
-    var lyricsLoadTask: Task<Void, Never>?
-    var playbackRecoveryTask: Task<Void, Never>?
-    private var exhaustiveRetryTask: Task<Void, Never>?
+
+    @ObservationIgnored var lyricsLoadTask: Task<Void, Never>?
+    @ObservationIgnored var playbackRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored private var exhaustiveRetryTask: Task<Void, Never>?
     /// Tracks which mediaIDs have already had exhaustiveRetry attempted.
     /// Prevents the infinite loop: fail → retry → same URL → fail → retry...
     private var exhaustiveRetryAttemptedIDs: Set<String> = []
@@ -268,10 +269,11 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     /// Patch 4: AsyncStream-based item status observer — replaces KVO.
     /// Cancelling itemObserverTask before replaceCurrentItem ensures stale
     /// callbacks from the previous item never fire against the new state.
-    private var itemObserverTask: Task<Void, Never>?
+    @ObservationIgnored private var itemObserverTask: Task<Void, Never>?
 
     // Patch 5: Async notification-based end observer — replaces NotificationCenter handle.
-    private var endObserverTask: Task<Void, Never>?
+    @ObservationIgnored private var endObserverTask: Task<Void, Never>?
+    @ObservationIgnored private var stallObserverTask: Task<Void, Never>?
     var webHLSProxyLoader: YTHLSProxyLoader? // Prevents ARC release during playback
 
     // Patch 7: Capture current playhead before a URL refresh so we can restore
@@ -296,7 +298,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     private var currentListeningSessionID: PersistentIdentifier?
     private var activeScrobbleSessionMediaID: String?
     private var hasSubmittedScrobbleForActiveSession = false
-    private var lastFMScrobbleTask: Task<Void, Never>?
+    @ObservationIgnored private var lastFMScrobbleTask: Task<Void, Never>?
     #if os(iOS)
     var artworkColorExtractor = ImageColorExtractor.shared
     #endif
@@ -306,14 +308,14 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     var lastPublishedNowPlayingState: NowPlayingState?
     var currentArtworkResource: CachedNowPlayingArtworkResource?
     var currentArtworkMediaID: String?
-    var artworkCache: [String: CachedNowPlayingArtworkResource] = [:]
-    var cacheAccessOrder: [String: Date] = [:]
-    var artworkAccentCache: [String: (artworkURL: URL, color: Color)] = [:]
-    var artworkPaletteCache: [String: (artworkURL: URL, palette: ImageColorPalette?)] = [:]
-    var accentLoadTask: Task<Void, Never>?
+    @ObservationIgnored var artworkCache: [String: CachedNowPlayingArtworkResource] = [:]
+    @ObservationIgnored var cacheAccessOrder: [String: Date] = [:]
+    @ObservationIgnored var artworkAccentCache: [String: (artworkURL: URL, color: Color)] = [:]
+    @ObservationIgnored var artworkPaletteCache: [String: (artworkURL: URL, palette: ImageColorPalette?)] = [:]
+    @ObservationIgnored var accentLoadTask: Task<Void, Never>?
 
-    var interruptionObserver: NSObjectProtocol?
-    var routeChangeObserver: NSObjectProtocol?
+    @ObservationIgnored var interruptionObserver: NSObjectProtocol?
+    @ObservationIgnored var routeChangeObserver: NSObjectProtocol?
     var wasPlayingBeforeInterruption = false
     #endif
 
@@ -330,13 +332,16 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     var radioSeedVideoID: String?
     var radioPlaylistID: String?
     var radioContinuationToken: String?
-    var radioAutoplayTask: Task<Void, Never>?
-    var radioContinuationTask: Task<Void, Never>?
+    @ObservationIgnored var radioAutoplayTask: Task<Void, Never>?
+    @ObservationIgnored var radioContinuationTask: Task<Void, Never>?
     var isLoadingRadioContinuation = false
     var preparedNextPlayback: PreparedQueuePlayback?
-    var nextPlaybackPreloadTask: Task<Void, Never>?
+    @ObservationIgnored var nextPlaybackPreloadTask: Task<Void, Never>?
+    @ObservationIgnored var timeBasedPrewarmTask: Task<Void, Never>?
     var preloadingNextMediaID: String?
-    var externalPayloadCache: [String: ExternalStreamPayload] = [:]
+    @ObservationIgnored var externalPayloadCache: [String: ExternalStreamPayload] = [:]
+    @ObservationIgnored var distantPreloadCache: [String: PreparedQueuePlayback] = [:]
+    @ObservationIgnored var distantPreloadTasks: [Task<Void, Never>] = []
 
     #if os(iOS)
     public init(
@@ -432,7 +437,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
 
         Color.resetDynamicAccent()
         currentAccentColor = Color.dynamicAccent
-        
+
         restoreLastSession()
     }
 
@@ -444,7 +449,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         }
         maybeSubmitLastFMScrobble()
         updateNowPlayingPlaybackInfo(force: false)
-        
+
         // Persist session periodically (every 5s)
         if abs(currentTime - lastPersistedTime) > 5.0 || lastPersistedTime == 0 {
             persistCurrentSession()
@@ -475,7 +480,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         currentAudioCodecLabel = state.codecLabel
         pendingPlaybackFormatOverride = nil
         currentVideoId = state.mediaID
-        
+
         persistCurrentSession()
     }
 
@@ -498,6 +503,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
 
     private func resetPlaybackRuntimeState(for mediaID: String) {
         playbackError = nil
+        stallCount = 0
         playbackEngine.resetProgress()
         resetPlaybackCandidates(for: mediaID)
         resetPlaybackRecoveryState(for: mediaID)
@@ -599,7 +605,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
 
         let nextEntry = playbackQueue[nextIndex]
         self.queuePosition = nextIndex
-        
+
         pendingPlaybackTelemetryType = triggeredByPlaybackEnd ? "auto-queue-transition" : "skip-next"
         pendingPlaybackTelemetryStartedAt = Date()
 
@@ -613,14 +619,25 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             } else {
                 playPreparedQueueEntry(prepared)
             }
+        } else if let distant = consumeDistantPreload(for: nextEntry.mediaID) {
+            if shouldRefreshPreparedPlaybackBeforeUse(distant) {
+                if !triggeredByPlaybackEnd {
+                    stopCurrentPlaybackForImmediateTransition()
+                }
+                load(entry: nextEntry)
+            } else {
+                CisumLog.queue.info("Using distant preloaded id=\(distant.mediaID, privacy: .public)")
+                playPreparedQueueEntry(distant)
+            }
         } else {
             if !triggeredByPlaybackEnd {
                 stopCurrentPlaybackForImmediateTransition()
             }
-            load(entry: nextEntry)
         }
 
         scheduleRadioContinuationIfNeeded()
+        timeBasedPrewarmTask?.cancel()
+        timeBasedPrewarmTask = nil
         preloadNextQueueEntryIfNeeded()
     }
 
@@ -768,18 +785,109 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             guard let self else { return }
             if Task.isCancelled { return }
 
-            do {
-                let payload: ExternalStreamPayload
-                if let cachedPayload = externalPayloadCache[normalizedMediaID] {
-                    payload = cachedPayload
-                } else {
-                    payload = try await track.resolvePayload()
-                    externalPayloadCache[normalizedMediaID] = payload
-                }
-
+            // Race BOTH resolution paths in parallel — whichever succeeds first wins.
+            // Check cache first (MainActor-isolated, must be before task group).
+            if let cachedPayload = externalPayloadCache[normalizedMediaID] {
                 if Task.isCancelled { return }
                 guard currentVideoId == normalizedMediaID else { return }
 
+                currentTitle = normalizedMusicDisplayTitle(cachedPayload.title, artist: cachedPayload.artist)
+                currentArtist = normalizedMusicDisplayArtist(cachedPayload.artist, title: cachedPayload.title)
+                currentImageURL = cachedPayload.artworkURL ?? track.artworkURL
+                currentStreamingServiceName = cachedPayload.service.rawValue
+                currentAudioQualityLabel = cachedPayload.qualityLabel
+                currentAudioCodecLabel = cachedPayload.codecLabel
+                pendingPlaybackFormatOverride = (cachedPayload.qualityLabel, cachedPayload.codecLabel)
+
+                let candidate = PlaybackCandidate(
+                    url: cachedPayload.streamURL, streamKind: .audio,
+                    mimeType: mimeTypeForCodecLabel(cachedPayload.codecLabel),
+                    itag: nil, expiresAt: nil, isCompatible: true
+                )
+                configurePlaybackCandidates(for: normalizedMediaID, candidates: [candidate])
+                playCurrentPlaybackCandidate()
+                startArtworkVideoProcessingIfNeeded(for: normalizedMediaID, title: currentTitle, artist: currentArtist, albumName: nil)
+                updateNowPlayingMetadata(force: true)
+                if !preserveQueue { seedRadioQueueForExternalTrack(externalTrack: track, resolvedPayload: cachedPayload, expectedCurrentMediaID: normalizedMediaID) }
+                preloadNextQueueEntryIfNeeded()
+                #if os(iOS)
+                loadNowPlayingArtwork(for: normalizedMediaID, title: currentTitle, artist: currentArtist, fallbackURL: currentImageURL)
+                #endif
+                if settings.metricsEnabled {
+                    let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
+                    await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
+                    logPlayback("⏱️ COLD START TO PLAY (cache): \(elapsed) ms for \(normalizedMediaID)")
+                }
+                return
+            }
+
+            let result: Result<ExternalStreamPayload, Error>? = await withTaskGroup(of: Result<ExternalStreamPayload, Error>?.self, returning: Result<ExternalStreamPayload, Error>?.self) { group in
+                // Path A: Primary resolvePayload (no MainActor access needed)
+                group.addTask {
+                    do {
+                        let payload = try await track.resolvePayload()
+                        return .success(payload)
+                    } catch {
+                        return .failure(error)
+                    }
+                }
+
+                // Path B: YouTube fallback via PlaybackURLResolver (InnerTube WebSafari path)
+                group.addTask { [weak self] in
+                    guard let self else { return nil }
+                    do {
+                        let candidates = try await resolvePlaybackCandidates(
+                            forID: normalizedMediaID,
+                            title: track.title,
+                            artist: track.artist
+                        )
+                        // Wrap candidates in ExternalStreamPayload-compatible form
+                        guard let bestCandidate = candidates.first else {
+                            throw PlaybackURLResolver.ResolverError.resolutionFailed(mediaID: normalizedMediaID)
+                        }
+                        return .success(ExternalStreamPayload(
+                            mediaID: normalizedMediaID,
+                            streamURL: bestCandidate.url,
+                            title: track.title,
+                            artist: track.artist,
+                            artworkURL: track.artworkURL,
+                            service: track.service,
+                            qualityLabel: track.qualityLabelHint ?? "YouTube",
+                            codecLabel: track.codecLabelHint ?? "HLS"
+                        ))
+                    } catch {
+                        return .failure(error)
+                    }
+                }
+
+                // Collect first success, cancel remaining
+                var lastError: Error?
+                for await result in group {
+                    if let result {
+                        switch result {
+                        case let .success(payload):
+                            group.cancelAll()
+                            return .success(payload)
+                        case let .failure(error):
+                            lastError = error
+                        }
+                    }
+                }
+                return lastError.map { .failure($0) }
+            }
+
+            guard let result else {
+                if Task.isCancelled { return }
+                handlePlaybackFailure(PlaybackURLResolver.ResolverError.resolutionFailed(mediaID: normalizedMediaID))
+                return
+            }
+
+            switch result {
+            case let .success(payload):
+                if Task.isCancelled { return }
+                guard currentVideoId == normalizedMediaID else { return }
+
+                externalPayloadCache[normalizedMediaID] = payload
                 currentTitle = normalizedMusicDisplayTitle(payload.title, artist: payload.artist)
                 currentArtist = normalizedMusicDisplayArtist(payload.artist, title: payload.title)
                 currentImageURL = payload.artworkURL ?? track.artworkURL
@@ -831,7 +939,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                     await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
                     logPlayback("⏱️ COLD START TO PLAY: \(elapsed) ms for \(normalizedMediaID)")
                 }
-            } catch {
+
+            case let .failure(error):
                 if error is CancellationError { return }
                 guard currentVideoId == normalizedMediaID else { return }
                 handlePlaybackFailure(error)
@@ -846,7 +955,12 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         playbackRecoveryAttemptCounts.removeAll(keepingCapacity: true)
         nextPlaybackPreloadTask?.cancel()
         nextPlaybackPreloadTask = nil
+        timeBasedPrewarmTask?.cancel()
+        timeBasedPrewarmTask = nil
         preparedNextPlayback = nil
+        distantPreloadTasks.forEach { $0.cancel() }
+        distantPreloadTasks.removeAll()
+        distantPreloadCache.removeAll()
         externalPayloadCache.removeAll(keepingCapacity: true)
         playbackQueue = []
         queuePosition = nil
@@ -872,7 +986,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         }
 
         if let earliestExpiry = prepared.playbackCandidates.compactMap(\.expiresAt).min(),
-           earliestExpiry.timeIntervalSinceNow <= CachePolicy.playbackMinimumRemainingLifetime {
+           earliestExpiry.timeIntervalSinceNow <= CachePolicy.playbackMinimumRemainingLifetime
+        {
             return true
         }
 
@@ -908,6 +1023,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         itemObserverTask = nil
         endObserverTask?.cancel()
         endObserverTask = nil
+        stallObserverTask?.cancel()
+        stallObserverTask = nil
 
         player.replaceCurrentItem(with: prepared.item)
 
@@ -918,6 +1035,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         playbackEngine.reactivateSession()
         observeItemStatus(prepared.item)
         observeItemEnd(prepared.item)
+        observeItemStall(prepared.item)
 
         playbackEngine.resetProgress()
         playbackEngine.play()
@@ -1007,6 +1125,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         itemObserverTask = nil
         endObserverTask?.cancel()
         endObserverTask = nil
+        stallObserverTask?.cancel()
+        stallObserverTask = nil
 
         player.replaceCurrentItem(with: item)
 
@@ -1021,6 +1141,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         observeItemStatus(item)
         // Patch 5: Wire the async end observer.
         observeItemEnd(item)
+        observeItemStall(item)
 
         playbackEngine.resetProgress()
         playbackEngine.play()
@@ -1028,6 +1149,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         updateNowPlayingMetadata()
         updateRemoteCommandState()
         preloadNextQueueEntryIfNeeded()
+        scheduleTimeBasedPrewarming()
     }
 
     private func resetPlaybackCandidates(for mediaID: String) {
@@ -1186,7 +1308,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 switch status {
                 case .readyToPlay:
                     self.logPlayback("AVPlayerItem ready to play")
-                    
+
                     if let start = self.pendingPlaybackTelemetryStartedAt {
                         let elapsed = Date().timeIntervalSince(start) * 1000
                         let type = self.pendingPlaybackTelemetryType ?? "playback"
@@ -1227,7 +1349,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                     // Step 2: One-shot exhaustive retry — fetch fresh URLs from the network.
                     // Patch 6: No fullReset() — reuse the existing AVPlayer instance.
                     if let mediaID = self.playbackCandidatesMediaID,
-                       !self.exhaustiveRetryAttemptedIDs.contains(mediaID) {
+                       !self.exhaustiveRetryAttemptedIDs.contains(mediaID)
+                    {
                         self.exhaustiveRetryAttemptedIDs.insert(mediaID)
                         // Patch 7: Capture position before we swap the URL.
                         self.savedPositionToRestore = self.currentTime > 1 ? self.currentTime : nil
@@ -1314,6 +1437,26 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         }
     }
 
+    /// Tracks playback stalls and emits telemetry events.
+    private func observeItemStall(_ item: AVPlayerItem) {
+        stallObserverTask?.cancel()
+        stallObserverTask = Task { @MainActor [weak self, weak item] in
+            guard let self, let item else { return }
+            let notifications = NotificationCenter.default.notifications(
+                named: .AVPlayerItemPlaybackStalled,
+                object: item
+            )
+            for await _ in notifications where !Task.isCancelled {
+                guard item === self.player.currentItem else { return }
+                self.stallCount += 1
+                CisumLog.playback.warning("⚠️ Playback stalled id=\(self.currentVideoId ?? "unknown", privacy: .public) stallCount=\(self.stallCount)")
+                CisumSignpost.playback.event("playback-stall", "id=\(self.currentVideoId ?? "unknown") count=\(self.stallCount)")
+
+                await self.playbackMetricsStore.recordStall()
+            }
+        }
+    }
+
     // MARK: - Listening / Scrobbling Helpers
 
     private func startListeningSessionIfNeeded(for state: TrackPresentationState) {
@@ -1324,9 +1467,9 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         hasSubmittedScrobbleForActiveSession = false
 
         if isLocalHistoryEnabled() {
-        Task {
-            currentListeningSessionID = await startListeningSession(state)
-        }
+            Task {
+                currentListeningSessionID = await startListeningSession(state)
+            }
         }
 
         publishLastFMNowPlaying(for: state)
@@ -1339,7 +1482,6 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         if isLocalHistoryEnabled(), let sessionID = currentListeningSessionID {
             finishListeningSession(sessionID, Date(), currentTime, hasSubmittedScrobbleForActiveSession, nil as Date?)
         }
-        
 
         activeScrobbleSessionMediaID = nil
         hasSubmittedScrobbleForActiveSession = false
@@ -1499,8 +1641,9 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         }
     }
     #endif
+
     // MARK: - Persistence
-    
+
     private func persistCurrentSession() {
         guard let mediaID = currentVideoId else { return }
         let state = PersistedTrackState(
@@ -1518,7 +1661,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
 
     public func restoreLastSession() {
         guard let state = queuePersistenceStore.loadLastSession() else { return }
-        
+
         let restoredTrack = CachedRadioTrack(
             videoID: state.mediaID,
             title: state.title,
@@ -1527,12 +1670,12 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             thumbnailURL: state.artworkURL,
             isExplicit: state.isExplicit
         )
-        
+
         playbackQueue = [.cachedRadio(restoredTrack)]
         queuePosition = 0
         queueCount = 1
         queueSource = .radioAutoplay
-        
+
         let presentation = TrackPresentationState(
             mediaID: state.mediaID,
             title: state.title,
@@ -1546,11 +1689,11 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             durationHint: nil,
             queueIdentity: restoredTrack.queueIdentity
         )
-        
+
         applyTrackPresentation(presentation)
-        
-        self.savedPositionToRestore = state.playbackTime > 0 ? state.playbackTime : nil
-        
+
+        savedPositionToRestore = state.playbackTime > 0 ? state.playbackTime : nil
+
         let seedSong = YouTubeMusicSong(
             id: state.mediaID,
             title: state.title,
@@ -1562,7 +1705,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             isExplicit: state.isExplicit
         )
         seedRadioQueue(from: seedSong)
-        
+
         #if os(iOS)
         loadNowPlayingArtwork(
             for: state.mediaID,
@@ -1603,5 +1746,4 @@ private final class ArtworkVideoProgressBridge: @unchecked Sendable {
             viewModel.artworkVideoStatus = .processing
         }
     }
-
 }

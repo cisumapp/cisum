@@ -17,7 +17,7 @@ public struct YouTubePlaylistImportSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.playlistLibraryStore) private var playlistLibraryStore
 
     @Environment(\.youtube) private var youtube
 
@@ -37,12 +37,11 @@ public struct YouTubePlaylistImportSheet: View {
 
     @State private var errorMessage: String?
 
-    private var importService: YouTubePlaylistImportService {
-        guard let youtubeService = youtube else {
-            fatalError("YouTube service not available in environment")
+    private var importService: YouTubePlaylistImportService? {
+        guard let youtubeService = youtube, let playlistLibraryStore else {
+            return nil
         }
-        let store = PlaylistLibraryStore(modelContainer: modelContext.container)
-        return YouTubePlaylistImportService(youtube: youtubeService, playlistStore: store)
+        return YouTubePlaylistImportService(youtube: youtubeService, playlistStore: playlistLibraryStore)
     }
 
     public var body: some View {
@@ -210,6 +209,7 @@ private extension YouTubePlaylistImportSheet {
         isSearching = true
         defer { isSearching = false }
 
+        guard let importService else { return }
         do {
             searchResults = try await importService.searchPlaylists(query: trimmedQuery)
         } catch {
@@ -222,6 +222,7 @@ private extension YouTubePlaylistImportSheet {
         importingPlaylistID = playlist.id
         defer { importingPlaylistID = nil }
 
+        guard let importService else { return }
         do {
             let playlistID = try await importService.importPlaylist(from: playlist)
             onImported(playlistID)
@@ -239,6 +240,7 @@ private extension YouTubePlaylistImportSheet {
         importingPlaylistID = linkImportToken
         defer { importingPlaylistID = nil }
 
+        guard let importService else { return }
         do {
             let playlistID = try await importService.importPlaylist(fromLink: trimmedLink)
             onImported(playlistID)

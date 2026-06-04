@@ -250,7 +250,7 @@ fileprivate extension DynamicPlayerIsland {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 6) {
                 if !playerViewModel.syncedLyricsLines.isEmpty {
-                    ForEach(Array(playerViewModel.syncedLyricsLines.enumerated()), id: \.offset) {
+                    ForEach(Array(playerViewModel.syncedLyricsLines.enumerated()), id: \.element.id) {
                         index, line in
                         let isCurrentLyric = index == playerViewModel.currentSyncedLyricIndex
 

@@ -7,13 +7,13 @@ let package = Package(
     name: "Home",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(
             name: "Home",
             targets: ["Home"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../Shared/Aesthetics"),
@@ -21,7 +21,7 @@ let package = Package(
         .package(path: "../../Shared/Models"),
         .package(path: "../Tracks"),
         .package(path: "../Player"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK")
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
     ],
     targets: [
         .target(
@@ -32,9 +32,9 @@ let package = Package(
                 .product(name: "Models", package: "Models"),
                 .product(name: "Tracks", package: "Tracks"),
                 .product(name: "Player", package: "Player"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK")
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

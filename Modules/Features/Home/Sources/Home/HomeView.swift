@@ -14,10 +14,25 @@ public struct HomeView: View {
     @Environment(\.playerViewModel) private var playerViewModel
     @Environment(\.searchViewModel) private var searchViewModel
     @Environment(PlayerPresentationController.self) private var playerPresentationController
-    
+
     @Query(sort: \ListeningHistoryEntry.startedAt, order: .reverse) private var recentHistory: [ListeningHistoryEntry]
-    
+
     @State private var scrollOffset: CGFloat = 0
+
+    @State private var uniqueHistoryItemsWithDisplay: [HomeFeedItemWithDisplay] = []
+
+    private func updateUniqueHistoryItems() {
+        var seenMediaIDs = Set<String>()
+        uniqueHistoryItemsWithDisplay = recentHistory
+            .filter { entry in
+                seenMediaIDs.insert(entry.mediaID).inserted
+            }
+            .prefix(15)
+            .map { entry in
+                let item = entry.asHomeFeedItem
+                return .init(item: item, display: item.displayItem())
+            }
+    }
 
     init(viewModel: HomeViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -28,7 +43,7 @@ public struct HomeView: View {
             content
         }
     }
-    
+
     var content: some View {
         LazyVStack(alignment: .leading, spacing: 24) {
             if viewModel.isLoading, viewModel.items.isEmpty {
@@ -37,7 +52,7 @@ public struct HomeView: View {
                     .padding(.top, 16)
                     .tint(.primary)
             }
-            
+
             if let errorMessage = viewModel.errorMessage, viewModel.items.isEmpty {
                 ContentUnavailableView(
                     "Unable to Load Home",
@@ -45,7 +60,7 @@ public struct HomeView: View {
                     description: Text(errorMessage)
                 )
                 .foregroundStyle(.primary)
-                
+
                 Button("Retry") {
                     Task {
                         await viewModel.refresh()
@@ -54,63 +69,57 @@ public struct HomeView: View {
                 .buttonStyle(.borderedProminent)
                 .frame(maxWidth: .infinity)
             }
-            
+
             // Horizontal Sections
-            if !recentHistory.isEmpty {
-                // Deduplicate history by mediaID to avoid repeating the same song
-                var seenMediaIDs = Set<String>()
-                let uniqueHistory = recentHistory.filter { seenMediaIDs.insert($0.mediaID).inserted }.prefix(15)
-                
-                let historyItems = uniqueHistory.map { $0.asHomeFeedItem }
-                HorizontalTrackSection(title: "Jump Back In", items: Array(historyItems), onPlay: playItem)
+            if !uniqueHistoryItemsWithDisplay.isEmpty {
+                HorizontalTrackSection(title: "Jump Back In", items: uniqueHistoryItemsWithDisplay, onPlay: playItem)
             }
-            
-            if !viewModel.topSongs.isEmpty {
-                HorizontalTrackSection(title: "Top Songs", items: viewModel.topSongs, onPlay: playItem)
+
+            if !viewModel.topSongsWithDisplay.isEmpty {
+                HorizontalTrackSection(title: "Top Songs", items: viewModel.topSongsWithDisplay, onPlay: playItem)
             }
-            
-            if !viewModel.trending.isEmpty {
-                HorizontalTrackSection(title: "Trending", items: viewModel.trending, onPlay: playItem)
+
+            if !viewModel.trendingWithDisplay.isEmpty {
+                HorizontalTrackSection(title: "Trending", items: viewModel.trendingWithDisplay, onPlay: playItem)
             }
-            
+
             // Vertical generic recommendations
             if !viewModel.items.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Recommended for You")
                         .font(.title2.bold())
                         .padding(.horizontal)
-                    
+
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
-                        ForEach(viewModel.items, id: \.id) { item in
-                            let display = item.displayItem()
+                        ForEach(viewModel.displayItems) { wrapped in
                             Button {
-                                playItem(item)
+                                playItem(wrapped.item)
                             } label: {
                                 TrackCard(
-                                    trackName: display.title,
-                                    artistName: display.subtitle,
-                                    duration: display.duration ?? "",
-                                    artworkURL: display.artworkURL,
+                                    trackName: wrapped.display.title,
+                                    artistName: wrapped.display.subtitle,
+                                    duration: wrapped.display.duration ?? "",
+                                    artworkURL: wrapped.display.artworkURL,
                                     artworkColor: .cisumAccent
                                 )
                             }
                             .buttonStyle(.plain)
                             .onAppear {
-                                viewModel.loadMoreIfNeeded(currentItem: item)
+                                viewModel.loadMoreIfNeeded(currentItem: wrapped.item)
                             }
                         }
                     }
                     .padding(.horizontal)
                 }
             }
-            
+
             if viewModel.isLoadingMore {
                 ProgressView("Loading More...")
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
                     .tint(.primary)
             }
-            
+
             if let footerMessage = viewModel.footerMessage, !viewModel.items.isEmpty {
                 Text(footerMessage)
                     .font(.footnote)
@@ -122,10 +131,14 @@ public struct HomeView: View {
         .padding(.bottom, 120)
         .padding(.top, 16)
         .task {
+            updateUniqueHistoryItems()
             await viewModel.loadIfNeeded()
         }
         .refreshable {
             await viewModel.refresh()
+        }
+        .onChange(of: recentHistory.count) { _, _ in
+            updateUniqueHistoryItems()
         }
     }
 
@@ -161,27 +174,26 @@ public struct HomeView: View {
 
 private struct HorizontalTrackSection: View {
     let title: String
-    let items: [HomeFeedItem]
+    let items: [HomeFeedItemWithDisplay]
     let onPlay: (HomeFeedItem) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.title2.bold())
                 .padding(.horizontal)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 12) {
-                    ForEach(items, id: \.id) { item in
-                        let display = item.displayItem()
+                    ForEach(items) { wrapped in
                         Button {
-                            onPlay(item)
+                            onPlay(wrapped.item)
                         } label: {
                             TrackCard(
-                                trackName: display.title,
-                                artistName: display.subtitle,
-                                duration: display.duration ?? "",
-                                artworkURL: display.artworkURL,
+                                trackName: wrapped.display.title,
+                                artistName: wrapped.display.subtitle,
+                                duration: wrapped.display.duration ?? "",
+                                artworkURL: wrapped.display.artworkURL,
                                 artworkColor: .cisumAccent
                             )
                         }
@@ -197,13 +209,13 @@ private struct HorizontalTrackSection: View {
 extension ListeningHistoryEntry {
     var asHomeFeedItem: HomeFeedItem {
         let song = YouTubeMusicSong(
-            id: self.mediaID,
-            title: self.title,
-            artists: [self.artist],
-            album: self.album,
+            id: mediaID,
+            title: title,
+            artists: [artist],
+            album: album,
             duration: nil,
-            thumbnailURL: self.artworkURL.flatMap { URL(string: $0) },
-            videoId: self.mediaID,
+            thumbnailURL: artworkURL.flatMap { URL(string: $0) },
+            videoId: mediaID,
             isExplicit: false
         )
         return .musicSong(song)

@@ -6,7 +6,7 @@ import SwiftData
 @Model
 public final class SpotifyCacheEntry {
     @Attribute(.unique) public var key: String
-    public var payload: Data
+    @Attribute(.externalStorage) public var payload: Data
     public var updatedAt: Date
 
     public init(key: String, payload: Data, updatedAt: Date = Date()) {

@@ -5,26 +5,29 @@
 //  Created by Aarav Gupta on 29/04/26.
 //
 
-import Kingfisher
 import Aesthetics
+import Kingfisher
 import Models
 import Player
+import ProviderSDK
 import SwiftData
 import SwiftUI
 import YouTubeSDK
 
 public struct PlaylistView: View {
-    let playlist: Playlist
+    let playlist: Models.Playlist
     @Query private var tracks: [PlaylistItem]
 
     @Environment(PlayerPresentationController.self) private var playerPresentationController
+    @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     @Environment(\.searchViewModel) private var searchViewModel
     @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.modelContext) private var modelContext
 
     @State private var showPlaybackAlert = false
     @State private var playbackAlertMessage = ""
 
-    public init(playlist: Playlist) {
+    public init(playlist: Models.Playlist) {
         self.playlist = playlist
         let playlistID = playlist.playlistID
         _tracks = Query(
@@ -43,57 +46,14 @@ public struct PlaylistView: View {
                         .black,
                         playerViewModel.currentAccentColor,
                         playerViewModel.currentAccentColor,
-                        playerViewModel.currentAccentColor
+                        playerViewModel.currentAccentColor,
                     ],
                     startPoint: .bottom,
                     endPoint: .top
                 )
 
                 ScrollView {
-                    Rectangle()
-                        .fill(playerViewModel.currentAccentColor)
-                        .frame(width: size.width, height: size.width)
-                        .overlay {
-                            if let artwork = playlist.artworkURLString,
-                               let artworkURL = URL(string: artwork) {
-                                KFImage(artworkURL)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: size.width, height: size.width)
-                                    .clipped()
-                            }
-                        }
-                        .overlay {
-                            VStack(alignment: .leading) {
-                                Text(playlist.title)
-                                    .font(.largeTitle)
-                                    .fontWeight(.semibold)
-
-                                if let owner = playlist.ownerName {
-                                    Button {} label: {
-                                        HStack(spacing: 4) {
-                                            Text(owner)
-                                                .textCase(.uppercase)
-
-                                            Image(systemName: "chevron.right")
-                                                .font(.callout)
-                                        }
-                                        .fontWeight(.semibold)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .frame(
-                                maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading
-                            )
-                            .padding()
-                            .background(
-                                LinearGradient(
-                                    colors: [.black.opacity(0.7), .clear], startPoint: .bottom,
-                                    endPoint: .center
-                                )
-                            )
-                        }
+                    PlaylistArtworkHeader(playlist: playlist, width: size.width)
 
                     HStack {
                         Button {
@@ -117,47 +77,11 @@ public struct PlaylistView: View {
 
                     LazyVStack(spacing: 0) {
                         ForEach(Array(tracks.enumerated()), id: \.element.itemKey) { index, track in
-                            Button {
+                            PlaylistTrackRow(index: index, track: track) {
                                 Task {
                                     await playPlaylist(startingAt: index)
                                 }
-                            } label: {
-                                VStack {
-                                    HStack {
-                                        Text("\(index + 1)")
-                                            .font(.caption.monospacedDigit())
-                                            .frame(width: 24, alignment: .leading)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(track.title)
-                                                .lineLimit(1)
-
-                                            Text(track.artistName ?? "")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-
-                                        Spacer()
-
-                                        Group {
-                                            Menu {
-                                                Button {} label: {
-                                                    Text("Download")
-                                                }
-                                            } label: {
-                                                Image(systemName: "ellipsis")
-                                            }
-                                            .menuStyle(.button)
-                                            .buttonStyle(.plain)
-                                        }
-                                        .font(.system(size: 20))
-                                    }
-                                    .fontWeight(.semibold)
-                                }
-                                .padding()
                             }
-                            .buttonStyle(.plain)
 
                             Divider()
                                 .padding(.horizontal)
@@ -175,7 +99,7 @@ public struct PlaylistView: View {
     private func playPlaylist(startingAt index: Int) async {
         guard tracks.indices.contains(index) else { return }
 
-        let queueTracks = tracks.compactMap(makePlayableQueueTrack(for:))
+        let queueTracks = tracks.compactMap { makePlayableQueueTrack(for: $0) }
         guard !queueTracks.isEmpty else {
             playbackAlertMessage = "This playlist does not have any playable tracks yet."
             showPlaybackAlert = true
@@ -198,6 +122,8 @@ public struct PlaylistView: View {
     private func makePlayableQueueTrack(for track: PlaylistItem) -> ExternalQueueTrack {
         let artworkURL = track.artworkURLString.flatMap { URL(string: $0) }
         let searchItem = makeSearchItem(for: track, artworkURL: artworkURL)
+        let itemKey = track.itemKey
+        let store = playlistLibraryStore
 
         return ExternalQueueTrack(
             mediaID: playbackMediaID(for: track),
@@ -214,87 +140,130 @@ public struct PlaylistView: View {
                         "Unable to resolve a playable stream for \"\(track.title)\"."
                     )
                 }
+
+                // Cache the resolved ID!
+                if resolved.mediaID != searchItem.id {
+                    await store?.updateProviderID(for: itemKey, provider: resolved.service.rawValue, trackID: resolved.mediaID)
+                }
+
                 return resolved
             }
         )
     }
 
     private func playbackMediaID(for track: PlaylistItem) -> String {
-        if let resolvedMediaID = track.resolvedMediaID?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ),
-            !resolvedMediaID.isEmpty {
-            return resolvedMediaID
+        let validID = { (id: String?) -> String? in
+            guard let unwrapped = id?.trimmingCharacters(in: .whitespacesAndNewlines), !unwrapped.isEmpty else { return nil }
+            return unwrapped
         }
-
-        return track.itemKey
+        return validID(track.tidalID) ??
+            validID(track.qobuzID) ??
+            validID(track.appleMusicID) ??
+            validID(track.youtubeMusicID) ??
+            validID(track.youtubeID) ??
+            validID(track.spotifyID) ??
+            validID(track.soundcloudID) ??
+            validID(track.deezerID) ??
+            track.itemKey
     }
 
     private func makeSearchItem(for track: PlaylistItem, artworkURL: URL?) -> FederatedSearchItem {
         let artistName = track.artistName ?? ""
         let duration = track.durationSeconds
 
-        if let resolvedMediaID = track.resolvedMediaID, !resolvedMediaID.isEmpty {
-            let youtubeSong = YouTubeMusicSong(
-                id: resolvedMediaID,
-                title: track.title,
-                artists: [artistName].filter { !$0.isEmpty },
-                album: track.albumName,
-                duration: duration.map { TimeInterval($0) },
-                thumbnailURL: artworkURL,
-                videoId: resolvedMediaID,
-                isExplicit: false
-            )
-
-            return FederatedSearchItem(
-                id: resolvedMediaID,
-                title: track.title,
-                subtitle: artistName.isEmpty ? (track.albumName ?? "YouTube") : artistName,
-                artworkURL: artworkURL,
-                durationSeconds: duration,
-                isPlayable: true,
-                isExplicit: false,
-                audioQualityLabel: nil,
-                audioCodecLabel: nil,
-                payload: .youtubeMusic(youtubeSong)
-            )
+        let validID = { (id: String?) -> String? in
+            guard let unwrapped = id?.trimmingCharacters(in: .whitespacesAndNewlines), !unwrapped.isEmpty else { return nil }
+            return unwrapped
         }
 
-        switch playlist.sourceProvider {
-        case .youtube, .youtubeMusic:
-            let youtubeID = track.sourceTrackID ?? track.itemKey
-            guard
-                let youtubeVideo = makeSyntheticYouTubeVideo(
-                    videoID: youtubeID,
-                    title: track.title,
-                    author: artistName,
-                    durationSeconds: duration,
-                    artworkURL: artworkURL
-                )
-            else {
+        let payload: FederatedSearchPayload
+        let mediaID: String
+
+        if let tidalID = validID(track.tidalID) {
+            mediaID = tidalID
+            let rep = TrackRepresentation(providerID: "tidal", providerTrackID: tidalID, title: track.title, artist: artistName, duration: duration, artworkURL: artworkURL)
+            let sdkTrack = Track(
+                id: CanonicalID(value: tidalID),
+                title: track.title,
+                artists: [Artist(id: ArtistIdentifier(provider: "tidal", value: artistName), name: artistName)],
+                album: Album(id: AlbumIdentifier(provider: "tidal", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "tidal", value: artistName), name: artistName)),
+                duration: duration ?? 0,
+                representations: [rep]
+            )
+            payload = .providerSDKTrack(sdkTrack)
+        } else if let qobuzID = validID(track.qobuzID) {
+            mediaID = qobuzID
+            let rep = TrackRepresentation(providerID: "qobuz", providerTrackID: qobuzID, title: track.title, artist: artistName, duration: duration, artworkURL: artworkURL)
+            let sdkTrack = Track(
+                id: CanonicalID(value: qobuzID),
+                title: track.title,
+                artists: [Artist(id: ArtistIdentifier(provider: "qobuz", value: artistName), name: artistName)],
+                album: Album(id: AlbumIdentifier(provider: "qobuz", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "qobuz", value: artistName), name: artistName)),
+                duration: duration ?? 0,
+                representations: [rep]
+            )
+            payload = .providerSDKTrack(sdkTrack)
+        } else if let appleID = validID(track.appleMusicID) {
+            mediaID = appleID
+            let rep = TrackRepresentation(providerID: "appleMusic", providerTrackID: appleID, title: track.title, artist: artistName, duration: duration, artworkURL: artworkURL)
+            let sdkTrack = Track(
+                id: CanonicalID(value: appleID),
+                title: track.title,
+                artists: [Artist(id: ArtistIdentifier(provider: "appleMusic", value: artistName), name: artistName)],
+                album: Album(id: AlbumIdentifier(provider: "appleMusic", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "appleMusic", value: artistName), name: artistName)),
+                duration: duration ?? 0,
+                representations: [rep]
+            )
+            payload = .providerSDKTrack(sdkTrack)
+        } else if let ytMusicID = validID(track.youtubeMusicID) {
+            mediaID = ytMusicID
+            let ytSong = YouTubeMusicSong(id: ytMusicID, title: track.title, artists: [artistName].filter { !$0.isEmpty }, album: track.albumName, duration: duration.map { TimeInterval($0) }, thumbnailURL: artworkURL, videoId: ytMusicID, isExplicit: false)
+            payload = .youtubeMusic(ytSong)
+        } else if let ytID = validID(track.youtubeID) {
+            mediaID = ytID
+            let ytVideo = makeSyntheticYouTubeVideo(videoID: ytID, title: track.title, author: artistName, durationSeconds: duration, artworkURL: artworkURL)
+            if let ytVideo {
+                payload = .youtubeVideo(ytVideo)
+            } else {
                 return makeFallbackSpotifyItem(for: track, artworkURL: artworkURL)
             }
-
-            return FederatedSearchItem(
-                id: youtubeID,
-                title: track.title,
-                subtitle: artistName.isEmpty ? (track.albumName ?? "YouTube") : artistName,
-                artworkURL: artworkURL,
-                durationSeconds: duration,
-                isPlayable: true,
-                isExplicit: false,
-                audioQualityLabel: nil,
-                audioCodecLabel: nil,
-                payload: .youtubeVideo(youtubeVideo)
-            )
-
-        default:
-            return makeFallbackSpotifyItem(for: track, artworkURL: artworkURL)
+        } else if let spotifyID = validID(track.spotifyID) {
+            mediaID = spotifyID
+            let spotifyTrack = SpotifySearchTrack(id: spotifyID, title: track.title, artistName: artistName, albumName: track.albumName, artworkURL: artworkURL, durationSeconds: duration ?? 0, previewURL: nil, isrc: track.isrc)
+            payload = .spotify(spotifyTrack)
+        } else if playlist.sourceProvider == .spotify {
+            let spotifyID = track.sourceTrackID ?? track.itemKey
+            mediaID = spotifyID
+            let spotifyTrack = SpotifySearchTrack(id: spotifyID, title: track.title, artistName: artistName, albumName: track.albumName, artworkURL: artworkURL, durationSeconds: duration ?? 0, previewURL: nil, isrc: track.isrc)
+            payload = .spotify(spotifyTrack)
+        } else {
+            let youtubeID = track.sourceTrackID ?? track.itemKey
+            mediaID = youtubeID
+            let youtubeVideo = makeSyntheticYouTubeVideo(videoID: youtubeID, title: track.title, author: artistName, durationSeconds: duration, artworkURL: artworkURL)
+            if let youtubeVideo {
+                payload = .youtubeVideo(youtubeVideo)
+            } else {
+                return makeFallbackSpotifyItem(for: track, artworkURL: artworkURL)
+            }
         }
+
+        return FederatedSearchItem(
+            id: mediaID,
+            title: track.title,
+            subtitle: artistName.isEmpty ? (track.albumName ?? "YouTube") : artistName,
+            artworkURL: artworkURL,
+            durationSeconds: duration,
+            isPlayable: true,
+            isExplicit: false,
+            audioQualityLabel: nil,
+            audioCodecLabel: nil,
+            payload: payload
+        )
     }
 
     private func makeFallbackSpotifyItem(for track: PlaylistItem, artworkURL: URL?)
-        -> FederatedSearchItem {
+        -> FederatedSearchItem
+    {
         let artistName = track.artistName ?? ""
         let spotifyID = track.sourceTrackID ?? track.itemKey
         let spotifyTrack = SpotifySearchTrack(
@@ -335,7 +304,7 @@ public struct PlaylistView: View {
             "viewCount": "0",
             "author": author,
             "channelId": "",
-            "shortDescription": ""
+            "shortDescription": "",
         ]
 
         if let durationSeconds {
@@ -345,8 +314,8 @@ public struct PlaylistView: View {
         if let artworkURL {
             videoDetails["thumbnail"] = [
                 "thumbnails": [
-                    ["url": artworkURL.absoluteString, "width": 0, "height": 0]
-                ]
+                    ["url": artworkURL.absoluteString, "width": 0, "height": 0],
+                ],
             ]
         }
 
@@ -361,6 +330,110 @@ public struct PlaylistView: View {
     }
 }
 
+// MARK: - Subviews
+
+private struct PlaylistArtworkHeader: View {
+    let playlist: Models.Playlist
+    let width: CGFloat
+    @Environment(\.playerViewModel) private var playerViewModel
+
+    var body: some View {
+        Rectangle()
+            .fill(playerViewModel.currentAccentColor)
+            .frame(width: width, height: width)
+            .overlay {
+                if let artwork = playlist.artworkURLString,
+                   let artworkURL = URL(string: artwork)
+                {
+                    KFImage(artworkURL)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: width, height: width)
+                        .clipped()
+                }
+            }
+            .overlay {
+                VStack(alignment: .leading) {
+                    Text(playlist.title)
+                        .font(.largeTitle)
+                        .fontWeight(.semibold)
+
+                    if let owner = playlist.ownerName {
+                        Button {} label: {
+                            HStack(spacing: 4) {
+                                Text(owner)
+                                    .textCase(.uppercase)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.callout)
+                            }
+                            .fontWeight(.semibold)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(
+                    maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading
+                )
+                .padding()
+                .background(
+                    LinearGradient(
+                        colors: [.black.opacity(0.7), .clear], startPoint: .bottom,
+                        endPoint: .center
+                    )
+                )
+            }
+    }
+}
+
+private struct PlaylistTrackRow: View {
+    let index: Int
+    let track: PlaylistItem
+    let onPlay: () -> Void
+
+    var body: some View {
+        Button {
+            onPlay()
+        } label: {
+            VStack {
+                HStack {
+                    Text("\(index + 1)")
+                        .font(.caption.monospacedDigit())
+                        .frame(width: 24, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(track.title)
+                            .lineLimit(1)
+
+                        Text(track.artistName ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Group {
+                        Menu {
+                            Button {} label: {
+                                Text("Download")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .menuStyle(.button)
+                        .buttonStyle(.plain)
+                    }
+                    .font(.system(size: 20))
+                }
+                .fontWeight(.semibold)
+            }
+            .padding()
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview {
-    PlaylistView(playlist: Playlist(title: "tera sharmana", normalizedTitle: "tera sharmana"))
+    PlaylistView(playlist: Models.Playlist(title: "tera sharmana", normalizedTitle: "tera sharmana"))
 }

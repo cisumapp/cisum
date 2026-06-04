@@ -41,34 +41,22 @@ public struct ProfileView: View {
     @State private var pendingFlowId: String?
 
     public var body: some View {
-        ZStack {
-            Color.cisumBg
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    profileHeader
-
-                    cisumAccountCard
-
-                    linkedAccountsSection
-
-                    profileStatusCard
-                    
-                    supportSection
-
-                    Text(
-                        "This profile screen is intentionally lightweight for now and will be expanded in a later pass."
-                    )
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                profileHeader
+                cisumAccountCard
+                linkedAccountsSection
+                profileStatusCard
+                supportSection
+                
+                Text("This profile screen is intentionally lightweight for now and will be expanded in a later pass.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                }
-                .padding()
             }
-            .safeAreaPadding(.top, 80)
-            .contentMargins(.bottom, 140)
+            .padding()
         }
-        .background(Color.cisumBg)
-        .ignoresSafeArea()
+        .background(Color.cisumBg.ignoresSafeArea())
+        .contentMargins(.bottom, 50)
         .onAppear {
             refreshSessionState()
         }
@@ -79,7 +67,7 @@ public struct ProfileView: View {
             if newPhase == .active {
                 Task {
                     await refreshLastFMStatus()
-
+                    
                     if let flowId = pendingFlowId {
                         do {
                             if let scrobbler = lastFMScrobbler {
@@ -275,7 +263,7 @@ public struct ProfileView: View {
                             .scaledToFit()
                             .frame(width: 18, height: 18)
                             .frame(width: 24)
-                        
+
                         Text("Google")
                         Spacer()
                         if isGoogleConnected {
@@ -300,17 +288,17 @@ public struct ProfileView: View {
                             .disabled(isConnectingGoogle)
                         }
                     }
-                    
+
                     Divider()
                 }
-                
+
                 // YouTube
                 HStack {
                     Image(systemName: "play.rectangle.fill")
                         .font(.title3)
                         .foregroundStyle(.red)
                         .frame(width: 24)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("YouTube")
                         if hasOAuthSession {
@@ -339,9 +327,9 @@ public struct ProfileView: View {
                         .buttonStyle(.bordered)
                     }
                 }
-                
+
                 Divider()
-                
+
                 // Spotify
                 VStack(spacing: 12) {
                     HStack {
@@ -349,7 +337,7 @@ public struct ProfileView: View {
                             .font(.title3)
                             .foregroundStyle(.green)
                             .frame(width: 24)
-                        
+
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Spotify")
                             if spotifyCoordinator.hasSession {
@@ -392,7 +380,7 @@ public struct ProfileView: View {
                             #endif
                         }
                     }
-                    
+
                     #if os(iOS) && canImport(SpotifySDK)
                     if !spotifyCoordinator.hasSession {
                         Toggle(
@@ -403,9 +391,9 @@ public struct ProfileView: View {
                     }
                     #endif
                 }
-                
+
                 Divider()
-                
+
                 // Last.fm
 //                VStack(spacing: 12) {
 //                    HStack {
@@ -413,7 +401,7 @@ public struct ProfileView: View {
 //                            .font(.title3)
 //                            .foregroundStyle(.red)
 //                            .frame(width: 24)
-//                        
+//
 //                        VStack(alignment: .leading, spacing: 2) {
 //                            Text("Last.fm")
 //                            if lastFMSettings.isConnected {
@@ -476,7 +464,7 @@ public struct ProfileView: View {
 //                            }
 //                        }
 //                    }
-//                    
+//
 //                    if lastFMSettings.isConnected {
 //                        Toggle("Enable Scrobbling", isOn: Bindable(lastFMSettings).enabled)
 //                            .font(.subheadline)
@@ -484,7 +472,6 @@ public struct ProfileView: View {
 //                            .font(.subheadline)
 //                    }
 //                }
-                
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 14)
@@ -539,7 +526,7 @@ public struct ProfileView: View {
                     Image(systemName: "doc.text.magnifyingglass")
                         .foregroundStyle(.blue)
                         .frame(width: 24)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Share App Logs")
                             .foregroundStyle(.primary)
@@ -547,7 +534,7 @@ public struct ProfileView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    
+
                     Spacer()
                     Image(systemName: "square.and.arrow.up")
                         .foregroundStyle(.secondary)

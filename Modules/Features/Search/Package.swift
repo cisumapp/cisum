@@ -6,10 +6,10 @@ let package = Package(
     name: "Search",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
-        .library(name: "Search", targets: ["Search"])
+        .library(name: "Search", targets: ["Search"]),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
@@ -24,7 +24,7 @@ let package = Package(
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
-        .package(path: "../Tracks")
+        .package(path: "../Tracks"),
     ],
     targets: [
         .target(
@@ -42,9 +42,9 @@ let package = Package(
                 .product(name: "Player", package: "Player"),
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "SpotifySDK", package: "SpotifySDK"),
-                .product(name: "Tracks", package: "Tracks")
+                .product(name: "Tracks", package: "Tracks"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

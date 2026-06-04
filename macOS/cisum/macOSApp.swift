@@ -18,9 +18,17 @@ import YouTubeSDK
 struct macOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
-    private let youtube = YouTube.shared
-    private let cisum = cisumModule()
+    private let youtube: YouTube
+    private let cisum: Module
     @State private var searchOverlay = SearchOverlayController()
+
+    init() {
+        PerfLog.info("🚀 cisum macOS app initializing")
+        let timer = PerfLog.start("macos-app-init")
+        self.youtube = YouTube.shared
+        self.cisum = cisumModule()
+        PerfLog.end(timer)
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -32,13 +40,18 @@ struct macOSApp: App {
                     backgroundFill
                 }
                 .onOpenURL { url in
+                    PerfLog.info("💻 Handling incoming URL: \(url.absoluteString)")
                     cisum.handleIncomingURL(url)
+                }
+                .onAppear {
+                    PerfLog.mark("root-view-appeared")
                 }
                 .clipShape(.rect(cornerRadius: 26, style: .continuous))
                 .removeWindowDecorations()
                 .modelContainer(cisum.modelContainer)
         }
         .onChange(of: scenePhase) { _, newPhase in
+            PerfLog.info("Scene phase changed: \(String(describing: newPhase))")
             cisum.handleScenePhaseChange(newPhase)
         }
 

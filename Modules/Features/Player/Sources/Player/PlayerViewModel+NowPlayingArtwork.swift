@@ -171,7 +171,8 @@ extension PlayerViewModel {
         info[MPNowPlayingInfoPropertyPlaybackRate] = nowPlayingState.playbackRate
 
         if let currentArtworkResource,
-           let mediaItemArtwork = Self.makeMediaItemArtwork(from: currentArtworkResource) {
+           let mediaItemArtwork = Self.makeMediaItemArtwork(from: currentArtworkResource)
+        {
             info[MPMediaItemPropertyArtwork] = mediaItemArtwork
         }
 
@@ -247,7 +248,8 @@ extension PlayerViewModel {
 
     private func updateAccentColor(from artwork: CachedNowPlayingArtworkResource, mediaID: String) {
         if let cachedAccent = artworkAccentCache[mediaID],
-           cachedAccent.artworkURL == artwork.url {
+           cachedAccent.artworkURL == artwork.url
+        {
             applyCurrentAccentColor(cachedAccent.color)
             return
         }
@@ -530,14 +532,16 @@ extension PlayerViewModel {
         if requestedSize.width > 0,
            requestedSize.height > 0,
            requestedSize.width.isFinite,
-           requestedSize.height.isFinite {
+           requestedSize.height.isFinite
+        {
             return requestedSize
         }
 
         if fallbackSize.width > 0,
            fallbackSize.height > 0,
            fallbackSize.width.isFinite,
-           fallbackSize.height.isFinite {
+           fallbackSize.height.isFinite
+        {
             return fallbackSize
         }
 

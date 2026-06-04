@@ -70,40 +70,38 @@ public final class cisumModule {
 
     // MARK: - Neutral Facades
 
-    public var homeView: AnyView {
-        AnyView(home.view)
+    public var homeView: some View {
+        home.view
     }
 
-    public var discoverView: AnyView {
-        AnyView(discover.view)
+    public var discoverView: some View {
+        discover.view
     }
 
-    public var libraryView: AnyView {
-        AnyView(library.view)
+    public var libraryView: some View {
+        library.view
     }
 
-    public var searchView: AnyView {
-        AnyView(search.view)
+    public var searchView: some View {
+        search.view
     }
 
-    public var settingsView: AnyView {
-        AnyView(profile.settingsView)
+    public var settingsView: some View {
+        profile.settingsView
     }
 
-    public var pluginsView: AnyView {
-        AnyView(
-            PluginsView()
-                .environment(container)
-                .environment(container.playbackServices.streamingProviderSettings)
-                .environment(ProviderManifestStore.shared)
-        )
+    public var pluginsView: some View {
+        PluginsView()
+            .environment(container)
+            .environment(container.playbackServices.streamingProviderSettings)
+            .environment(ProviderManifestStore.shared)
     }
 
-    public var profileView: AnyView {
-        AnyView(profile.profileView)
+    public var profileView: some View {
+        profile.profileView
     }
 
-    public var loginView: AnyView {
+    public var loginView: some View {
         let authService = container.userServices.authService
         let supabaseService = container.userServices.supabaseService
         let analyticsService = container.userServices.analyticsService
@@ -123,26 +121,26 @@ public final class cisumModule {
             analyticsService.identify(userId: user.id, properties: [
                 "email": user.emailAddresses.first?.emailAddress ?? "",
                 "name": user.fullName,
-                "signup": isSignup
+                "signup": isSignup,
             ])
             analyticsService.captureEvent(
                 isSignup ? "user_signed_up" : "user_signed_in",
                 properties: ["email": user.emailAddresses.first?.emailAddress ?? ""]
             )
         }
-        return AnyView(view.environment(authService))
+        return view.environment(authService)
     }
 
-    public var spotifyLoginView: AnyView {
+    public var spotifyLoginView: some View {
         #if canImport(SpotifySDK)
-        AnyView(SpotifyLoginView(coordinator: container.userServices.spotifySessionCoordinator))
+        SpotifyLoginView(coordinator: container.userServices.spotifySessionCoordinator)
         #else
-        AnyView(EmptyView())
+        EmptyView()
         #endif
     }
 
-    public var youtubeLoginView: AnyView {
-        let view = YouTubeOAuthDeviceFlowView { [weak appRouter] _ in
+    public var youtubeLoginView: some View {
+        YouTubeOAuthDeviceFlowView { [weak appRouter] _ in
             Task { @MainActor in
                 _ = await YouTube.shared.ensureAccessToken()
                 appRouter?.pop()
@@ -152,26 +150,25 @@ public final class cisumModule {
                 appRouter?.pop()
             }
         }
-        return AnyView(view)
     }
 
-    public func playlistDetailView(for id: String) -> AnyView {
-        AnyView(PlaylistDetailWrapper(playlistID: id))
+    public func playlistDetailView(for id: String) -> some View {
+        PlaylistDetailWrapper(playlistID: id)
     }
 
-    public func artistDetailView(for id: String) -> AnyView {
+    public func artistDetailView(for id: String) -> some View {
         #if os(iOS)
-        AnyView(ArtistDetailWrapper(artistID: id))
+        ArtistDetailWrapper(artistID: id)
         #else
-        AnyView(EmptyView())
+        EmptyView()
         #endif
     }
 
-    public func albumDetailView(for id: String) -> AnyView {
+    public func albumDetailView(for id: String) -> some View {
         #if os(iOS)
-        AnyView(AlbumDetailWrapper(albumID: id))
+        AlbumDetailWrapper(albumID: id)
         #else
-        AnyView(EmptyView())
+        EmptyView()
         #endif
     }
 
@@ -195,12 +192,12 @@ public final class cisumModule {
         container.playbackServices.playerViewModel
     }
 
-    public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> AnyView {
-        AnyView(player.miniPlayer(isExpanded: isExpanded, namespace: namespace))
+    public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> some View {
+        player.miniPlayer(isExpanded: isExpanded, namespace: namespace)
     }
 
-    public func expandablePlayer(show: Binding<Bool>, isExpanded: Binding<Bool>, collapsedFrame: CGRect) -> AnyView {
-        AnyView(player.expandablePlayer(show: show, isExpanded: isExpanded, collapsedFrame: collapsedFrame))
+    public func expandablePlayer(show: Binding<Bool>, isExpanded: Binding<Bool>, collapsedFrame: CGRect) -> some View {
+        player.expandablePlayer(show: show, isExpanded: isExpanded, collapsedFrame: collapsedFrame)
     }
 
     #if os(iOS) || os(macOS)
@@ -218,6 +215,8 @@ public final class cisumModule {
             .environment(container.playbackServices)
             .environment(container.searchServices)
             .environment(container.libraryServices)
+            .environment(\.playlistLibraryStore, container.libraryServices.playlistLibraryStore)
+            .environment(\.centralMediaStore, container.libraryServices.centralMediaStore)
             .environment(container.userServices)
             .environment(container.providerServices)
             .environment(container.appServices)
@@ -230,8 +229,6 @@ public final class cisumModule {
             .environment(container.userServices.spotifySessionCoordinator)
             .environment(container.userServices.supabaseService)
             .environment(container.userServices.analyticsService)
-
-
             .environment(container.playbackServices.lastFMSettings)
             .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
             .environment(container.playbackServices.streamingProviderSettings)

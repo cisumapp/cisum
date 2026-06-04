@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "kuwo",
+    "name": "Kuwo Music",
+    "version": "1.0.0",
+    "description": "Kuwo search manifest with Chinese catalog support.",
+    "documentationURL": "https://www.kuwo.cn/"
+  },
+  "capabilities": {
+    "search": true,
+    "streaming": true,
+    "album_lookup": false,
+    "artist_lookup": false,
+    "playlist_lookup": false,
+    "lyrics": false,
+    "isrc_lookup": false
+  },
+  "supportedQualities": [
+    "low",
+    "standard",
+    "high",
+    "lossless"
+  ],
+  "supportedCodecs": [
+    "aac",
+    "flac"
+  ],
+  "network": {
+    "baseURL": "https://kw-api.cenguigui.cn",
+    "headers": {
+      "Accept": "application/json"
+    }
+  },
+  "search": {
+    "tracks": {
+      "path": "/",
+      "method": "GET",
+      "parameters": {
+        "name": "{{query}}",
+        "page": "1",
+        "limit": "{{limit}}"
+      },
+      "response": {
+        "items": "data",
+        "mapping": {
+          "id": "rid",
+          "title": "name",
+          "artist": "artist",
+          "duration": "duration"
+        }
+      }
+    }
+  },
+  "authentication": {
+    "type": "none",
+    "requires": false
+  },
+  "features": {
+    "cn_catalog": true,
+    "lossless_catalog": true,
+    "editorial_search": false
+  },
+  "rateLimit": 80,
+  "hasGeographicalRestrictions": true,
+  "nativeProvider": "KuwoProvider"
+}

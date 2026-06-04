@@ -26,6 +26,9 @@ public final class Playlist {
     public var updatedAt: Date = Date()
     public var lastPlayedAt: Date?
 
+    @Relationship(deleteRule: .cascade, inverse: \PlaylistItem.playlist)
+    public var items: [PlaylistItem]
+
     public init(
         playlistID: String = UUID().uuidString,
         title: String,
@@ -64,6 +67,7 @@ public final class Playlist {
         self.importedAt = importedAt
         self.updatedAt = updatedAt
         self.lastPlayedAt = lastPlayedAt
+        self.items = []
     }
 
     public var sourceProvider: PlaylistSource? {
