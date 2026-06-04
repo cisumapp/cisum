@@ -22,9 +22,9 @@ public struct DiscoverView: View {
 
     public init() {}
 
-    @State private var sections: [DiscoverSection] = DiscoverCache.load()?.sections ?? []
+    @State private var sections: [DiscoverSection] = []
     @State private var isLoading: Bool = false
-    @State private var didLoadInitialSections: Bool = DiscoverCache.load() != nil
+    @State private var didLoadInitialSections: Bool = false
     @State private var errorMessage: String?
     @State private var scrollOffset: CGFloat = 0
 
@@ -36,43 +36,47 @@ public struct DiscoverView: View {
                 ProfileMenuCustomAction(title: "Change Region") {
                     // TODO: Implement Region Change
                     print("Change Region selected")
-                }
+                },
             ]
         ) {
             content
         }
     }
-    
+
     var content: some View {
-            LazyVStack(alignment: .leading, spacing: 24) {
-                if isLoading, sections.isEmpty {
-                    ProgressView("Loading Charts...")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-
-                if let errorMessage, sections.isEmpty {
-                    ContentUnavailableView(
-                        "Unable to Load Discover",
-                        systemImage: "chart.line.uptrend.xyaxis",
-                        description: Text(errorMessage)
-                    )
-
-                    Button("Retry") {
-                        Task {
-                            await loadDiscoverSections(force: true)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                ForEach(sections) { section in
-                    DiscoverSectionView(section: section)
-                }
+        LazyVStack(alignment: .leading, spacing: 24) {
+            if isLoading, sections.isEmpty {
+                ProgressView("Loading Charts...")
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 120)
+
+            if let errorMessage, sections.isEmpty {
+                ContentUnavailableView(
+                    "Unable to Load Discover",
+                    systemImage: "chart.line.uptrend.xyaxis",
+                    description: Text(errorMessage)
+                )
+
+                Button("Retry") {
+                    Task {
+                        await loadDiscoverSections(force: true)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            ForEach(sections) { section in
+                DiscoverSectionView(section: section)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 120)
         .contentMargins(.top, 140)
         .task {
+            if let cached = DiscoverCache.load() {
+                sections = cached.sections
+                didLoadInitialSections = true
+            }
             if !didLoadInitialSections {
                 await loadDiscoverSections()
             }
@@ -210,9 +214,10 @@ private struct DiscoverSectionView: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVStack(spacing: 8) {
-                ForEach(section.items.indices, id: \.self) { index in
-                    DiscoverChartRow(rank: index + 1, item: section.items[index])
+            LazyVStack(spacing: 0) {
+                let itemsWithRank = Array(zip(section.items.indices, section.items))
+                ForEach(itemsWithRank, id: \.1.id) { index, item in
+                    DiscoverChartRow(rank: index + 1, item: item)
                 }
             }
         }
@@ -231,12 +236,13 @@ private struct DiscoverChartRow: View {
         Button {
             playItem(item)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 0) {
                 Text("#\(rank)")
                     .font(.caption.weight(.bold))
                     .frame(width: 34, alignment: .leading)
                     .foregroundStyle(.secondary)
-                
+                    .padding(.leading)
+
                 TrackListItem(
                     trackName: item.title,
                     artistName: item.subtitle,

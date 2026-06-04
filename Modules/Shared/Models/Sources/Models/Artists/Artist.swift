@@ -26,6 +26,12 @@ public final class Artist {
     public var createdAt: Date
     public var updatedAt: Date
 
+    @Relationship(deleteRule: .cascade, inverse: \Song.artist)
+    public var songs: [Song]
+
+    @Relationship(deleteRule: .cascade)
+    public var albums: [Album]
+
     public init(
         artistID: String = UUID().uuidString,
         displayName: String,
@@ -52,5 +58,7 @@ public final class Artist {
         self.appleMusicArtistID = appleMusicArtistID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.songs = []
+        self.albums = []
     }
 }

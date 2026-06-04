@@ -8,9 +8,12 @@ import Models
 import ProviderSDK
 import Utilities
 import YouTubeSDK
+#if canImport(WebKit)
+import WebKit
+#endif
 
 private let loadingLog = CisumLog.playback
-private let loadingSP  = CisumSignpost.playback
+private let loadingSP = CisumSignpost.playback
 
 public extension PlayerViewModel {
     // MARK: - Loaders
@@ -58,10 +61,10 @@ public extension PlayerViewModel {
 
         let tapStartedAt = Date()
         let tapToPlaySpid = loadingSP.begin("tap-to-play", "kind=video id=\(targetMediaID)")
-        
+
         pendingPlaybackTelemetryType = "tap-to-play"
         pendingPlaybackTelemetryStartedAt = tapStartedAt
-        
+
         let fallbackURL = normalizedArtworkURL(from: video.thumbnailURL)
         let displayTitle = normalizedMusicDisplayTitle(video.title, artist: video.author)
         let displayArtist = normalizedMusicDisplayArtist(video.author, title: video.title)
@@ -91,6 +94,36 @@ public extension PlayerViewModel {
         isLoading = true
         loadingMediaID = targetMediaID
         currentLoadTask?.cancel()
+
+        // Fire-and-forget: start BotGuard WKWebView warm-up so a minted poToken is
+        // available for CDN segment auth when the HLS proxy needs it. This runs
+        // concurrently with candidate resolution — no added latency.
+        #if canImport(WebKit)
+        Task { @MainActor in
+            let result = await BotGuardWebViewRunner.shared.prepare(for: video.id)
+            // SAPISID recovery: BotGuardWebViewRunner.prepare() calls propagateWebViewCookies()
+            // which copies youtube.com cookies (including SAPISID) from the WKWebView session
+            // into HTTPCookieStorage.shared. Recovering SAPISID here enables SAPISIDHASH auth
+            // in postWebSafari — YouTube returns rqh=0 adaptive URLs that the CDN serves
+            // without pot= enforcement.
+            if let webSAPISID = HTTPCookieStorage.shared
+                .cookies(for: URL(string: "https://www.youtube.com")!)?
+                .first(where: { $0.name == "SAPISID" })?.value
+            {
+                await YouTubeSDK.YouTubeStreamResolver.shared.api.setSAPISID(webSAPISID)
+            }
+            let oauthToken = await YouTubeOAuthClient().getAccessToken()
+            await YouTubeSDK.YouTubeStreamResolver.shared.api.updateAuthToken(oauthToken)
+            if result?.hasMinter == true,
+               let token = await BotGuardWebViewRunner.shared.mintToken(
+                   identifier: YouTubeSDK.YouTubeStreamResolver.shared.api.currentVisitorData() ?? ""
+               )
+            {
+                await YouTubeSDK.YouTubeStreamResolver.shared.api.storeExternalPoToken(token, for: video.id)
+            }
+        }
+        #endif
+
         currentLoadTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -161,7 +194,7 @@ public extension PlayerViewModel {
             track.hydrationState.contains(.metadataResolved) ? "metadataResolved" : nil,
             track.hydrationState.contains(.artworkResolved) ? "artworkResolved" : nil,
             track.hydrationState.contains(.streamResolved) ? "streamResolved" : nil,
-            track.hydrationState.contains(.lyricsResolved) ? "lyricsResolved" : nil
+            track.hydrationState.contains(.lyricsResolved) ? "lyricsResolved" : nil,
         ].compactMap(\.self)
         let representationKey = track.activeRepresentationKey.map { "\($0.providerID):\($0.providerTrackID)" }
 
@@ -190,7 +223,7 @@ public extension PlayerViewModel {
                         expiresAt: session.stream.expiresAt,
                         isCompatible: activeCandidate.isLocal,
                         providerID: session.stream.provider
-                    )
+                    ),
                 ]
             )
         )
@@ -225,10 +258,10 @@ public extension PlayerViewModel {
 
         let tapStartedAt = Date()
         let tapToPlaySpid = loadingSP.begin("tap-to-play", "kind=song id=\(targetMediaID)")
-        
+
         pendingPlaybackTelemetryType = "tap-to-play"
         pendingPlaybackTelemetryStartedAt = tapStartedAt
-        
+
         let displayTitle = normalizedMusicDisplayTitle(title, artist: artist)
         let displayArtist = normalizedMusicDisplayArtist(artist, title: title)
 
@@ -257,6 +290,29 @@ public extension PlayerViewModel {
         isLoading = true
         loadingMediaID = targetMediaID
         currentLoadTask?.cancel()
+
+        // Fire-and-forget: start BotGuard WKWebView warm-up for music tracks too.
+        #if canImport(WebKit)
+        Task { @MainActor in
+            let result = await BotGuardWebViewRunner.shared.prepare(for: mediaID)
+            if let webSAPISID = HTTPCookieStorage.shared
+                .cookies(for: URL(string: "https://www.youtube.com")!)?
+                .first(where: { $0.name == "SAPISID" })?.value
+            {
+                await YouTubeSDK.YouTubeStreamResolver.shared.api.setSAPISID(webSAPISID)
+            }
+            let oauthToken = await YouTubeOAuthClient().getAccessToken()
+            await YouTubeSDK.YouTubeStreamResolver.shared.api.updateAuthToken(oauthToken)
+            if result?.hasMinter == true,
+               let token = await BotGuardWebViewRunner.shared.mintToken(
+                   identifier: YouTubeSDK.YouTubeStreamResolver.shared.api.currentVisitorData() ?? ""
+               )
+            {
+                await YouTubeSDK.YouTubeStreamResolver.shared.api.storeExternalPoToken(token, for: mediaID)
+            }
+        }
+        #endif
+
         currentLoadTask = Task { [weak self] in
             guard let self else { return }
             defer {

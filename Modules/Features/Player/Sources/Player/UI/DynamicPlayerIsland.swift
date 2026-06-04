@@ -105,7 +105,8 @@ fileprivate extension DynamicPlayerIsland {
             .font(.title3)
             .fontWeight(.bold)
         }
-        .padding(.leading, 4)
+        .foregroundStyle(.primary)
+        .padding(.leading, 6)
         .padding(.trailing, 10)
     }
 

@@ -26,8 +26,8 @@ public func notoSerifItalic(size: CGFloat, weight: CGFloat = 200, width: CGFloat
         .name: "NotoSerif-Italic",
         kCTFontVariationAttribute as PlatformFontDescriptor.AttributeName: [
             2_003_265_652: weight, // wght: 100–900
-            2_003_072_104: width // wdth: 62.5–100
-        ]
+            2_003_072_104: width, // wdth: 62.5–100
+        ],
     ])
 
     let platformFont = PlatformFont(descriptor: descriptor, size: size)

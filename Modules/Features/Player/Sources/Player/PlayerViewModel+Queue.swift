@@ -23,7 +23,8 @@ extension PlayerViewModel {
             let cachedSession = radioSessionStore.session(forSeedVideoID: seedVideoID)
             if let cachedSession,
                shouldReuseCachedRadioSession(cachedSession),
-               currentVideoId == seedVideoID {
+               currentVideoId == seedVideoID
+            {
                 applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
                 scheduleRadioContinuationIfNeeded()
                 return
@@ -46,7 +47,8 @@ extension PlayerViewModel {
                 guard !Task.isCancelled else { return }
                 if let cachedSession,
                    currentVideoId == seedVideoID,
-                   !cachedSession.tracks.isEmpty {
+                   !cachedSession.tracks.isEmpty
+                {
                     applyCachedRadioSession(cachedSession, fallbackSeed: seedSong)
                     scheduleRadioContinuationIfNeeded()
                 }
@@ -90,7 +92,8 @@ extension PlayerViewModel {
 
                 if let cachedSession,
                    shouldReuseCachedRadioSession(cachedSession),
-                   currentVideoId == expectedCurrentMediaID {
+                   currentVideoId == expectedCurrentMediaID
+                {
                     applyCachedRadioSession(
                         cachedSession,
                         fallbackSeed: seedSong,
@@ -183,7 +186,8 @@ extension PlayerViewModel {
 
                 if let cachedSession,
                    shouldReuseCachedRadioSession(cachedSession),
-                   currentVideoId == expectedCurrentMediaID {
+                   currentVideoId == expectedCurrentMediaID
+                {
                     applyCachedRadioSession(
                         cachedSession,
                         fallbackSeed: seedSong,
@@ -456,8 +460,8 @@ extension PlayerViewModel {
         for entry in entries {
             let isNewMediaID = seenMediaIDs.insert(entry.mediaID).inserted
             let isNewFingerprint = seenFingerprints.insert(entry.fingerprint).inserted
-            
-            if isNewMediaID && isNewFingerprint {
+
+            if isNewMediaID, isNewFingerprint {
                 unique.append(entry)
             }
         }

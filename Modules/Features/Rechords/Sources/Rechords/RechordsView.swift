@@ -71,7 +71,7 @@ struct RechordsView: View {
                                 stops: [
                                     .init(color: .clear, location: 0.3),
                                     .init(color: .white.opacity(0.8), location: 0.5),
-                                    .init(color: .clear, location: 0.7)
+                                    .init(color: .clear, location: 0.7),
                                 ],
                                 startPoint: .bottomLeading,
                                 endPoint: .topTrailing
@@ -121,7 +121,7 @@ struct RechordsView: View {
             RechordsView.highlights.opacity(0.20),
             RechordsView.highlights.opacity(0.24),
             RechordsView.highlights.opacity(0.32),
-            RechordsView.highlights.opacity(0.40)
+            RechordsView.highlights.opacity(0.40),
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing

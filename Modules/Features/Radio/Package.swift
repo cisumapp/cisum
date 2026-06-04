@@ -7,20 +7,20 @@ let package = Package(
     name: "Radio",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Radio",
             targets: ["Radio"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
         .package(path: "../../Shared/Aesthetics"),
-        .package(path: "../../../Packages/StreamingKit/ProviderSDK")
+        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -31,9 +31,9 @@ let package = Package(
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
                 .product(name: "Aesthetics", package: "Aesthetics"),
-                .product(name: "ProviderSDK", package: "ProviderSDK")
+                .product(name: "ProviderSDK", package: "ProviderSDK"),
             ]
-        )
+        ),
 
     ],
     swiftLanguageModes: [.v6]

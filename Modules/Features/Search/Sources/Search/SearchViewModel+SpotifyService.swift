@@ -7,12 +7,14 @@ extension SearchViewModel {
         title: String,
         artist: String,
         duration: TimeInterval?,
+        sourceISRC: String?,
         candidates: [FederatedSearchItem]
     ) async -> SpotifyFallbackMatch? {
         findBestSpotifyFallbackMatch(
             for: title,
             artist: artist,
             durationSeconds: duration,
+            sourceISRC: sourceISRC,
             in: candidates
         )
     }
@@ -26,13 +28,16 @@ extension SearchViewModel {
         for title: String,
         artist: String,
         durationSeconds: TimeInterval?,
+        sourceISRC: String? = nil,
         in items: [FederatedSearchItem]
     ) -> SpotifyFallbackMatch? {
         let rankedMatches = items.compactMap { item -> SpotifyFallbackMatch? in
+            guard item.isPlayable else { return nil }
             let score = spotifyFallbackScore(
                 sourceTitle: title,
                 sourceArtist: artist,
                 sourceDuration: durationSeconds,
+                sourceISRC: sourceISRC,
                 candidate: item
             )
 
@@ -53,8 +58,25 @@ extension SearchViewModel {
         sourceTitle: String,
         sourceArtist: String,
         sourceDuration: TimeInterval?,
+        sourceISRC: String?,
         candidate: FederatedSearchItem
     ) -> Double {
+        // ISRC exact match: near-perfect score. ISRC is the gold standard for
+        // identifying the same recording across providers.
+        if let sourceISRC, !sourceISRC.isEmpty {
+            let candidateISRC: String? = switch candidate.payload {
+            case let .providerSDKTrack(track):
+                track.isrc?.value
+            case let .spotify(track):
+                track.isrc
+            default:
+                nil
+            }
+            if let candidateISRC, candidateISRC == sourceISRC {
+                return 1.0
+            }
+        }
+
         let normalizedSourceTitle = normalizedRankingText(sourceTitle)
         let normalizedSourceArtist = normalizedRankingText(sourceArtist)
         let normalizedCandidateTitle = normalizedRankingText(candidate.title)
@@ -143,7 +165,30 @@ extension SearchViewModel {
             " 8d",
             " mono",
             " remaster",
-            " version"
+            " version",
+            " stripped",
+            " piano version",
+            " orchestral",
+            " unplugged",
+            " demo",
+            " session",
+            " reprise",
+            " interlude",
+            " lo-fi",
+            " lofi",
+            " deluxe",
+            " special edition",
+            " bonus track",
+            " live at",
+            " performed by",
+            " ft.",
+            " feat.",
+            " × ",
+            " vs ",
+            " x ",
+            " vs. ",
+            " x ",
+            " bootleg",
         ]
 
         return markers.contains { title.contains($0) }

@@ -51,11 +51,11 @@ public struct RootView: View {
             expandMiniPlayer: $presentation.isExpanded,
             playerAnimationNamespace: playerAnimationNamespace,
             searchText: cisum.searchText,
-            playerContent: AnyView(cisum.applyEnvironment(to: cisum.expandablePlayer(
+            playerContent: cisum.applyEnvironment(to: cisum.expandablePlayer(
                 show: .constant(true),
                 isExpanded: $presentation.isExpanded,
                 collapsedFrame: .zero
-            ))),
+            )),
             accentColor: cisum.playerAccentColor
         ) {
             Tab("Home", systemImage: "house.fill", value: TabItem.home) {
@@ -107,9 +107,8 @@ public struct RootView: View {
             }
         }
         .usingRouter(cisum.router)
+        .environment(\.profileImageURL, profileImageURL)
         .background {
-            Color.cisumBg
-                .ignoresSafeArea()
             spotifyBackgroundRefresh
         }
         #else
@@ -127,7 +126,7 @@ public struct RootView: View {
                     .padding(8)
             }
             .overlay(alignment: .topLeading) {
-                ProfileButton(onAction: handleProfileAction)
+                ProfileButton(profileImageURL: profileImageURL, onAction: handleProfileAction)
                     .padding(8)
             }
             .overlay(alignment: .topTrailing) {
@@ -154,6 +153,17 @@ public struct RootView: View {
             SpotifySilentRefreshView(session: fallbackSession)
         }
         #endif
+    }
+
+    private var profileImageURL: URL? {
+        if let clerkUser = container.user.authService.user,
+           let url = URL(string: clerkUser.imageUrl) {
+            return url
+        }
+        if let avatar = container.user.spotifySessionCoordinator.accountProfile?.avatarImages.first {
+            return avatar.url
+        }
+        return nil
     }
 
     private func handleProfileAction(_ action: ProfileMenuAction) {
@@ -197,40 +207,41 @@ public struct RootView: View {
     private func tabRoot(for tab: TabItem, @ViewBuilder content: () -> some View) -> some View {
         NavigationStack(path: navigationState.binding(for: tab)) {
             content()
+                .background(Color.cisumBg.ignoresSafeArea())
                 .ignoresSafeArea()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .navigationDestination(for: AppRoute.self) { route in
                     switch route {
                     case .profile:
-                        cisum.profileView
+                        cisum.applyEnvironment(to: cisum.profileView)
                     case .settings:
-                        cisum.settingsView
+                        cisum.applyEnvironment(to: cisum.settingsView)
                     case .plugins:
-                        cisum.pluginsView
+                        cisum.applyEnvironment(to: cisum.pluginsView)
                     case let .playlist(id):
-                        cisum.playlistDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.playlistDetailView(for: id))
                     case let .artist(id):
-                        cisum.artistDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.artistDetailView(for: id))
                     case let .album(id):
-                        cisum.albumDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.albumDetailView(for: id))
                     case .login:
-                        cisum.loginView
+                        cisum.applyEnvironment(to: cisum.loginView)
                     case .spotifyLogin:
                         #if canImport(SpotifySDK)
-                        cisum.spotifyLoginView
+                        cisum.applyEnvironment(to: cisum.spotifyLoginView)
                         #else
                         EmptyView()
                         #endif
                     case .youtubeLogin:
-                        cisum.youtubeLoginView
+                        cisum.applyEnvironment(to: cisum.youtubeLoginView)
                     case .home:
-                        cisum.homeView
+                        cisum.applyEnvironment(to: cisum.homeView)
                     case .search:
-                        cisum.searchView
+                        cisum.applyEnvironment(to: cisum.searchView)
                     case .library:
-                        cisum.libraryView
+                        cisum.applyEnvironment(to: cisum.libraryView)
                     case .recents:
-                        cisum.libraryView
+                        cisum.applyEnvironment(to: cisum.libraryView)
                     }
                 }
                 .onScrollOffsetChange { oldValue, newValue in
@@ -308,35 +319,35 @@ public struct RootView: View {
                 .navigationDestination(for: AppRoute.self) { route in
                     switch route {
                     case .profile:
-                        cisum.profileView
+                        cisum.applyEnvironment(to: cisum.profileView)
                     case .settings:
-                        cisum.settingsView
+                        cisum.applyEnvironment(to: cisum.settingsView)
                     case .plugins:
-                        cisum.pluginsView
+                        cisum.applyEnvironment(to: cisum.pluginsView)
                     case let .playlist(id):
-                        cisum.playlistDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.playlistDetailView(for: id))
                     case let .artist(id):
-                        cisum.artistDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.artistDetailView(for: id))
                     case let .album(id):
-                        cisum.albumDetailView(for: id)
+                        cisum.applyEnvironment(to: cisum.albumDetailView(for: id))
                     case .login:
-                        cisum.loginView
+                        cisum.applyEnvironment(to: cisum.loginView)
                     case .spotifyLogin:
                         #if canImport(SpotifySDK)
-                        cisum.spotifyLoginView
+                        cisum.applyEnvironment(to: cisum.spotifyLoginView)
                         #else
                         EmptyView()
                         #endif
                     case .youtubeLogin:
-                        cisum.youtubeLoginView
+                        cisum.applyEnvironment(to: cisum.youtubeLoginView)
                     case .home:
-                        cisum.homeView
+                        cisum.applyEnvironment(to: cisum.homeView)
                     case .search:
-                        cisum.searchView
+                        cisum.applyEnvironment(to: cisum.searchView)
                     case .library:
-                        cisum.libraryView
+                        cisum.applyEnvironment(to: cisum.libraryView)
                     case .recents:
-                        cisum.libraryView
+                        cisum.applyEnvironment(to: cisum.libraryView)
                     }
                 }
         }

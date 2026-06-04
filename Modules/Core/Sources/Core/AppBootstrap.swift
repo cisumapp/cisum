@@ -24,7 +24,7 @@ import Utilities
 import YouTubeSDK
 
 private let lifecycleLog = CisumLog.lifecycle
-private let lifecycleSP  = CisumSignpost.lifecycle
+private let lifecycleSP = CisumSignpost.lifecycle
 
 @MainActor
 enum AppBootstrap {
@@ -85,7 +85,7 @@ enum AppBootstrap {
         let providerSDK = Plugins.makeProviderSDK()
         let includeProviderSDK = UserDefaults.standard.object(forKey: "plugins.provider_sdk_enabled") as? Bool ?? true
         let includeYouTubeFallback = UserDefaults.standard.object(forKey: "plugins.youtube_fallback_enabled") as? Bool ?? true
-        
+
         Plugins.configurePlaybackURLResolver(
             providerSDK: providerSDK,
             youtube: youtube,
@@ -357,7 +357,8 @@ enum AppBootstrap {
             PlaylistImportCandidateEntry.self,
             Artist.self,
             Album.self,
-            Song.self
+            Song.self,
+            QueueStateEntry.self,
         ])
 
         // Ensure Application Support directory exists
@@ -384,7 +385,8 @@ enum AppBootstrap {
             PlaylistImportCandidateEntry.self,
             Artist.self,
             Album.self,
-            Song.self
+            Song.self,
+            QueueStateEntry.self,
         ])
 
         if let configuration {

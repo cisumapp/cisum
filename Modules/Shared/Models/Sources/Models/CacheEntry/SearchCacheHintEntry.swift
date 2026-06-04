@@ -13,7 +13,7 @@ public final class SearchCacheHintEntry {
     @Attribute(.unique) public var cacheKey: String
     public var normalizedQuery: String
     public var scopeRawValue: String
-    public var topVideoIDsData: Data
+    @Attribute(.externalStorage) public var topVideoIDsData: Data
     public var updatedAt: Date
     public var lastAccessedAt: Date
 

@@ -165,7 +165,8 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
             dragOffset = CGFloat(index) * width
             lastVisibleSelection = activeTab
         } else if let last = lastVisibleSelection,
-                  let idx = visible.firstIndex(where: { $0.value == last }) {
+                  let idx = visible.firstIndex(where: { $0.value == last })
+        {
             // Restore to previously remembered visible selection if still present
             dragOffset = CGFloat(idx) * width
         } else if let first = visible.first {

@@ -13,7 +13,6 @@ import SpotifySDK
 
 public struct SpotifyPlaylistImportSheet: View {
     private enum Theme {
-        static let sheetBackground = Color.cisumBg
         static let surface = Color.cisumElevatedSurface
         static let mutedSurface = Color.cisumSurface
         static let primaryText = Color.cisumPrimaryText
@@ -22,11 +21,9 @@ public struct SpotifyPlaylistImportSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @Environment(SpotifySessionCoordinator.self) private var coordinator
-    private var centralStore: CentralMediaStore {
-        CentralMediaStore(modelContainer: modelContext.container)
-    }
+    @Environment(\.playlistLibraryStore) private var playlistLibraryStore
+    @Environment(\.centralMediaStore) private var centralMediaStore
 
     public let onImported: (String) -> Void
 
@@ -48,15 +45,14 @@ public struct SpotifyPlaylistImportSheet: View {
         await coordinator.restoreSessionIfNeeded()
 
         let sdk = coordinator.sdk ?? coordinator.session.map { SpotifySDK(session: $0) }
-        guard let sdk else { return nil }
+        guard let sdk, let playlistLibraryStore, let centralMediaStore else { return nil }
 
         return SpotifyPlaylistImportService(
             sdk: sdk,
-            playlistStore: PlaylistLibraryStore(modelContainer: modelContext.container),
-            onSpotifyPlaylistImported: { [container = modelContext.container] playlist in
-                let centralStore = CentralMediaStore(modelContainer: container)
+            playlistStore: playlistLibraryStore,
+            onSpotifyPlaylistImported: { playlist in
                 Task {
-                    _ = await centralStore.upsertSpotifyPlaylist(playlist)
+                    _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
                 }
             }
         )
@@ -65,8 +61,6 @@ public struct SpotifyPlaylistImportSheet: View {
     public var body: some View {
         NavigationStack {
             ZStack {
-                importSheetBackground
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         heroCard
@@ -105,8 +99,10 @@ public struct SpotifyPlaylistImportSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 14) {
                 if let profile = coordinator.accountProfile,
-                   let avatarURL = profile.avatarImages.first?.url {
+                   let avatarURL = profile.avatarImages.first?.url
+                {
                     KFImage(avatarURL)
+                        .downsampling(size: CGSize(width: 112, height: 112))
                         .placeholder {
                             Circle()
                                 .fill(Theme.mutedSurface)
@@ -379,6 +375,7 @@ public struct SpotifyPlaylistImportSheet: View {
     private func personalPlaylistCard(_ playlist: SpotifyPersonalPlaylistSummary) -> some View {
         HStack(spacing: 12) {
             KFImage(playlist.artworkURL)
+                .downsampling(size: CGSize(width: 112, height: 112))
                 .placeholder {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Theme.mutedSurface)
@@ -514,11 +511,6 @@ public struct SpotifyPlaylistImportSheet: View {
         .padding(.vertical, 6)
         .background(Theme.mutedSurface, in: Capsule())
         .foregroundStyle(Theme.secondaryText)
-    }
-
-    private var importSheetBackground: some View {
-        Theme.sheetBackground
-            .ignoresSafeArea()
     }
 
     private struct EmptyStateCard: View {

@@ -11,7 +11,7 @@ import Foundation
 import Observation
 import YouTubeSDK
 
-private class HomeFeedCache {
+private class HomeFeedCache: Codable {
     let topSongs: [HomeFeedItem]
     let trending: [HomeFeedItem]
     let items: [HomeFeedItem]
@@ -19,6 +19,11 @@ private class HomeFeedCache {
     let loadedContinuationPages: Int
     let seenItemKeys: Set<String>
     let timestamp: Date
+
+    private static let cacheFileURL: URL = {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("home_feed_cache.json")
+    }()
 
     init(topSongs: [HomeFeedItem], trending: [HomeFeedItem], items: [HomeFeedItem], continuationToken: String?, loadedContinuationPages: Int, seenItemKeys: Set<String>, timestamp: Date) {
         self.topSongs = topSongs
@@ -29,10 +34,21 @@ private class HomeFeedCache {
         self.seenItemKeys = seenItemKeys
         self.timestamp = timestamp
     }
-}
 
-@MainActor
-private var sharedHomeCache: HomeFeedCache?
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        try? data.write(to: Self.cacheFileURL, options: .atomic)
+    }
+
+    static func load() -> HomeFeedCache? {
+        guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
+        return try? JSONDecoder().decode(HomeFeedCache.self, from: data)
+    }
+
+    static func clear() {
+        try? FileManager.default.removeItem(at: cacheFileURL)
+    }
+}
 
 @Observable
 @MainActor
@@ -50,9 +66,28 @@ final class HomeViewModel {
     private var lastPaginationTriggerAt: Date?
     private var lastPaginationTriggerToken: String?
 
-    var topSongs: [HomeFeedItem] = []
-    var trending: [HomeFeedItem] = []
-    var items: [HomeFeedItem] = []
+    var topSongs: [HomeFeedItem] = [] {
+        didSet {
+            topSongsWithDisplay = topSongs.map { .init(item: $0, display: $0.displayItem()) }
+        }
+    }
+
+    var trending: [HomeFeedItem] = [] {
+        didSet {
+            trendingWithDisplay = trending.map { .init(item: $0, display: $0.displayItem()) }
+        }
+    }
+
+    var items: [HomeFeedItem] = [] {
+        didSet {
+            updateDisplayItems()
+        }
+    }
+
+    private(set) var topSongsWithDisplay: [HomeFeedItemWithDisplay] = []
+    private(set) var trendingWithDisplay: [HomeFeedItemWithDisplay] = []
+    private(set) var displayItems: [HomeFeedItemWithDisplay] = []
+
     var isLoading = false
     var isLoadingMore = false
     var didLoadInitialFeed = false
@@ -65,6 +100,10 @@ final class HomeViewModel {
 
     init(youtube: YouTube) {
         self.youtube = youtube
+    }
+
+    private func updateDisplayItems() {
+        displayItems = items.map { .init(item: $0, display: $0.displayItem()) }
     }
 
     func loadIfNeeded() async {
@@ -93,7 +132,8 @@ final class HomeViewModel {
         if let token = continuationToken,
            let lastTime = lastPaginationTriggerAt,
            lastPaginationTriggerToken == token,
-           Date().timeIntervalSince(lastTime) < Pagination.cooldown {
+           Date().timeIntervalSince(lastTime) < Pagination.cooldown
+        {
             return
         }
 
@@ -108,16 +148,16 @@ final class HomeViewModel {
     private func loadInitialFeed(force: Bool) async {
         if isLoading { return }
         if didLoadInitialFeed, !force { return }
-        
-        if !force, let cache = sharedHomeCache, Date().timeIntervalSince(cache.timestamp) < 3600 {
-            self.topSongs = cache.topSongs
-            self.trending = cache.trending
-            self.items = cache.items
-            self.continuationToken = cache.continuationToken
-            self.loadedContinuationPages = cache.loadedContinuationPages
-            self.seenItemKeys = cache.seenItemKeys
-            self.isLoading = false
-            self.didLoadInitialFeed = true
+
+        if !force, let cache = HomeFeedCache.load(), Date().timeIntervalSince(cache.timestamp) < 21600 {
+            topSongs = cache.topSongs
+            trending = cache.trending
+            items = cache.items
+            continuationToken = cache.continuationToken
+            loadedContinuationPages = cache.loadedContinuationPages
+            seenItemKeys = cache.seenItemKeys
+            isLoading = false
+            didLoadInitialFeed = true
             return
         }
 
@@ -130,6 +170,7 @@ final class HomeViewModel {
             seenItemKeys.removeAll(keepingCapacity: true)
             topSongs.removeAll(keepingCapacity: true)
             trending.removeAll(keepingCapacity: true)
+            HomeFeedCache.clear()
         }
 
         defer {
@@ -162,11 +203,11 @@ final class HomeViewModel {
         }
 
         if case let .success(songs) = await topSongsResult {
-            topSongs = songs.map { $0.asHomeFeedItem }
+            topSongs = songs.map(\.asHomeFeedItem)
         }
 
         if case let .success(trends) = await trendingResult {
-            trending = trends.map { $0.asHomeFeedItem }
+            trending = trends.map(\.asHomeFeedItem)
         }
 
         let hasItems = mergeItems(mergedItems, replacing: true)
@@ -181,7 +222,7 @@ final class HomeViewModel {
             footerMessage = "No more Home pages are available right now."
         }
 
-        sharedHomeCache = HomeFeedCache(
+        HomeFeedCache(
             topSongs: topSongs,
             trending: trending,
             items: items,
@@ -189,7 +230,7 @@ final class HomeViewModel {
             loadedContinuationPages: loadedContinuationPages,
             seenItemKeys: seenItemKeys,
             timestamp: Date()
-        )
+        ).save()
     }
 
     private func fetchMusicSections() async -> Result<[YouTubeMusicSection], Error> {
@@ -255,15 +296,15 @@ final class HomeViewModel {
                 footerMessage = "Showing the latest music recommendations for now."
             }
 
-            sharedHomeCache = HomeFeedCache(
+            HomeFeedCache(
                 topSongs: topSongs,
                 trending: trending,
                 items: items,
                 continuationToken: continuationToken,
                 loadedContinuationPages: loadedContinuationPages,
                 seenItemKeys: seenItemKeys,
-                timestamp: sharedHomeCache?.timestamp ?? Date()
-            )
+                timestamp: Date()
+            ).save()
         } catch {
             continuationToken = nil
             if items.isEmpty {
@@ -315,7 +356,7 @@ final class HomeViewModel {
     }
 }
 
-enum HomeFeedItem: Identifiable {
+enum HomeFeedItem: Identifiable, Codable {
     case musicSong(YouTubeMusicSong)
     case musicAlbum(YouTubeMusicAlbum)
     case musicArtist(YouTubeMusicArtist)
@@ -351,6 +392,52 @@ enum HomeFeedItem: Identifiable {
             }
         }
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case type, payload
+    }
+
+    private enum ItemType: String, Codable {
+        case musicSong, musicAlbum, musicArtist, musicPlaylist, main
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .musicSong(song):
+            try container.encode(ItemType.musicSong, forKey: .type)
+            try container.encode(song, forKey: .payload)
+        case let .musicAlbum(album):
+            try container.encode(ItemType.musicAlbum, forKey: .type)
+            try container.encode(album, forKey: .payload)
+        case let .musicArtist(artist):
+            try container.encode(ItemType.musicArtist, forKey: .type)
+            try container.encode(artist, forKey: .payload)
+        case let .musicPlaylist(playlist):
+            try container.encode(ItemType.musicPlaylist, forKey: .type)
+            try container.encode(playlist, forKey: .payload)
+        case let .main(item):
+            try container.encode(ItemType.main, forKey: .type)
+            try container.encode(item, forKey: .payload)
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(ItemType.self, forKey: .type)
+        switch type {
+        case .musicSong:
+            self = .musicSong(try container.decode(YouTubeMusicSong.self, forKey: .payload))
+        case .musicAlbum:
+            self = .musicAlbum(try container.decode(YouTubeMusicAlbum.self, forKey: .payload))
+        case .musicArtist:
+            self = .musicArtist(try container.decode(YouTubeMusicArtist.self, forKey: .payload))
+        case .musicPlaylist:
+            self = .musicPlaylist(try container.decode(YouTubeMusicPlaylist.self, forKey: .payload))
+        case .main:
+            self = .main(try container.decode(YouTubeItem.self, forKey: .payload))
+        }
+    }
 }
 
 struct HomeFeedDisplayItem: Identifiable, Equatable {
@@ -363,6 +450,18 @@ struct HomeFeedDisplayItem: Identifiable, Equatable {
 
     static func == (lhs: HomeFeedDisplayItem, rhs: HomeFeedDisplayItem) -> Bool {
         lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle
+    }
+}
+
+struct HomeFeedItemWithDisplay: Identifiable, Equatable {
+    let item: HomeFeedItem
+    let display: HomeFeedDisplayItem
+    var id: String {
+        item.id
+    }
+
+    static func == (lhs: HomeFeedItemWithDisplay, rhs: HomeFeedItemWithDisplay) -> Bool {
+        lhs.display == rhs.display
     }
 }
 
@@ -478,13 +577,13 @@ extension HomeFeedItem {
 extension YouTubeChartItem {
     var asHomeFeedItem: HomeFeedItem {
         let song = YouTubeMusicSong(
-            id: self.id,
-            title: self.title,
-            artists: [self.subtitle],
+            id: id,
+            title: title,
+            artists: [subtitle],
             album: nil,
             duration: nil,
-            thumbnailURL: self.thumbnailURL,
-            videoId: self.id,
+            thumbnailURL: thumbnailURL,
+            videoId: id,
             isExplicit: false
         )
         return .musicSong(song)

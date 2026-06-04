@@ -50,50 +50,9 @@ public struct AlbumView: View {
 
                         LazyVStack(spacing: 0) {
                             ForEach(Array(tracks.enumerated()), id: \.element.songID) { index, track in
-                                Button {
+                                AlbumTrackRow(index: index, track: track) {
                                     playTracks(startingAt: index)
-                                } label: {
-                                    VStack {
-                                        HStack {
-                                            Text("\(index + 1)")
-                                                .font(.caption.monospacedDigit())
-                                                .frame(width: 24, alignment: .leading)
-
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(track.title)
-                                                    .lineLimit(1)
-
-                                                Text(track.primaryArtistName ?? "")
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(1)
-                                            }
-
-                                            Spacer()
-
-                                            Group {
-                                                if track.isExplicit {
-                                                    Image(systemName: "e.square.fill")
-                                                        .foregroundStyle(.secondary)
-                                                }
-
-                                                Menu {
-                                                    Button {} label: {
-                                                        Text("Download")
-                                                    }
-                                                } label: {
-                                                    Image(systemName: "ellipsis")
-                                                }
-                                                .menuStyle(.button)
-                                                .buttonStyle(.plain)
-                                            }
-                                            .font(.system(size: 20))
-                                        }
-                                        .fontWeight(.semibold)
-                                    }
-                                    .padding()
                                 }
-                                .buttonStyle(.plain)
 
                                 Divider()
                                     .padding(.horizontal)
@@ -177,6 +136,61 @@ public struct AlbumView: View {
 
         playerViewModel.setQueue(externalTracks, startIndex: index)
         playerPresentationController.expand()
+    }
+}
+
+// MARK: - Subviews
+
+private struct AlbumTrackRow: View {
+    let index: Int
+    let track: Song
+    let onPlay: () -> Void
+
+    var body: some View {
+        Button {
+            onPlay()
+        } label: {
+            VStack {
+                HStack {
+                    Text("\(index + 1)")
+                        .font(.caption.monospacedDigit())
+                        .frame(width: 24, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(track.title)
+                            .lineLimit(1)
+
+                        Text(track.primaryArtistName ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Group {
+                        if track.isExplicit {
+                            Image(systemName: "e.square.fill")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Menu {
+                            Button {} label: {
+                                Text("Download")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .menuStyle(.button)
+                        .buttonStyle(.plain)
+                    }
+                    .font(.system(size: 20))
+                }
+                .fontWeight(.semibold)
+            }
+            .padding()
+        }
+        .buttonStyle(.plain)
     }
 }
 #endif

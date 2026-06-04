@@ -9,7 +9,7 @@ import Aesthetics
 import SwiftUI
 
 #if os(iOS)
-struct iOSTabView<SelectionValue: Hashable>: View {
+struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     @Environment(\.tabBarVisibility) private var tabBarVisibility
     @Environment(\.tabBarBottomAccessory) private var tabBarBottomAccessory
     @Environment(\.colorScheme) private var colorScheme
@@ -24,7 +24,7 @@ struct iOSTabView<SelectionValue: Hashable>: View {
 
     var searchText: Binding<String>
     var onSearchSubmit: () -> Void
-    let playerContent: AnyView
+    let playerContent: PlayerContent
     let popupItemID: String
     let accentColor: Color
 
@@ -33,7 +33,7 @@ struct iOSTabView<SelectionValue: Hashable>: View {
         expandMiniPlayer: Binding<Bool>,
         playerAnimationNamespace: Namespace.ID,
         searchText: Binding<String> = .constant(""),
-        playerContent: AnyView,
+        playerContent: PlayerContent,
         popupItemID: String = "cisum-now-playing",
         accentColor: Color = .blue,
         @TabViewBuilder<SelectionValue> content: () -> [TabViewData<SelectionValue>],
@@ -87,6 +87,10 @@ struct iOSTabView<SelectionValue: Hashable>: View {
         tabs.first(where: { $0.role == .search })?.value == value
     }
 
+    private var visibleTabs: [TabViewData<SelectionValue>] {
+        tabs.filter { $0.role != .search }
+    }
+
     // MARK: - Native TabView (iOS 26+)
 
     @available(iOS 26.0, *)
@@ -113,10 +117,11 @@ struct iOSTabView<SelectionValue: Hashable>: View {
         ZStack {
             ZStack {
                 if let searchTab = tabs.first(where: { $0.role == .search }),
-                   selection == searchTab.value {
+                   selection == searchTab.value
+                {
                     searchTab.content
                 } else {
-                    ForEach(tabs.filter { $0.role != .search }) { tab in
+                    ForEach(visibleTabs) { tab in
                         if selection == tab.value {
                             tab.content
                         }

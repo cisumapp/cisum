@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "tidal",
+    "name": "TIDAL",
+    "version": "1.0.0",
+    "description": "TIDAL catalog search manifest for ProviderSDK.",
+    "documentationURL": "https://developer.tidal.com/"
+  },
+  "capabilities": {
+    "search": true,
+    "streaming": true,
+    "album_lookup": true,
+    "artist_lookup": true,
+    "playlist_lookup": false,
+    "lyrics": false,
+    "isrc_lookup": true
+  },
+  "supportedQualities": [
+    "standard",
+    "high",
+    "lossless",
+    "hiResLossless"
+  ],
+  "supportedCodecs": [
+    "aac",
+    "flac"
+  ],
+  "network": {
+    "baseURL": "https://lateralus-backend.onrender.com",
+    "headers": {
+      "Accept": "application/json",
+      "User-Agent": "TidalModule/3.0"
+    }
+  },
+  "search": {
+    "tracks": {
+      "path": "/search/",
+      "method": "GET",
+      "parameters": {
+        "s": "{{query}}",
+        "type": "tracks",
+        "limit": "{{limit}}"
+      },
+      "response": {
+        "items": "data.tracks.items",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "artist.name",
+          "duration": "duration"
+        }
+      }
+    },
+    "albums": {
+      "path": "/search/",
+      "method": "GET",
+      "parameters": {
+        "s": "{{query}}",
+        "type": "albums",
+        "limit": "{{limit}}"
+      },
+      "response": {
+        "items": "data.albums.items",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "artist.name"
+        }
+      }
+    },
+    "artists": {
+      "path": "/search/",
+      "method": "GET",
+      "parameters": {
+        "s": "{{query}}",
+        "type": "artists",
+        "limit": "{{limit}}"
+      },
+      "response": {
+        "items": "data.artists.items",
+        "mapping": {
+          "id": "id",
+          "name": "name"
+        }
+      }
+    }
+  },
+  "authentication": {
+    "type": "oauth2",
+    "requires": false,
+    "oauthScopes": [
+      "r_usr",
+      "w_usr"
+    ]
+  },
+  "features": {
+    "explicit_filtering": true,
+    "editorial_search": true,
+    "hires_metadata": true
+  },
+  "rateLimit": 120,
+  "hasGeographicalRestrictions": true,
+  "nativeProvider": "TidalProvider"
+}

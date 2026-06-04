@@ -18,7 +18,6 @@ public struct SearchHistoryEntrySnapshot: Sendable {
     }
 }
 
-
 @ModelActor
 public actor SearchHistoryStore {
     public func recordSearch(query: String) {
@@ -105,7 +104,7 @@ public actor SearchHistoryStore {
         [
             SortDescriptor(\SearchHistoryEntry.successfulPlayCount, order: .reverse),
             SortDescriptor(\SearchHistoryEntry.searchCount, order: .reverse),
-            SortDescriptor(\SearchHistoryEntry.lastSearchedAt, order: .reverse)
+            SortDescriptor(\SearchHistoryEntry.lastSearchedAt, order: .reverse),
         ]
     }
 }

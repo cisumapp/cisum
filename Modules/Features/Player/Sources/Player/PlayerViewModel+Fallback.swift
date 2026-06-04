@@ -12,10 +12,10 @@ import YouTubeSDK
 extension PlayerViewModel {
     // MARK: - Playback Resolution & Fallback
 
-    func resolvePlaybackCandidates(forID id: String, title: String = "", artist: String = "", representations: [TrackRepresentation]? = nil, forceDecipher: Bool = false) async throws -> [PlaybackCandidate] {
+    func resolvePlaybackCandidates(forID id: String, title: String = "", artist: String = "", representations: [TrackRepresentation]? = nil, forceDecipher: Bool = false, duration: TimeInterval? = nil) async throws -> [PlaybackCandidate] {
         let normalizedID = canonicalPlaybackMediaID(id)
         let resolver = await PlaybackURLResolver.sharedInstance()
-        return try await resolver.resolve(mediaID: normalizedID, title: title, artist: artist, representations: representations, forceDecipher: forceDecipher)
+        return try await resolver.resolve(mediaID: normalizedID, title: title, artist: artist, representations: representations, forceDecipher: forceDecipher, duration: duration)
     }
 
     func resolvePrioritizedPlaybackCandidates(
@@ -48,7 +48,8 @@ extension PlayerViewModel {
         if url.absoluteString.contains("manifest.googlevideo.com") || url.pathExtension.lowercased() == "m3u8" {
             let proxyURL = url.proxyURL ?? url
             let nSolver = YouTubeWebViewHLSExtractor.shared.extractedNSolver
-            let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver)
+            let poToken = YouTubeWebViewHLSExtractor.shared.extractedPoToken
+            let proxyLoader = YTHLSProxyLoader(ua: ua, nSolver: nSolver, poToken: poToken)
             let asset = AVURLAsset(url: proxyURL)
             asset.resourceLoader.setDelegate(proxyLoader, queue: DispatchQueue.global(qos: .userInitiated))
 
@@ -98,7 +99,7 @@ extension PlayerViewModel {
         guard candidateIndex >= 0, candidateIndex < playbackCandidates.count else { return }
 
         if isPlaying {
-            self.savedPositionToRestore = currentTime
+            savedPositionToRestore = currentTime
         }
 
         playbackCandidateIndex = candidateIndex
@@ -122,7 +123,7 @@ extension PlayerViewModel {
 
         Swift.Task { @MainActor [weak self] in
             guard let self else { return }
-            self.savedPositionToRestore = position
+            savedPositionToRestore = position
             playCurrentPlaybackCandidate()
         }
         return true
@@ -213,7 +214,8 @@ extension PlayerViewModel {
 
         if let errorDomain,
            let errorCode,
-           errorDomain == NSURLErrorDomain {
+           errorDomain == NSURLErrorDomain
+        {
             let recoverableCodes: Set<Int> = [-1100, -1102, -1011, -1009, -1005, -1004, -1003, -1001]
             if recoverableCodes.contains(errorCode) {
                 return true
@@ -222,7 +224,8 @@ extension PlayerViewModel {
 
         if let errorDomain,
            let errorCode,
-           errorDomain == AVFoundationErrorDomain {
+           errorDomain == AVFoundationErrorDomain
+        {
             let recoverableCodes: Set<Int> = [-11800, -11819, -11850, -11867]
             if recoverableCodes.contains(errorCode) {
                 return true

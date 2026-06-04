@@ -28,6 +28,12 @@ public final class Album {
     public var createdAt: Date
     public var updatedAt: Date
 
+    @Relationship(deleteRule: .nullify)
+    public var artist: Artist?
+
+    @Relationship(deleteRule: .cascade)
+    public var songs: [Song]
+
     public init(
         albumID: String = UUID().uuidString,
         title: String,
@@ -58,5 +64,6 @@ public final class Album {
         self.appleMusicAlbumID = appleMusicAlbumID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.songs = []
     }
 }

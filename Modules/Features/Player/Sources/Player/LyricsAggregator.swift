@@ -1,4 +1,5 @@
 import Foundation
+import Utilities
 import YouTubeSDK
 
 #if canImport(LyricsKit)
@@ -17,6 +18,9 @@ import ProviderSDK
 import iTunesKit
 import Models
 #endif
+
+private let lyricsLog = CisumLog.playback
+private let lyricsSP = CisumSignpost.playback
 
 @MainActor
 public final class LyricsAggregator {
@@ -56,11 +60,17 @@ public final class LyricsAggregator {
         spotifyTrackId: String? = nil,
         youtubeVideoId _: String? = nil
     ) async throws -> ResolvedLyrics {
+        let spid = lyricsSP.begin("fetch-lyrics", "title=\(title) artist=\(artist)")
+        defer { lyricsSP.end("fetch-lyrics", state: spid, "title=\(title)") }
+
         // Priority 1: SpicyLyrics (Syllable-level sync if trackId available)
         #if canImport(SpotifySDK)
         if let trackId = spotifyTrackId, let spicyClient = spicyLyricsClient {
+            lyricsLog.debug("Attempting SpicyLyrics for id=\(trackId, privacy: .public)")
+            let spicySpid = lyricsSP.begin("fetch-spicy-lyrics", "id=\(trackId)")
             do {
                 if let spicyLines = try await spicyClient.fetchLyrics(trackId: trackId), !spicyLines.isEmpty {
+                    lyricsSP.end("fetch-spicy-lyrics", state: spicySpid, "id=\(trackId) success=true")
                     // Map SpicyLyricLine to TimedLyricLine
                     let timedLines = spicyLines.map { sl in
                         let mappedSyllables = sl.syllables.map { syl in
@@ -79,8 +89,10 @@ public final class LyricsAggregator {
                     }
                     return ResolvedLyrics(syncedLines: timedLines, plainText: nil, attribution: "SpicyLyrics")
                 }
+                lyricsSP.end("fetch-spicy-lyrics", state: spicySpid, "id=\(trackId) success=false")
             } catch {
-                print("LyricsAggregator: SpicyLyrics failed - \(error.localizedDescription)")
+                lyricsSP.end("fetch-spicy-lyrics", state: spicySpid, "id=\(trackId) error=\(error.localizedDescription)")
+                lyricsLog.warning("LyricsAggregator: SpicyLyrics failed - \(error.localizedDescription, privacy: .public)")
             }
         }
         #endif
@@ -92,7 +104,11 @@ public final class LyricsAggregator {
             let album = albumName ?? "Single"
             let duration = durationHint ?? 0
 
+            lyricsLog.debug("Attempting LRCLIB for title=\(title, privacy: .public) artist=\(artistName, privacy: .public)")
+            let lrclibSpid = lyricsSP.begin("fetch-lrclib-lyrics", "title=\(title)")
+
             if duration > 0, let best = try await LyricsKit.shared.bestLyrics(trackName: title, artistName: artistName, albumName: album, durationInSeconds: duration) {
+                lyricsSP.end("fetch-lrclib-lyrics", state: lrclibSpid, "title=\(title) source=best")
                 let mapped = mapLRCLIBRecord(best)
                 if !mapped.syncedLines.isEmpty || mapped.plainText != nil {
                     return mapped
@@ -101,13 +117,15 @@ public final class LyricsAggregator {
 
             let syncedCandidates = try await LyricsKit.shared.searchSynced(trackName: title, artistName: artistName, albumName: albumName)
             if let syncedMatch = syncedCandidates.first {
+                lyricsSP.end("fetch-lrclib-lyrics", state: lrclibSpid, "title=\(title) source=searchSynced")
                 let mapped = mapLRCLIBRecord(syncedMatch)
                 if !mapped.syncedLines.isEmpty || mapped.plainText != nil {
                     return mapped
                 }
             }
+            lyricsSP.end("fetch-lrclib-lyrics", state: lrclibSpid, "title=\(title) success=false")
         } catch {
-            print("LyricsAggregator: LRCLIB failed - \(error.localizedDescription)")
+            lyricsLog.warning("LyricsAggregator: LRCLIB failed - \(error.localizedDescription, privacy: .public)")
         }
         #endif
 
@@ -135,7 +153,7 @@ public final class LyricsAggregator {
 
         let attributionParts = [
             record.artistName.trimmingCharacters(in: .whitespacesAndNewlines),
-            record.trackName.trimmingCharacters(in: .whitespacesAndNewlines)
+            record.trackName.trimmingCharacters(in: .whitespacesAndNewlines),
         ].filter { !$0.isEmpty }
 
         let attribution = attributionParts.isEmpty ? nil : attributionParts.joined(separator: " • ")

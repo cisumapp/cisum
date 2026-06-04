@@ -11,7 +11,7 @@ import SwiftData
 @Model
 public final class SearchHistoryEntry {
     public var query: String
-    public var normalizedQuery: String
+    @Attribute(.unique) public var normalizedQuery: String
     public var searchCount: Int
     public var successfulPlayCount: Int
     public var lastSearchedAt: Date

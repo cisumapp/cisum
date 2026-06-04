@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "deezer",
+    "name": "Deezer",
+    "version": "1.0.0",
+    "description": "Deezer search and streaming via public API + deemix worker.",
+    "documentationURL": "https://developers.deezer.com/api"
+  },
+  "capabilities": {
+    "search": true,
+    "streaming": true,
+    "album_lookup": true,
+    "artist_lookup": true,
+    "playlist_lookup": false,
+    "lyrics": false,
+    "isrc_lookup": true
+  },
+  "supportedQualities": [
+    "low",
+    "standard",
+    "high",
+    "lossless"
+  ],
+  "supportedCodecs": [
+    "mp3",
+    "aac",
+    "flac"
+  ],
+  "network": {
+    "baseURL": "https://api.deezer.com",
+    "headers": {
+      "Accept": "application/json"
+    }
+  },
+  "search": {
+    "tracks": {
+      "path": "/search",
+      "method": "GET",
+      "parameters": {
+        "q": "{{query}}",
+        "limit": "{{limit}}",
+        "index": "{{offset}}"
+      },
+      "response": {
+        "items": "data",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "artist.name",
+          "duration": "duration"
+        }
+      }
+    },
+    "albums": {
+      "path": "/search/album",
+      "method": "GET",
+      "parameters": {
+        "q": "{{query}}",
+        "limit": "{{limit}}",
+        "index": "{{offset}}"
+      },
+      "response": {
+        "items": "data",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "artist.name"
+        }
+      }
+    },
+    "artists": {
+      "path": "/search/artist",
+      "method": "GET",
+      "parameters": {
+        "q": "{{query}}",
+        "limit": "{{limit}}",
+        "index": "{{offset}}"
+      },
+      "response": {
+        "items": "data",
+        "mapping": {
+          "id": "id",
+          "name": "name"
+        }
+      }
+    }
+  },
+  "authentication": {
+    "type": "none",
+    "requires": false
+  },
+  "features": {
+    "editorial_search": true,
+    "radio_seed_support": true,
+    "preview_only": false
+  },
+  "rateLimit": 50,
+  "hasGeographicalRestrictions": true,
+  "nativeProvider": "DeezerProvider",
+  "secrets": {
+    "worker_url": "https://deemix-worker.ddezerouse.workers.dev"
+  }
+}

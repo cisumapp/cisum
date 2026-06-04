@@ -11,7 +11,7 @@ let package = Package(
         .library(
             name: "Artists",
             targets: ["Artists"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
@@ -21,7 +21,7 @@ let package = Package(
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../Player"),
         .package(path: "../Albums"),
-        .package(path: "../Tracks")
+        .package(path: "../Tracks"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -36,9 +36,9 @@ let package = Package(
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "Player", package: "Player"),
                 .product(name: "Albums", package: "Albums"),
-                .product(name: "Tracks", package: "Tracks")
+                .product(name: "Tracks", package: "Tracks"),
             ]
-        )
+        ),
 
     ],
     swiftLanguageModes: [.v6]

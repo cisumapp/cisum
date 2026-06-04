@@ -29,7 +29,7 @@ public class SearchViewModel: SearchViewModelInterface {
             .spotify: 5,
             .youtubeMusic: 3,
             .youtube: 3,
-            .providerSDK: 8 // Up to 8 streaming-provider tracks (SoundCloud, Tidal, Qobuz…)
+            .providerSDK: 8, // Up to 8 streaming-provider tracks (SoundCloud, Tidal, Qobuz…)
         ]
     }
 
@@ -107,26 +107,26 @@ public class SearchViewModel: SearchViewModelInterface {
     public private(set) var hiddenFallbackMap: [String: FederatedSearchItem] = [:]
 
     // Internal
-    private var searchTask: Task<Void, Never>?
-    private var prefetchTask: Task<Void, Never>?
-    private var suggestionTask: Task<Void, Never>?
-    private var lastCompletedQuery: String?
-    private var suggestionCache: [String: [String]] = [:]
-    private var lastSuggestionPrefetched: String?
-    private var lastHintPrefetchedKey: String?
-    private var videoContinuationToken: String?
-    private var isLoadingMoreVideos = false
-    private var videoContinuationBadResponseCount = 0
-    private var lastPaginationTriggerAt: Date?
-    private var lastPaginationTriggerToken: String?
-    private var inlinePrefetchedVideoIDs: Set<String> = []
-    private var inlinePrefetchPendingIDs: Set<String> = []
-    private var inlinePrefetchDrainTask: Task<Void, Never>?
-    private let inlinePrefetchCoalesceWindow: Duration = .milliseconds(80)
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var prefetchTask: Task<Void, Never>?
+    @ObservationIgnored private var suggestionTask: Task<Void, Never>?
+    @ObservationIgnored private var lastCompletedQuery: String?
+    @ObservationIgnored private var suggestionCache: [String: [String]] = [:]
+    @ObservationIgnored private var lastSuggestionPrefetched: String?
+    @ObservationIgnored private var lastHintPrefetchedKey: String?
+    @ObservationIgnored private var videoContinuationToken: String?
+    @ObservationIgnored private var isLoadingMoreVideos = false
+    @ObservationIgnored private var videoContinuationBadResponseCount = 0
+    @ObservationIgnored private var lastPaginationTriggerAt: Date?
+    @ObservationIgnored private var lastPaginationTriggerToken: String?
+    @ObservationIgnored private var inlinePrefetchedVideoIDs: Set<String> = []
+    @ObservationIgnored private var inlinePrefetchPendingIDs: Set<String> = []
+    @ObservationIgnored private var inlinePrefetchDrainTask: Task<Void, Never>?
+    @ObservationIgnored private let inlinePrefetchCoalesceWindow: Duration = .milliseconds(80)
     /// How many items from the end to start prefetching the next page.
     /// Increasing this reduces UI jumps at the cost of earlier network calls.
-    private let videoPrefetchThreshold = 10
-    private let paginationTriggerCooldown: TimeInterval = 0.25
+    @ObservationIgnored private let videoPrefetchThreshold = 10
+    @ObservationIgnored private let paginationTriggerCooldown: TimeInterval = 0.25
 
     public var isVideoPaginationLoading: Bool {
         searchScope == .video && isLoadingMoreVideos && !videoResults.isEmpty
@@ -135,7 +135,7 @@ public class SearchViewModel: SearchViewModelInterface {
     // MARK: - Actions
 
     public func performDebouncedSearch() {
-        Utilities.Logger.log("SearchViewModel: performDebouncedSearch called with text: '\(searchText)'")
+        PerfLog.trace("SearchViewModel: performDebouncedSearch called with text: '\(searchText)'")
         searchTask?.cancel() // 1. Cancel previous typing
         prefetchTask?.cancel()
         suggestionTask?.cancel()
@@ -145,7 +145,7 @@ public class SearchViewModel: SearchViewModelInterface {
 
         // 2. Clear results if empty
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Utilities.Logger.log("SearchViewModel: Text is empty, clearing results.")
+            PerfLog.trace("SearchViewModel: Text is empty, clearing results.")
             clearAllResults()
             suggestions = []
             state = .idle
@@ -177,7 +177,8 @@ public class SearchViewModel: SearchViewModelInterface {
         }
 
         if case .success = state,
-           lastCompletedQuery == query {
+           lastCompletedQuery == query
+        {
             Utilities.Logger.log("SearchViewModel: Query '\(query)' matches last completed query, skipping.")
             return
         }
@@ -428,7 +429,7 @@ public class SearchViewModel: SearchViewModelInterface {
         }
 
         let resolver = await PlaybackURLResolver.sharedInstance()
-        let candidates = try await resolver.resolve(mediaID: videoID, title: title, artist: artist, representations: representations, forceDecipher: false)
+        let candidates = try await resolver.resolve(mediaID: videoID, title: title, artist: artist, representations: representations, forceDecipher: false, duration: spotifyItem?.durationSeconds)
         guard let url = candidates.first?.url else {
             throw NSError(domain: "SearchViewModel", code: 404, userInfo: [NSLocalizedDescriptionKey: "No playback stream found"])
         }
@@ -452,6 +453,34 @@ public class SearchViewModel: SearchViewModelInterface {
     /// Resolution order: YouTube Music → YouTube.
     private func resolveSpotifyViaHiddenFallback(for spotifyItem: FederatedSearchItem) async throws -> ExternalStreamPayload? {
         var activeSpotifyItem = spotifyItem
+
+        // 0. Check CentralMediaStore for a cached provider ID
+        if let centralMediaStore,
+           let spotifyID = spotifyTrackID(from: activeSpotifyItem)
+        {
+            let cachedIDs = await centralMediaStore.cachedProviderIDs(forSpotifyTrackID: spotifyID)
+
+            if let ytMusicID = cachedIDs?.youtubeMusicVideoID {
+                return try await resolveYouTubeExternalStream(
+                    for: ytMusicID,
+                    title: activeSpotifyItem.title,
+                    artist: primaryArtistName(from: activeSpotifyItem.subtitle),
+                    artworkURL: activeSpotifyItem.artworkURL,
+                    service: .youtubeMusic,
+                    spotifyItem: activeSpotifyItem
+                )
+            } else if let ytID = cachedIDs?.youtubeVideoID {
+                return try await resolveYouTubeExternalStream(
+                    for: ytID,
+                    title: activeSpotifyItem.title,
+                    artist: primaryArtistName(from: activeSpotifyItem.subtitle),
+                    artworkURL: activeSpotifyItem.artworkURL,
+                    service: .youtube,
+                    spotifyItem: activeSpotifyItem
+                )
+            }
+            // Add other providers (tidal, qobuz) later if ProviderSDK resolution supports it directly here.
+        }
 
         // 1. Ensure we have the ISRC for accurate matching
         if case let .spotify(track) = activeSpotifyItem.payload, track.isrc == nil {
@@ -487,6 +516,10 @@ public class SearchViewModel: SearchViewModelInterface {
         let spotifyTitle = activeSpotifyItem.title
         let spotifyArtist = primaryArtistName(from: activeSpotifyItem.subtitle)
         let spotifyDuration = activeSpotifyItem.durationSeconds
+        let spotifyISRC: String? = {
+            if case let .spotify(track) = activeSpotifyItem.payload { return track.isrc }
+            return nil
+        }()
 
         // Try local visible results next (fast path)
         let hiddenItems = SpotifyFallbackResolutionPolicy.order.flatMap { items(for: $0) }
@@ -498,6 +531,7 @@ public class SearchViewModel: SearchViewModelInterface {
                 for: spotifyTitle,
                 artist: spotifyArtist,
                 durationSeconds: spotifyDuration,
+                sourceISRC: spotifyISRC,
                 in: hiddenItems
             )
         }.value
@@ -584,6 +618,12 @@ public class SearchViewModel: SearchViewModelInterface {
         let query = [artistValue, titleValue].filter { !$0.isEmpty }.joined(separator: " ")
         guard !query.isEmpty else { return nil }
 
+        // Extract source ISRC for exact-match scoring
+        let sourceISRC: String? = {
+            if case let .spotify(track) = spotifyItem.payload { return track.isrc }
+            return nil
+        }()
+
         Utilities.Logger.log("SearchViewModel: Resolving Spotify fallback in parallel for '\(query)'...")
 
         return await withTaskGroup(of: ExternalStreamPayload?.self) { group in
@@ -592,7 +632,7 @@ public class SearchViewModel: SearchViewModelInterface {
                 guard !Task.isCancelled else { return nil }
                 let result = await self.fetchYouTubeMusicSectionItems(query: query, updateUI: false)
                 if case let .success(items) = result {
-                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, candidates: items) {
+                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, sourceISRC: sourceISRC, candidates: items) {
                         return try? await self.resolveExternalStream(for: best.item, spotifyItem: spotifyItem)
                     }
                 }
@@ -605,7 +645,7 @@ public class SearchViewModel: SearchViewModelInterface {
                 let videoQuery = self.effectiveSearchQuery(for: query, scope: Models.SearchScope.video)
                 let result = await self.fetchYouTubeSectionItems(query: videoQuery, updateUI: false)
                 if case let .success(items) = result {
-                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, candidates: items) {
+                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, sourceISRC: sourceISRC, candidates: items) {
                         return try? await self.resolveExternalStream(for: best.item, spotifyItem: spotifyItem)
                     }
                 }
@@ -1013,7 +1053,8 @@ public class SearchViewModel: SearchViewModelInterface {
         }
 
         if let numberRange = lowercased.range(of: "[0-9]+(?:\\.[0-9]+)?", options: .regularExpression),
-           let number = Double(lowercased[numberRange]) {
+           let number = Double(lowercased[numberRange])
+        {
             if lowercased.contains("billion") { return number * 1_000_000_000 }
             if lowercased.contains("million") { return number * 1_000_000 }
             if lowercased.contains("thousand") { return number * 1000 }
@@ -1148,7 +1189,7 @@ public class SearchViewModel: SearchViewModelInterface {
                     self.musicResults = results
                     self.searchCache.setMusicResults(results, for: query)
                 }
-                await self.searchCacheHintStore.recordMusicResults(query: query, results: results)
+                await searchCacheHintStore.recordMusicResults(query: query, results: results)
 
                 let topResultsForPrefetch = Array(results.prefix(2))
                 let prefetchIDs = topResultsForPrefetch.map(\.videoId)
@@ -1196,7 +1237,7 @@ public class SearchViewModel: SearchViewModelInterface {
                     self.searchCache.setVideoResults(results, for: query)
                     return results
                 }
-                await self.searchCacheHintStore.recordVideoResults(query: query, results: videoResults)
+                await searchCacheHintStore.recordVideoResults(query: query, results: videoResults)
 
                 topVideos = Array(videoResults.compactMap { item -> YouTubeVideo? in
                     if case let .video(video) = item { return video }
@@ -1406,7 +1447,8 @@ public class SearchViewModel: SearchViewModelInterface {
             title: title,
             artist: artist,
             representations: representations,
-            forceDecipher: false
+            forceDecipher: false,
+            duration: track.duration
         )
 
         guard let best = candidates.first, let url = Optional(best.url) else {
@@ -1459,7 +1501,7 @@ public class SearchViewModel: SearchViewModelInterface {
             let sourceArtists = Array((results.artists?.items ?? []).prefix(4))
             let sourcePlaylists = Array((results.playlists?.items ?? []).prefix(4))
 
-            if let centralMediaStore = self.centralMediaStore {
+            if let centralMediaStore {
                 _ = await centralMediaStore.upsertSpotifyTracks(sourceTracks)
                 _ = await centralMediaStore.upsertSpotifyArtists(sourceArtists)
                 _ = await centralMediaStore.upsertSpotifyPlaylists(sourcePlaylists)
@@ -1849,7 +1891,8 @@ public class SearchViewModel: SearchViewModelInterface {
 
         if let lastTime = lastPaginationTriggerAt,
            lastPaginationTriggerToken == token,
-           Date().timeIntervalSince(lastTime) < paginationTriggerCooldown {
+           Date().timeIntervalSince(lastTime) < paginationTriggerCooldown
+        {
             return
         }
 

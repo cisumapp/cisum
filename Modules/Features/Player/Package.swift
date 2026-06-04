@@ -5,7 +5,7 @@ let package = Package(
     name: "Player",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
-        .library(name: "Player", targets: ["Player"])
+        .library(name: "Player", targets: ["Player"]),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
@@ -20,7 +20,7 @@ let package = Package(
         .package(path: "../../../Packages/StreamingKit/iTunesKit"),
         .package(path: "../../../Packages/StreamingKit/LyricsKit"),
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
-        .package(path: "../Tracks")
+        .package(path: "../Tracks"),
     ],
     targets: [
         .target(
@@ -38,8 +38,8 @@ let package = Package(
                 .product(name: "SpotifySDK", package: "SpotifySDK"),
                 .product(name: "iTunesKit", package: "iTunesKit"),
                 .product(name: "LyricsKit", package: "LyricsKit"),
-                .product(name: "Tracks", package: "Tracks")
+                .product(name: "Tracks", package: "Tracks"),
             ]
-        )
+        ),
     ]
 )

@@ -10,7 +10,8 @@ extension PlayerViewModel {
 
         let playbackTime = max(currentTime, 0)
         if let firstTimestamp = syncedLyricsLines.first?.timestamp,
-           playbackTime < firstTimestamp {
+           playbackTime < firstTimestamp
+        {
             return 0
         }
 

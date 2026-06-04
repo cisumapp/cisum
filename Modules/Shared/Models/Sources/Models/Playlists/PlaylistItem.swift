@@ -26,7 +26,15 @@ public final class PlaylistItem {
     public var durationSeconds: Double?
     public var artworkURLString: String?
 
-    public var resolvedMediaID: String?
+    public var youtubeID: String?
+    public var youtubeMusicID: String?
+    public var spotifyID: String?
+    public var tidalID: String?
+    public var qobuzID: String?
+    public var soundcloudID: String?
+    public var deezerID: String?
+    public var appleMusicID: String?
+
     public var resolutionConfidence: Double?
 
     public var importStatusRawValue: String
@@ -35,6 +43,9 @@ public final class PlaylistItem {
 
     public var createdAt: Date
     public var updatedAt: Date
+
+    @Relationship(deleteRule: .nullify)
+    public var playlist: Playlist?
 
     public init(
         playlistID: String,
@@ -47,7 +58,14 @@ public final class PlaylistItem {
         isrc: String? = nil,
         durationSeconds: Double? = nil,
         artworkURLString: String? = nil,
-        resolvedMediaID: String? = nil,
+        youtubeID: String? = nil,
+        youtubeMusicID: String? = nil,
+        spotifyID: String? = nil,
+        tidalID: String? = nil,
+        qobuzID: String? = nil,
+        soundcloudID: String? = nil,
+        deezerID: String? = nil,
+        appleMusicID: String? = nil,
         resolutionConfidence: Double? = nil,
         importStatus: PlaylistItemImportStatus = .pending,
         importErrorCode: String? = nil,
@@ -66,7 +84,14 @@ public final class PlaylistItem {
         self.isrc = isrc
         self.durationSeconds = durationSeconds
         self.artworkURLString = artworkURLString
-        self.resolvedMediaID = resolvedMediaID
+        self.youtubeID = youtubeID
+        self.youtubeMusicID = youtubeMusicID
+        self.spotifyID = spotifyID
+        self.tidalID = tidalID
+        self.qobuzID = qobuzID
+        self.soundcloudID = soundcloudID
+        self.deezerID = deezerID
+        self.appleMusicID = appleMusicID
         self.resolutionConfidence = resolutionConfidence
         self.importStatusRawValue = importStatus.rawValue
         self.importErrorCode = importErrorCode

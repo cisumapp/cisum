@@ -7,13 +7,13 @@ let package = Package(
     name: "Playlists",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(
             name: "Playlists",
             targets: ["Playlists"]
-        )
+        ),
     ],
     dependencies: [
         .package(path: "../../Shared/Models"),
@@ -23,7 +23,8 @@ let package = Package(
         .package(path: "../Tracks"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
-        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0"))
+        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
     ],
     targets: [
         .target(
@@ -36,9 +37,10 @@ let package = Package(
                 .product(name: "Tracks", package: "Tracks"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "SpotifySDK", package: "SpotifySDK"),
-                .product(name: "Kingfisher", package: "Kingfisher")
+                .product(name: "ProviderSDK", package: "ProviderSDK"),
+                .product(name: "Kingfisher", package: "Kingfisher"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

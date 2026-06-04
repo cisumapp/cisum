@@ -9,8 +9,8 @@ import Aesthetics
 import Kingfisher
 import Models
 import SwiftUI
-import YouTubeSDK
 import Tracks
+import YouTubeSDK
 
 // MARK: - Artwork Section
 
@@ -19,13 +19,6 @@ struct NowPlayingArtwork: View, Equatable {
     let artworkURL: URL?
     let isLyricsVisible: Bool
     let isQueueVisible: Bool
-
-    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.size == rhs.size &&
-        lhs.artworkURL == rhs.artworkURL &&
-        lhs.isLyricsVisible == rhs.isLyricsVisible &&
-        lhs.isQueueVisible == rhs.isQueueVisible
-    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -63,9 +56,9 @@ struct NowPlayingSongInfo: View, Equatable {
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.title == rhs.title &&
-        lhs.artist == rhs.artist &&
-        lhs.isExplicit == rhs.isExplicit &&
-        lhs.videoId == rhs.videoId
+            lhs.artist == rhs.artist &&
+            lhs.isExplicit == rhs.isExplicit &&
+            lhs.videoId == rhs.videoId
     }
 
     var body: some View {
@@ -75,12 +68,12 @@ struct NowPlayingSongInfo: View, Equatable {
                     Text(title)
                         .font(.title3)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white)
 
                     if isExplicit {
                         Text("E")
                             .font(.caption2.bold())
-                            .foregroundStyle(.primary.opacity(0.8))
+                            .foregroundStyle(Color.white.opacity(0.8))
                             .padding(4)
                             .background(Color.cisumChromeSubtle, in: RoundedRectangle(cornerRadius: 4))
                     }
@@ -88,7 +81,8 @@ struct NowPlayingSongInfo: View, Equatable {
 
                 Text(artist)
                     .font(.headline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color.white.opacity(0.8))
+                    .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -109,7 +103,7 @@ struct NowPlayingSongInfo: View, Equatable {
                     StreamQualityAndSourceSheet()
                 }
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(Color.white)
             .font(.title2)
             .frame(alignment: .trailing)
         }
@@ -160,7 +154,7 @@ struct NowPlayingControls: View {
                 ForwardButton()
                     .sensoryFeedback(.impact, trigger: playerViewModel.currentVideoId)
             }
-            .foregroundColor(.primary)
+            .foregroundColor(.white)
 
             Spacer(minLength: 0)
 
@@ -224,7 +218,7 @@ struct NowPlayingFooter: View {
                     .font(.title2)
             }
         }
-        .foregroundColor(.secondary)
+        .foregroundColor(.white.opacity(0.2))
 //        .blendMode(.overlay)
     }
 }
@@ -290,16 +284,17 @@ struct SyncedLyricsView: View {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
                     ForEach(Array(playerViewModel.syncedLyricsLines.enumerated()), id: \.element.id) { index, line in
+                        let active = isLineActive(line)
                         LyricLineView(
                             line: line,
-                            isActive: isLineActive(line),
-                            distance: distanceToActiveLine(index)
+                            isActive: active,
+                            distance: distanceToActiveLine(index),
+                            currentTime: active ? playerViewModel.currentTime : nil
                         )
                         .id(line.id)
                     }
                 }
                 .padding(.vertical, 180)
-                .padding(.horizontal, 20)
             }
             .mask {
                 LinearGradient(
@@ -338,12 +333,13 @@ struct LyricLineView: View {
     let line: TimedLyricLine
     let isActive: Bool
     let distance: Int
+    let currentTime: TimeInterval?
     @Environment(\.playerViewModel) private var playerViewModel
 
     var body: some View {
         Group {
-            if isActive, let syllables = line.syllables, !syllables.isEmpty {
-                syllablesText(currentTime: playerViewModel.currentTime)
+            if isActive, let syllables = line.syllables, !syllables.isEmpty, let currentTime {
+                syllablesText(currentTime: currentTime)
             } else {
                 Text(line.text)
                     .foregroundStyle(.primary.opacity(isActive ? 1.0 : opacityForDistance))
@@ -452,20 +448,24 @@ struct StreamQualityAndSourceSheet: View {
                     if !playerViewModel.playbackCandidates.isEmpty {
                         Section(header: Text("Available Alternatives")) {
                             ForEach(Array(playerViewModel.playbackCandidates.enumerated()), id: \.offset) { index, candidate in
+                                let isSelected = index == playerViewModel.playbackCandidateIndex
+                                let providerName = candidate.providerID?.capitalized ?? "YouTube"
+                                let labels = playerViewModel.playbackLabels(for: candidate)
+
                                 Button {
                                     playerViewModel.switchPlaybackProvider(candidateIndex: index)
                                     dismiss()
                                 } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(candidate.providerID?.capitalized ?? "YouTube")
+                                            Text(providerName)
                                                 .font(.subheadline.bold())
-                                                .foregroundColor(index == playerViewModel.playbackCandidateIndex ? .cisumAccent : .primary)
+                                                .foregroundColor(isSelected ? .cisumAccent : .primary)
 
                                             HStack {
-                                                Text(playerViewModel.playbackLabels(for: candidate).quality)
+                                                Text(labels.quality)
                                                 Text("•")
-                                                Text(playerViewModel.playbackLabels(for: candidate).codec)
+                                                Text(labels.codec)
                                             }
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -473,7 +473,7 @@ struct StreamQualityAndSourceSheet: View {
 
                                         Spacer()
 
-                                        if index == playerViewModel.playbackCandidateIndex {
+                                        if isSelected {
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundColor(.cisumAccent)
                                         }
@@ -527,19 +527,19 @@ struct NowPlayingQueueView: View {
                                 isExplicit: false
                             )
                             .background(
-                                playerViewModel.currentQueuePreviewIndex == index 
+                                playerViewModel.currentQueuePreviewIndex == index
                                     ? Color.primary.opacity(0.15)
                                     : Color.clear
                             )
-                            .cornerRadius(16)
                         }
                         .buttonStyle(.plain)
+                        
+                        Divider()
                     }
                 }
-                .padding(.vertical, 10)
             }
             .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         } else {
             Color.clear
         }

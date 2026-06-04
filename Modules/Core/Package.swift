@@ -5,10 +5,10 @@ let package = Package(
     name: "Core",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
-        .library(name: "Core", targets: ["Core"])
+        .library(name: "Core", targets: ["Core"]),
     ],
     dependencies: [
         .package(path: "../Shared/Aesthetics"),
@@ -32,7 +32,7 @@ let package = Package(
         .package(path: "../Features/Player"),
         .package(path: "../Features/Search"),
         .package(path: "../Features/Profile"),
-        .package(path: "../Features/Radio")
+        .package(path: "../Features/Radio"),
     ],
     targets: [
         .target(
@@ -59,8 +59,8 @@ let package = Package(
                 .product(name: "Player", package: "Player"),
                 .product(name: "Search", package: "Search"),
                 .product(name: "Profile", package: "Profile"),
-                .product(name: "Radio", package: "Radio")
+                .product(name: "Radio", package: "Radio"),
             ]
-        )
+        ),
     ]
 )

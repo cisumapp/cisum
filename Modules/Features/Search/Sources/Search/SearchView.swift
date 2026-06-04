@@ -12,21 +12,20 @@ import Utilities
 import YouTubeSDK
 
 #if canImport(SpotifySDK)
-    import SpotifySDK
+import SpotifySDK
 #endif
 
 public struct SearchView: View {
     @Environment(PlayerPresentationController.self) private var presentationController
     @Environment(\.searchViewModel) private var searchViewModelOptional
     @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.playlistLibraryStore) private var playlistLibraryStore
+    @Environment(\.centralMediaStore) private var centralMediaStore
 
     private var searchViewModel: any SearchViewModelInterface {
         searchViewModelOptional!
     }
 
-    private var centralMediaStore: CentralMediaStore {
-        CentralMediaStore(modelContainer: modelContext.container)
-    }
     @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(\.router) private var router
@@ -35,6 +34,7 @@ public struct SearchView: View {
 
     @FocusState private var isSearchFocused: Bool
     @State private var viewModel = SearchStateViewModel()
+    @State private var reversedSuggestions: [String] = []
 
     public init() {}
 
@@ -51,90 +51,92 @@ public struct SearchView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
-            ZStack {
-                switch searchViewModel.state {
-                case .idle:
-                    if searchViewModel.recentSearches.isEmpty {
-                        ContentUnavailableView(
-                            "Search for something", systemImage: "magnifyingglass")
-                    } else {
-                        List {
-                            Section {
-                                ForEach(searchViewModel.recentSearches, id: \.self) { recent in
-                                    Button {
-                                        searchViewModel.applySuggestion(recent)
-                                    } label: {
-                                        Label(recent, systemImage: "clock")
-                                            .foregroundStyle(.primary)
-                                    }
-                                }
-                                .onDelete { indexSet in
-                                    for index in indexSet {
-                                        let query = searchViewModel.recentSearches[index]
-                                        searchViewModel.removeRecentSearch(query)
-                                    }
-                                }
-                            } header: {
-                                SearchSectionHeader(title: "Recent Searches", subtitle: "")
-                            }
-                        }
-                        .listStyle(.plain)
-                        .contentMargins(.bottom, 140)
-                    }
-
-                case .loading:
-                    ProgressView("Searching…")
-                        .controlSize(.large)
-
-                case .error(let message):
+            switch searchViewModel.state {
+            case .idle:
+                if searchViewModel.recentSearches.isEmpty {
                     ContentUnavailableView(
-                        "Error", systemImage: "exclamationmark.triangle", description: Text(message)
+                        "Search for something",
+                        systemImage: "magnifyingglass"
                     )
-
-                case .success:
-                    SearchResultsList(
-                        searchViewModel: searchViewModel,
-                        playerViewModel: playerViewModel,
-                        isImportingSpotifyPlaylistID: $viewModel.isImportingSpotifyPlaylistID,
-                        showNonPlayableAlert: $viewModel.showNonPlayableAlert,
-                        nonPlayableMessage: $viewModel.nonPlayableMessage,
-                        onRowSelection: handleRowSelection
-                    )
-                }
-                
-                // Custom Inverted Suggestions Overlay
-                if isSearchFocused && !searchViewModel.searchText.isEmpty && !searchViewModel.suggestions.isEmpty {
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            ForEach(searchViewModel.suggestions.reversed(), id: \.self) { suggestion in
+                } else {
+                    List {
+                        Section("Recent Searches") {
+                            ForEach(searchViewModel.recentSearches, id: \.self) { recent in
                                 Button {
-                                    searchViewModel.applySuggestion(suggestion)
-                                    isSearchFocused = false
+                                    searchViewModel.applySuggestion(recent)
                                 } label: {
-                                    HStack {
-                                        Label(suggestion, systemImage: "magnifyingglass")
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                    }
-                                    .padding()
-                                    .contentShape(Rectangle())
+                                    Label(recent, systemImage: "clock")
+                                        .foregroundStyle(.primary)
                                 }
-                                .buttonStyle(.plain)
-                                .scaleEffect(x: 1, y: -1)
-                                
-                                Divider()
-                                    .scaleEffect(x: 1, y: -1)
+                            }
+                            .onDelete { indexSet in
+                                for index in indexSet {
+                                    let query = searchViewModel.recentSearches[index]
+                                    searchViewModel.removeRecentSearch(query)
+                                }
                             }
                         }
                     }
-                    #if os(iOS)
-                    .background(Color(uiColor: .systemBackground))
-                    #else
-                    .background(Color(nsColor: .windowBackgroundColor))
-                    #endif
-                    .scaleEffect(x: 1, y: -1)
-                    .zIndex(100)
+                    .listStyle(.plain)
+                    .safeAreaPadding(.top)
+                    .contentMargins(.bottom, 140)
                 }
+
+            case .loading:
+                ProgressView("Searching…")
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            case let .error(message):
+                ContentUnavailableView(
+                    "Error",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(message)
+                )
+
+            case .success:
+                SearchResultsList(
+                    searchViewModel: searchViewModel,
+                    playerViewModel: playerViewModel,
+                    isImportingSpotifyPlaylistID: $viewModel.isImportingSpotifyPlaylistID,
+                    showNonPlayableAlert: $viewModel.showNonPlayableAlert,
+                    nonPlayableMessage: $viewModel.nonPlayableMessage,
+                    onRowSelection: handleRowSelection
+                )
+            }
+
+            // Custom Inverted Suggestions Overlay
+            if isSearchFocused, !searchViewModel.searchText.isEmpty, !reversedSuggestions.isEmpty {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(reversedSuggestions, id: \.self) { suggestion in
+                            Button {
+                                searchViewModel.applySuggestion(suggestion)
+                                isSearchFocused = false
+                            } label: {
+                                HStack {
+                                    Label(suggestion, systemImage: "magnifyingglass")
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                }
+                                .padding()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .scaleEffect(x: 1, y: -1)
+
+                            Divider()
+                                .scaleEffect(x: 1, y: -1)
+                        }
+                    }
+                }
+                #if os(iOS)
+                .background(Color(uiColor: .systemBackground))
+                #else
+                .background(Color(nsColor: .windowBackgroundColor))
+                #endif
+                .scaleEffect(x: 1, y: -1)
+                .zIndex(100)
             }
         }
         .onSubmit(of: .search) {
@@ -149,7 +151,10 @@ public struct SearchView: View {
         .alert(viewModel.actionAlertMessage, isPresented: $viewModel.showActionAlert) {
             Button("OK", role: .cancel) {}
         }
-        .onAppear {
+        .onChange(of: searchViewModel.suggestions) { _, newSuggestions in
+            reversedSuggestions = newSuggestions.reversed()
+        }
+        .task {
             searchViewModel.loadRecentSearches()
         }
     }
@@ -160,12 +165,12 @@ public struct SearchView: View {
         hideKeyboard()
 
         switch item.payload {
-        case .youtubeMusic(let song):
+        case let .youtubeMusic(song):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
             playerViewModel.load(song: song, preserveQueue: false)
             presentationController.expand()
 
-        case .youtubeVideo(let video):
+        case let .youtubeVideo(video):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
             playerViewModel.load(video: video, preserveQueue: false)
             presentationController.expand()
@@ -175,10 +180,10 @@ public struct SearchView: View {
                 await playSpotifyTrack(item)
             }
 
-        case .spotifyArtist(let artist):
+        case let .spotifyArtist(artist):
             navigateToArtist(artist)
 
-        case .spotifyPlaylist(let playlist):
+        case let .spotifyPlaylist(playlist):
             Task {
                 await handleSpotifyPlaylistTap(playlist)
             }
@@ -191,24 +196,22 @@ public struct SearchView: View {
         }
     }
 
-    private var playlistLibraryStore: PlaylistLibraryStore {
-        PlaylistLibraryStore(modelContainer: modelContext.container)
-    }
-
     #if canImport(SpotifySDK)
-        private var spotifyPlaylistImportService: SpotifyPlaylistImportService? {
-            guard let sdk = spotifyCoordinator.sdk else { return nil }
-            return SpotifyPlaylistImportService(
-                sdk: sdk,
-                playlistStore: playlistLibraryStore,
-                onSpotifyPlaylistImported: { [container = modelContext.container] playlist in
-                    let centralMediaStore = CentralMediaStore(modelContainer: container)
-                    Task {
-                        _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
-                    }
+    private var spotifyPlaylistImportService: SpotifyPlaylistImportService? {
+        guard let sdk = spotifyCoordinator.sdk,
+              let playlistLibraryStore,
+              let centralMediaStore
+        else { return nil }
+        return SpotifyPlaylistImportService(
+            sdk: sdk,
+            playlistStore: playlistLibraryStore,
+            onSpotifyPlaylistImported: { playlist in
+                Task {
+                    _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
                 }
-            )
-        }
+            }
+        )
+    }
     #endif
 
     private func playSpotifyTrack(_ item: FederatedSearchItem) async {
@@ -271,33 +274,34 @@ public struct SearchView: View {
 
     private func handleSpotifyPlaylistTap(_ playlist: SpotifySearchPlaylist) async {
         #if canImport(SpotifySDK)
-            if let existing = await playlistLibraryStore.playlistSnapshot(
-                sourceProvider: .spotify, sourcePlaylistID: playlist.id
-            ) {
-                router.navigate(to: .playlist(id: existing.playlistID))
-                return
-            }
+        guard let playlistLibraryStore else { return }
+        if let existing = await playlistLibraryStore.playlistSnapshot(
+            sourceProvider: .spotify, sourcePlaylistID: playlist.id
+        ) {
+            router.navigate(to: .playlist(id: existing.playlistID))
+            return
+        }
 
-            guard let importService = spotifyPlaylistImportService else {
-                viewModel.actionAlertMessage =
-                    "Spotify is not connected. Open Settings and sign in first."
-                viewModel.showActionAlert = true
-                return
-            }
-
-            viewModel.isImportingSpotifyPlaylistID = playlist.id
-            defer { viewModel.isImportingSpotifyPlaylistID = nil }
-
-            do {
-                let playlistID = try await importService.importPlaylist(id: playlist.id)
-                router.navigate(to: .playlist(id: playlistID))
-            } catch {
-                viewModel.actionAlertMessage = error.localizedDescription
-                viewModel.showActionAlert = true
-            }
-        #else
-            viewModel.actionAlertMessage = "Spotify playlist import is unavailable on this target."
+        guard let importService = spotifyPlaylistImportService else {
+            viewModel.actionAlertMessage =
+                "Spotify is not connected. Open Settings and sign in first."
             viewModel.showActionAlert = true
+            return
+        }
+
+        viewModel.isImportingSpotifyPlaylistID = playlist.id
+        defer { viewModel.isImportingSpotifyPlaylistID = nil }
+
+        do {
+            let playlistID = try await importService.importPlaylist(id: playlist.id)
+            router.navigate(to: .playlist(id: playlistID))
+        } catch {
+            viewModel.actionAlertMessage = error.localizedDescription
+            viewModel.showActionAlert = true
+        }
+        #else
+        viewModel.actionAlertMessage = "Spotify playlist import is unavailable on this target."
+        viewModel.showActionAlert = true
         #endif
     }
 
@@ -335,7 +339,7 @@ public struct SearchView: View {
             genresJSONString: spotifyArtist.genres.isEmpty
                 ? nil
                 : (try? String(data: JSONEncoder().encode(spotifyArtist.genres), encoding: .utf8))
-                    ?? nil,
+                ?? nil,
             spotifyArtistID: spotifyArtist.id
         )
         modelContext.insert(stub)
@@ -343,7 +347,7 @@ public struct SearchView: View {
     }
 
     private func playlistID(for item: FederatedSearchItem) -> String? {
-        guard case .spotifyPlaylist(let playlist) = item.payload else { return nil }
+        guard case let .spotifyPlaylist(playlist) = item.payload else { return nil }
         return playlist.id
     }
 
@@ -436,145 +440,36 @@ private struct SearchResultsList: View {
         let hasHiddenTopResults = !searchViewModel.unifiedTopResults.isEmpty
 
         List {
-            // MARK: Spotify Tracks
-
             if hasSpotifyTracks {
-                Section {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 12) {
-                            ForEach(searchViewModel.spotifyTrackResults) { item in
-                                Button {
-                                    onRowSelection(item)
-                                } label: {
-                                    TrackCard(
-                                        trackName: item.title,
-                                        artistName: item.subtitle,
-                                        duration: item.displayDuration ?? "",
-                                        artworkURL: item.artworkURL,
-                                        artworkColor: .blue
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                } header: {
-                    SearchSectionHeader(title: "Tracks", subtitle: "From Spotify")
-                }
+                SpotifyTrackSection(results: searchViewModel.spotifyTrackResults, onSelect: onRowSelection)
             }
-
-            // MARK: Spotify Artists
 
             if hasSpotifyArtists {
-                Section {
-                    ForEach(searchViewModel.spotifyArtistResults) { item in
-                        Button {
-                            onRowSelection(item)
-                        } label: {
-                            SearchArtistRow(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                } header: {
-                    SearchSectionHeader(title: "Artists", subtitle: "From Spotify")
-                }
+                SpotifyArtistSection(results: searchViewModel.spotifyArtistResults, onSelect: onRowSelection)
             }
-
-            // MARK: Spotify Playlists
 
             if hasSpotifyPlaylists {
-                Section {
-                    ForEach(searchViewModel.spotifyPlaylistResults) { item in
-                        let playlistID = playlistID(for: item)
-                        Button {
-                            onRowSelection(item)
-                        } label: {
-                            SearchPlaylistRow(
-                                item: item,
-                                isImporting: isImportingSpotifyPlaylistID == playlistID
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isImportingSpotifyPlaylistID == playlistID)
-                    }
-                } header: {
-                    SearchSectionHeader(title: "Playlists", subtitle: "From Spotify")
-                }
+                SpotifyPlaylistSection(
+                    results: searchViewModel.spotifyPlaylistResults,
+                    isImportingID: isImportingSpotifyPlaylistID,
+                    onSelect: onRowSelection
+                )
             }
-
-            // MARK: Additional Results
 
             if hasHiddenTopResults {
-                Section {
-                    if searchViewModel.unifiedTopResults.isEmpty {
-                        Text("No results")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            LazyHStack(spacing: 12) {
-                                ForEach(searchViewModel.unifiedTopResults) { item in
-                                    Button {
-                                        onRowSelection(item)
-                                    } label: {
-                                        TrackCard(
-                                            trackName: item.title,
-                                            artistName: item.subtitle,
-                                            duration: item.displayDuration ?? "",
-                                            artworkURL: item.artworkURL,
-                                            artworkColor: .blue
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        }
-                    }
-                } header: {
-                    SearchSectionHeader(title: "Top Results", subtitle: "Unified Search")
-                }
+                TopResultsSection(results: searchViewModel.unifiedTopResults, onSelect: onRowSelection)
             }
-
-            // MARK: You Might Like
 
             if !searchViewModel.youMightLikeResults.isEmpty {
-                Section {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: 12) {
-                            ForEach(searchViewModel.youMightLikeResults) { item in
-                                Button {
-                                    onRowSelection(item)
-                                } label: {
-                                    TrackCard(
-                                        trackName: item.title,
-                                        artistName: item.subtitle,
-                                        duration: item.displayDuration ?? "",
-                                        artworkURL: item.artworkURL,
-                                        artworkColor: .blue
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                } header: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("You Might Like")
-                        if let anchorTitle =
-                            (searchViewModel.spotifyTrackResults.first
-                            ?? searchViewModel.unifiedTopResults.first)?.title {
-                            Text("Similar to \"\(anchorTitle)\"")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                YouMightLikeSection(
+                    results: searchViewModel.youMightLikeResults,
+                    anchorTitle: (
+                        searchViewModel.spotifyTrackResults.first
+                            ?? searchViewModel.unifiedTopResults.first
+                    )?.title,
+                    onSelect: onRowSelection
+                )
             }
-
-            // MARK: Empty Spotify state
 
             if hasSpotify == false, hasHiddenTopResults == false {
                 Section {
@@ -595,7 +490,151 @@ private struct SearchResultsList: View {
     }
 
     private func playlistID(for item: FederatedSearchItem) -> String? {
-        guard case .spotifyPlaylist(let playlist) = item.payload else { return nil }
+        guard case let .spotifyPlaylist(playlist) = item.payload else { return nil }
         return playlist.id
+    }
+}
+
+// MARK: - Section Subviews
+
+private struct SpotifyTrackSection: View {
+    let results: [FederatedSearchItem]
+    let onSelect: (FederatedSearchItem) -> Void
+
+    var body: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(results) { item in
+                        Button { onSelect(item) } label: {
+                            TrackCard(
+                                trackName: item.title,
+                                artistName: item.subtitle,
+                                duration: item.displayDuration ?? "",
+                                artworkURL: item.artworkURL,
+                                artworkColor: .blue
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        } header: {
+            SearchSectionHeader(title: "Tracks", subtitle: "From Spotify")
+        }
+    }
+}
+
+private struct SpotifyArtistSection: View {
+    let results: [FederatedSearchItem]
+    let onSelect: (FederatedSearchItem) -> Void
+
+    var body: some View {
+        Section {
+            ForEach(results) { item in
+                Button { onSelect(item) } label: {
+                    SearchArtistRow(item: item)
+                }
+                .buttonStyle(.plain)
+            }
+        } header: {
+            SearchSectionHeader(title: "Artists", subtitle: "From Spotify")
+        }
+    }
+}
+
+private struct SpotifyPlaylistSection: View {
+    let results: [FederatedSearchItem]
+    let isImportingID: String?
+    let onSelect: (FederatedSearchItem) -> Void
+
+    var body: some View {
+        Section {
+            ForEach(results) { item in
+                let playlistID = extractPlaylistID(for: item)
+                Button { onSelect(item) } label: {
+                    SearchPlaylistRow(
+                        item: item,
+                        isImporting: isImportingID == playlistID
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isImportingID == playlistID)
+            }
+        } header: {
+            SearchSectionHeader(title: "Playlists", subtitle: "From Spotify")
+        }
+    }
+
+    private func extractPlaylistID(for item: FederatedSearchItem) -> String? {
+        guard case let .spotifyPlaylist(playlist) = item.payload else { return nil }
+        return playlist.id
+    }
+}
+
+private struct TopResultsSection: View {
+    let results: [FederatedSearchItem]
+    let onSelect: (FederatedSearchItem) -> Void
+
+    var body: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(results) { item in
+                        Button { onSelect(item) } label: {
+                            TrackCard(
+                                trackName: item.title,
+                                artistName: item.subtitle,
+                                duration: item.displayDuration ?? "",
+                                artworkURL: item.artworkURL,
+                                artworkColor: .blue
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        } header: {
+            SearchSectionHeader(title: "Top Results", subtitle: "Unified Search")
+        }
+    }
+}
+
+private struct YouMightLikeSection: View {
+    let results: [FederatedSearchItem]
+    let anchorTitle: String?
+    let onSelect: (FederatedSearchItem) -> Void
+
+    var body: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(results) { item in
+                        Button { onSelect(item) } label: {
+                            TrackCard(
+                                trackName: item.title,
+                                artistName: item.subtitle,
+                                duration: item.displayDuration ?? "",
+                                artworkURL: item.artworkURL,
+                                artworkColor: .blue
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+        } header: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("You Might Like")
+                if let anchorTitle {
+                    Text("Similar to \"\(anchorTitle)\"")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 }

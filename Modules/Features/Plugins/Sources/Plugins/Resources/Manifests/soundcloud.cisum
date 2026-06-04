@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "provider": {
+    "id": "soundcloud",
+    "name": "SoundCloud",
+    "version": "1.0.0",
+    "description": "SoundCloud search and streaming via api-v2.",
+    "documentationURL": "https://developers.soundcloud.com/"
+  },
+  "capabilities": {
+    "search": true,
+    "streaming": true,
+    "album_lookup": false,
+    "artist_lookup": true,
+    "playlist_lookup": false,
+    "lyrics": false,
+    "isrc_lookup": false
+  },
+  "supportedQualities": [
+    "standard",
+    "high"
+  ],
+  "supportedCodecs": [
+    "mp3",
+    "aac"
+  ],
+  "network": {
+    "baseURL": "https://api-v2.soundcloud.com",
+    "headers": {
+      "Accept": "application/json",
+      "User-Agent": "StaircaseMorgk/1.0"
+    }
+  },
+  "search": {
+    "tracks": {
+      "path": "/search",
+      "method": "GET",
+      "parameters": {
+        "q": "{{query}}",
+        "limit": "{{limit}}",
+        "offset": "0",
+        "linked_partitioning": "1",
+        "facet": "model"
+      },
+      "response": {
+        "items": "collection",
+        "mapping": {
+          "id": "id",
+          "title": "title",
+          "artist": "user.username",
+          "duration": "duration"
+        }
+      }
+    }
+  },
+  "authentication": {
+    "type": "none",
+    "requires": false
+  },
+  "features": {
+    "editorial_search": false
+  },
+  "rateLimit": 60,
+  "hasGeographicalRestrictions": false,
+  "nativeProvider": "SoundCloudProvider"
+}

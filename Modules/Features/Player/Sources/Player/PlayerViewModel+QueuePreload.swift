@@ -33,7 +33,8 @@ extension PlayerViewModel {
         }
 
         if preloadingNextMediaID == nextEntry.mediaID,
-           nextPlaybackPreloadTask != nil {
+           nextPlaybackPreloadTask != nil
+        {
             return
         }
 
@@ -67,6 +68,30 @@ extension PlayerViewModel {
 
             queueLog.info("Preload ready id=\(prepared.mediaID, privacy: .public) quality=\(prepared.qualityLabel, privacy: .public)")
             preparedNextPlayback = prepared
+        }
+        preloadDistantQueueEntries()
+    }
+
+    /// Schedules a time-based prewarming task that re-preloads the next track
+    /// when we're 30 seconds from the end of the current track.
+    /// This ensures the prepared playback is fresh even for long tracks.
+    func scheduleTimeBasedPrewarming() {
+        timeBasedPrewarmTask?.cancel()
+        timeBasedPrewarmTask = nil
+
+        let trackDuration = duration
+        guard trackDuration > 60 else { return }
+
+        // Trigger prewarming 30 seconds before track ends (or at 70% mark, whichever is later)
+        let triggerOffset = max(30, trackDuration * 0.7)
+        let delay = max(0, trackDuration - triggerOffset)
+
+        timeBasedPrewarmTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            queueLog.info("Time-based prewarm triggered for next track (\(String(format: "%.0f", delay))s into \(String(format: "%.0f", trackDuration))s track)")
+            preloadNextQueueEntryIfNeeded()
         }
     }
 
@@ -142,13 +167,59 @@ extension PlayerViewModel {
                 let normalizedMediaID = track.mediaID.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !normalizedMediaID.isEmpty else { return nil }
 
-                let payload: ExternalStreamPayload
+                // Check cache first (MainActor-isolated, must be before task group)
                 if let cachedPayload = externalPayloadCache[normalizedMediaID] {
-                    payload = cachedPayload
-                } else {
-                    payload = try await track.resolvePayload()
-                    externalPayloadCache[normalizedMediaID] = payload
+                    let streamingService = Self.streamingService(for: cachedPayload.service)
+                    let candidate = PlaybackCandidate(
+                        url: cachedPayload.streamURL, streamKind: .audio,
+                        mimeType: mimeTypeForCodecLabel(cachedPayload.codecLabel),
+                        itag: nil, expiresAt: nil, isCompatible: true
+                    )
+                    let prepared = PreparedQueuePlayback(
+                        mediaID: normalizedMediaID,
+                        item: makePlayerItem(for: cachedPayload.streamURL, service: streamingService),
+                        playbackCandidates: [candidate], preparedAt: .now,
+                        title: normalizedMusicDisplayTitle(cachedPayload.title, artist: cachedPayload.artist),
+                        artist: normalizedMusicDisplayArtist(cachedPayload.artist, title: cachedPayload.title),
+                        artworkURL: cachedPayload.artworkURL ?? track.artworkURL,
+                        streamingService: streamingService,
+                        qualityLabel: cachedPayload.qualityLabel, codecLabel: cachedPayload.codecLabel,
+                        albumName: nil, isExplicit: track.isExplicit, durationHint: nil
+                    )
+                    debugQueuePreloadSelection(prepared, source: "external-cached")
+                    return prepared
                 }
+
+                // Race both resolution paths in parallel
+                let payload: ExternalStreamPayload? = await withTaskGroup(of: ExternalStreamPayload?.self, returning: ExternalStreamPayload?.self) { group in
+                    // Path A: Primary resolvePayload
+                    group.addTask {
+                        do { return try await track.resolvePayload() }
+                        catch { return nil }
+                    }
+                    // Path B: YouTube fallback
+                    group.addTask { [weak self] in
+                        guard let self else { return nil }
+                        do {
+                            let candidates = try await resolvePlaybackCandidates(
+                                forID: normalizedMediaID, title: track.title, artist: track.artist
+                            )
+                            guard let best = candidates.first else { return nil }
+                            return ExternalStreamPayload(
+                                mediaID: normalizedMediaID, streamURL: best.url,
+                                title: track.title, artist: track.artist,
+                                artworkURL: track.artworkURL, service: track.service,
+                                qualityLabel: track.qualityLabelHint ?? "YouTube",
+                                codecLabel: track.codecLabelHint ?? "HLS"
+                            )
+                        } catch { return nil }
+                    }
+                    for await result in group {
+                        if let result { group.cancelAll(); return result }
+                    }
+                    return nil
+                }
+                guard let payload else { return nil }
 
                 let streamingService = Self.streamingService(for: payload.service)
                 let candidate = PlaybackCandidate(
@@ -226,5 +297,40 @@ extension PlayerViewModel {
         #if DEBUG
         print("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
         #endif
+    }
+
+    /// Pre-resolves the next 2-5 queue entries in parallel background tasks.
+    /// Results are cached in `distantPreloadCache` and consumed when the queue advances.
+    func preloadDistantQueueEntries() {
+        guard let queuePosition else { return }
+
+        distantPreloadTasks.forEach { $0.cancel() }
+        distantPreloadTasks.removeAll()
+
+        let maxLookahead = min(5, playbackQueue.count - queuePosition - 1)
+        guard maxLookahead >= 2 else { return }
+
+        for offset in 2 ... maxLookahead {
+            let index = queuePosition + offset
+            guard playbackQueue.indices.contains(index) else { continue }
+            let entry = playbackQueue[index]
+
+            if distantPreloadCache[entry.mediaID] != nil { continue }
+
+            let task = Task { @MainActor [weak self] in
+                guard let self else { return }
+                let prepared = await prepareQueuePlayback(for: entry)
+                guard !Task.isCancelled, let prepared else { return }
+                distantPreloadCache[prepared.mediaID] = prepared
+                queueLog.info("Distant preload ready id=\(prepared.mediaID, privacy: .public) offset=\(offset)")
+            }
+            distantPreloadTasks.append(task)
+        }
+    }
+
+    /// Returns a pre-resolved playback item for the given mediaID, if available.
+    /// Consumes from `distantPreloadCache` and removes the entry.
+    func consumeDistantPreload(for mediaID: String) -> PreparedQueuePlayback? {
+        distantPreloadCache.removeValue(forKey: mediaID)
     }
 }

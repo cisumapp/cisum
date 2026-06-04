@@ -7,14 +7,14 @@ let package = Package(
     name: "Rechords",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Rechords",
             targets: ["Rechords"]
-        )
+        ),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -22,9 +22,9 @@ let package = Package(
         .target(
             name: "Rechords",
             resources: [
-                .copy("Resources")
+                .copy("Resources"),
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )
