@@ -22,13 +22,13 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
         duration: TimeInterval? = nil
     ) async throws -> [PlaybackCandidate] {
         let normalizedMediaID = canonicalPlaybackMediaID(mediaID)
-        print("ProviderSDKStreamResolver: resolving \(normalizedMediaID) title=\(title) artist=\(artist) representations=\(representations?.count ?? 0)")
+        PerfLog.debug("ProviderSDKStreamResolver: resolving \(normalizedMediaID) title=\(title) artist=\(artist) representations=\(representations?.count ?? 0)")
 
         if !forceDecipher,
            let cachedCandidates = await mediaCacheStore.playbackCandidates(for: normalizedMediaID, maxAge: 21600),
            let cachedCandidate = cachedCandidates.first(where: { $0.isCompatible })
         {
-            print("ProviderSDKStreamResolver: cached resolution hit for \(normalizedMediaID)")
+            PerfLog.debug("ProviderSDKStreamResolver: cached resolution hit for \(normalizedMediaID)")
             return [cachedCandidate]
         }
 
@@ -71,7 +71,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
                 resolvedAudioStreams = [stream]
             } catch {
                 resolutionError = error
-                print("ProviderSDKStreamResolver: stream resolution with provided representations failed: \(error.localizedDescription)")
+                PerfLog.debug("ProviderSDKStreamResolver: stream resolution with provided representations failed: \(error.localizedDescription)")
                 // Clear the stream so we fall back to ISRC lookup or federated search
                 resolvedAudioStreams = []
             }
@@ -79,12 +79,12 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
 
         // 1.5 Fallback: Search by ISRC if available and we don't have a stream yet
         if resolvedAudioStreams.isEmpty, let isrcStr = representations?.compactMap(\.isrc).first, let isrc = try? ISRC(isrcStr) {
-            print("ProviderSDKStreamResolver: falling back to ISRC lookup for: '\(isrcStr)'")
+            PerfLog.debug("ProviderSDKStreamResolver: falling back to ISRC lookup for: '\(isrcStr)'")
             if let track = try? await providerSDK.getTrackByISRC(isrc) {
                 if let stream = try? await providerSDK.resolveStream(for: track, quality: .high) {
                     resolvedAudioStreams = [stream]
                     matchedTrack = track
-                    print("ProviderSDKStreamResolver: ISRC lookup successful for \(isrcStr) using provider: \(stream.provider)")
+                    PerfLog.debug("ProviderSDKStreamResolver: ISRC lookup successful for \(isrcStr) using provider: \(stream.provider)")
                 }
             }
         }
@@ -104,7 +104,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
 
         let query = "\(searchTitle) \(searchArtist)".trimmingCharacters(in: .whitespacesAndNewlines)
         if resolvedAudioStreams.isEmpty, !query.isEmpty {
-            print("ProviderSDKStreamResolver: falling back to federated search for: '\(query)'")
+            PerfLog.debug("ProviderSDKStreamResolver: falling back to federated search for: '\(query)'")
             let searchStream = await providerSDK.searchTracks(query: query, limit: 1)
 
             // C-3 fix: append on each yield so a single-provider error doesn't discard
@@ -116,7 +116,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
                 }
             } catch {
                 // A provider failure mid-stream is non-fatal — use whatever we accumulated.
-                print("ProviderSDKStreamResolver: federated search stream error (partial results kept): \(error.localizedDescription)")
+                PerfLog.debug("ProviderSDKStreamResolver: federated search stream error (partial results kept): \(error.localizedDescription)")
             }
 
             /// Score each track against the target metadata
@@ -157,7 +157,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
                 }
 
                 let trackFullText = "\(candidateTitle) \(candidateArtists)"
-                print("ProviderSDKStreamResolver: federated candidate '\(trackFullText)' titleScore: \(titleScore) artistScore: \(artistScore) (passes: \(passes))")
+                PerfLog.debug("ProviderSDKStreamResolver: federated candidate '\(trackFullText)' titleScore: \(titleScore) artistScore: \(artistScore) (passes: \(passes))")
                 return passes
             }
 
@@ -182,7 +182,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
                     case let .success(payload):
                         successes.append(payload)
                     case let .failure(error):
-                        print("ProviderSDKStreamResolver: stream resolution failed. Error: \(error.localizedDescription)")
+                        PerfLog.debug("ProviderSDKStreamResolver: stream resolution failed. Error: \(error.localizedDescription)")
                     }
                 }
 
@@ -195,7 +195,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
 
                 // Just use the highest scoring one for `matchedTrack` and logging.
                 let bestResult = results[0]
-                print("ProviderSDKStreamResolver: successfully resolved streams via ProviderSDK (count: \(results.count)). Selected best match: \(bestResult.track.title) (score: \(scoreTrack(bestResult.track)))")
+                PerfLog.debug("ProviderSDKStreamResolver: successfully resolved streams via ProviderSDK (count: \(results.count)). Selected best match: \(bestResult.track.title) (score: \(scoreTrack(bestResult.track)))")
 
                 resolvedAudioStreams = [bestResult.stream]
                 matchedTrack = bestResult.track
@@ -213,14 +213,14 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
             .sorted()
             .joined(separator: ",")
 
-        print("ProviderSDKStreamResolver: matched track \(track.id.value) source_providers=[\(sourceProviders)] active_representation=\(track.activeRepresentationKey?.providerID ?? "none")")
+        PerfLog.debug("ProviderSDKStreamResolver: matched track \(track.id.value) source_providers=[\(sourceProviders)] active_representation=\(track.activeRepresentationKey?.providerID ?? "none")")
 
         guard !resolvedAudioStreams.isEmpty else {
             throw resolutionError ?? NSError(domain: "ProviderSDKStreamResolver", code: 404, userInfo: [NSLocalizedDescriptionKey: "Failed to resolve stream after federated fallback"])
         }
 
         let candidates = resolvedAudioStreams.map { audioStream in
-            print("ProviderSDKStreamResolver: resolved stream provider=\(audioStream.provider) quality=\(audioStream.quality.rawValue) url=\(audioStream.url.absoluteString)")
+            PerfLog.debug("ProviderSDKStreamResolver: resolved stream provider=\(audioStream.provider) quality=\(audioStream.quality.rawValue) url=\(audioStream.url.absoluteString)")
             return Caching.PlaybackCandidate(
                 url: audioStream.url,
                 streamKind: Self.streamKind(for: audioStream.url),
@@ -241,7 +241,7 @@ public struct ProviderSDKStreamResolver: StreamResolutionProvider {
         let normalizedMediaID = canonicalPlaybackMediaID(mediaID)
         let candidates = await mediaCacheStore.playbackCandidates(for: normalizedMediaID, maxAge: 21600)
         if let url = candidates?.first(where: { $0.isCompatible })?.url {
-            print("ProviderSDKStreamResolver: cached URL hit for \(normalizedMediaID)")
+            PerfLog.debug("ProviderSDKStreamResolver: cached URL hit for \(normalizedMediaID)")
             return url
         }
 

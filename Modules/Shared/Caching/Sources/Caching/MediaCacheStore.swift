@@ -629,12 +629,12 @@ public actor ArtworkImageFileStore {
         return fileURL
     }
 
-    public func readData(named filename: String) -> Data? {
+    public func readData(named filename: String) async -> Data? {
         guard let fileURL = existingFileURL(named: filename) else {
             return nil
         }
 
-        return try? Data(contentsOf: fileURL)
+        return try? await URLSession.shared.data(from: fileURL).0
     }
 
     public func fileExists(named filename: String) -> Bool {

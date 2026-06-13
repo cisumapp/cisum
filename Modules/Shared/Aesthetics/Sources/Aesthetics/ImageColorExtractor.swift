@@ -449,7 +449,7 @@ public actor ImageColorExtractor {
     }
 }
 
-// MARK: - UIColor ↔ RGB
+// MARK: - UIColor  RGB
 
 private extension UIColor {
     convenience init(_ rgb: RGB) {

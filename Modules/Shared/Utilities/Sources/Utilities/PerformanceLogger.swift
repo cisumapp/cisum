@@ -26,7 +26,6 @@
 //
 
 import Foundation
-import os.log
 
 /// Minimal performance logger that captures file/function/line and timing.
 public enum PerfLog {
@@ -57,56 +56,56 @@ public enum PerfLog {
     /// Log a trace message with automatic file/function/line capture
     @inlinable
     public static func trace(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        log(message, level: .trace, file: file, function: function, line: line)
+        log(message(), level: .trace, file: file, function: function, line: line)
     }
 
     /// Log a debug message with automatic file/function/line capture
     @inlinable
     public static func debug(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        log(message, level: .debug, file: file, function: function, line: line)
+        log(message(), level: .debug, file: file, function: function, line: line)
     }
 
     /// Log an info message with automatic file/function/line capture
     @inlinable
     public static func info(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        log(message, level: .info, file: file, function: function, line: line)
+        log(message(), level: .info, file: file, function: function, line: line)
     }
 
     /// Log a warning message with automatic file/function/line capture
     @inlinable
     public static func warning(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        log(message, level: .warning, file: file, function: function, line: line)
+        log(message(), level: .warning, file: file, function: function, line: line)
     }
 
     /// Log an error message with automatic file/function/line capture
     @inlinable
     public static func error(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         file: String = #fileID,
         function: String = #function,
         line: Int = #line
     ) {
-        log(message, level: .error, file: file, function: function, line: line)
+        log(message(), level: .error, file: file, function: function, line: line)
     }
 
     // MARK: - Performance Timing
@@ -151,7 +150,7 @@ public enum PerfLog {
         let duration = timer.start.duration(to: .now)
         let ms = Double(duration.components.seconds) * 1000.0 + Double(duration.components.attoseconds) / 1_000_000_000_000_000.0
         log(
-            "⏱️ \(timer.name) took \(String(format: "%.2f", ms))ms",
+            "\(timer.name) took \(String(format: "%.2f", ms))ms",
             level: .debug,
             file: timer.file,
             function: timer.function,
@@ -173,7 +172,7 @@ public enum PerfLog {
         let duration = start.duration(to: .now)
         let ms = Double(duration.components.seconds) * 1000.0 + Double(duration.components.attoseconds) / 1_000_000_000_000_000.0
         log(
-            "⏱️ \(name) took \(String(format: "%.2f", ms))ms",
+            "\(name) took \(String(format: "%.2f", ms))ms",
             level: .debug,
             file: file,
             function: function,
@@ -196,7 +195,7 @@ public enum PerfLog {
         let duration = start.duration(to: .now)
         let ms = Double(duration.components.seconds) * 1000.0 + Double(duration.components.attoseconds) / 1_000_000_000_000_000.0
         log(
-            "⏱️ \(name) took \(String(format: "%.2f", ms))ms",
+            "\(name) took \(String(format: "%.2f", ms))ms",
             level: .debug,
             file: file,
             function: function,
@@ -213,14 +212,21 @@ public enum PerfLog {
         function: String = #function,
         line: Int = #line
     ) {
-        log("📍 \(name)", level: .debug, file: file, function: function, line: line)
+        log("\(name)", level: .debug, file: file, function: function, line: line)
     }
 
     // MARK: - Internal Implementation
 
     @usableFromInline
+    static func currentCPUTimeMs() -> Double {
+        var spec = timespec()
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &spec)
+        return Double(spec.tv_sec) * 1000.0 + Double(spec.tv_nsec) / 1_000_000.0
+    }
+
+    @usableFromInline
     static func log(
-        _ message: String,
+        _ message: @autoclosure () -> String,
         level: Level,
         file: String,
         function: String,
@@ -229,35 +235,25 @@ public enum PerfLog {
         guard level >= minLevel else { return }
 
         let fileName = (file as NSString).lastPathComponent
-        let icon = levelIcon(level)
-        let formatted = "\(icon) [\(fileName):\(line)] \(function) → \(message)"
-
-        // Output to Console.app via unified logging
-        switch level {
-        case .trace, .debug:
-            CisumLog.concurrency.debug("\(formatted, privacy: .public)")
-        case .info:
-            CisumLog.concurrency.info("\(formatted, privacy: .public)")
-        case .warning:
-            CisumLog.concurrency.notice("\(formatted, privacy: .public)")
-        case .error:
-            CisumLog.concurrency.error("\(formatted, privacy: .public)")
-        }
-
-        // Also print to Xcode console for immediate visibility
-        #if DEBUG
+        let cpuTime = String(format: "%.2f", currentCPUTimeMs())
+        let msg = message()
+        
+        let formatted = """
+        [\(cpuTime)] [\(fileName):\(line) | \(function)]
+         ↳ \(msg)
+        """
         print(formatted)
-        #endif
     }
 
-    @usableFromInline
-    static func levelIcon(_ level: Level) -> String {
-        switch level {
-        case .trace: "🔍"
-        case .debug: "🐛"
-        case .info: "ℹ️"
-        case .warning: "⚠️"
-        case .error: "❌"
+    // MARK: - Diagnostics
+
+    /// Provides a URL to the log file (currently a dummy file since PerfLog uses console print).
+    /// Used by ProfileView to share app diagnostics.
+    public static func getLogFileURL() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cisum_perf_logs.txt")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try? "Performance Logger uses console printing. To enable file logging, implement a FileHandle within PerfLog.".write(to: url, atomically: true, encoding: .utf8)
         }
+        return url
     }
 }

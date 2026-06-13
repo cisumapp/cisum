@@ -3,6 +3,7 @@ import Observation
 import Plugins
 import Security
 import WebKit
+import Utilities
 
 #if canImport(SpotifySDK)
 import SpotifySDK
@@ -342,9 +343,7 @@ public final class SpotifySessionCoordinator {
     }
 
     public func completeSession(tokens: SpotifySessionTokens) {
-        print(
-            "🚀 [SpotifySessionCoordinator] completeSession. tokens.isAnonymous: \(tokens.isAnonymous), pendingMode: \(pendingMode)"
-        )
+        PerfLog.debug(" [SpotifySessionCoordinator] completeSession. tokens.isAnonymous: \(tokens.isAnonymous), pendingMode: \(pendingMode)")
         guard let session else { return }
         lastErrorMessage = nil
 
@@ -428,13 +427,13 @@ public final class SpotifySessionCoordinator {
             return
         }
 
-        print(
-            "🚀 [SpotifySessionCoordinator] refreshAccountProfile called. tokens.isAnonymous: \(String(describing: session?.tokens?.isAnonymous))"
+        PerfLog.debug(
+            " [SpotifySessionCoordinator] refreshAccountProfile called. tokens.isAnonymous: \(String(describing: session?.tokens?.isAnonymous))"
         )
 
         guard session?.tokens?.isAnonymous == false else {
-            print(
-                "🚀 [SpotifySessionCoordinator] Bailing out of profile fetch because tokens are marked anonymous."
+            PerfLog.debug(
+                " [SpotifySessionCoordinator] Bailing out of profile fetch because tokens are marked anonymous."
             )
             accountProfile = nil
             return
@@ -442,11 +441,11 @@ public final class SpotifySessionCoordinator {
 
         do {
             accountProfile = try await sdk.account.profileAttributes()
-            print(
-                "🚀 [SpotifySessionCoordinator] Successfully fetched profile: \(accountProfile?.displayName ?? "nil")"
+            PerfLog.debug(
+                " [SpotifySessionCoordinator] Successfully fetched profile: \(accountProfile?.displayName ?? "nil")"
             )
         } catch {
-            print("🔴 [SpotifySessionCoordinator] Failed to fetch account profile: \(error)")
+            PerfLog.debug(" [SpotifySessionCoordinator] Failed to fetch account profile: \(error)")
             accountProfile = nil
         }
     }

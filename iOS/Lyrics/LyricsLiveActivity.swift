@@ -64,11 +64,11 @@ private extension LyricsAttributes {
 
 private extension LyricsAttributes.ContentState {
     static var smiley: LyricsAttributes.ContentState {
-        LyricsAttributes.ContentState(emoji: "😀")
+        LyricsAttributes.ContentState(emoji: "")
     }
 
     static var starEyes: LyricsAttributes.ContentState {
-        LyricsAttributes.ContentState(emoji: "🤩")
+        LyricsAttributes.ContentState(emoji: "")
     }
 }
 

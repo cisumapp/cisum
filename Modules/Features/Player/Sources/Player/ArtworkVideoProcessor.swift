@@ -5,7 +5,6 @@ import Utilities
 import ffmpegkit
 #endif
 
-private let artworkLog = CisumLog.artwork
 private let artworkSP = CisumSignpost.artwork
 
 public actor ArtworkVideoProcessor {
@@ -116,7 +115,7 @@ public actor ArtworkVideoProcessor {
         let resolvedCacheID = resolvedCacheID(for: mediaID, preferredCacheID: cacheID)
         let outputURL = cacheDirectory.appending(path: "\(resolvedCacheID).mp4")
         if fileManager.fileExists(atPath: outputURL.path(percentEncoded: false)) {
-            artworkLog.debug("🖼️ Cache hit for media=\(mediaID) cache=\(resolvedCacheID)")
+            PerfLog.debug(" Cache hit for media=\(mediaID) cache=\(resolvedCacheID)")
             progress(1)
             return outputURL
         }
@@ -169,12 +168,12 @@ public actor ArtworkVideoProcessor {
 
         do {
             if fileManager.fileExists(atPath: outputURL.path(percentEncoded: false)) {
-                artworkLog.info("🖼️ Reusing cached artwork video for media=\(mediaID) cache=\(cacheID)")
+                PerfLog.info(" Reusing cached artwork video for media=\(mediaID) cache=\(cacheID)")
                 notifyProgress(1, for: cacheID)
                 return outputURL
             }
 
-            artworkLog.info("🖼️ Probing source for media=\(mediaID) cache=\(cacheID)")
+            PerfLog.info(" Probing source for media=\(mediaID) cache=\(cacheID)")
             let probeSpid = artworkSP.begin("probe-source", "id=\(mediaID)")
             let sourceMetadata = await loadSourceMetadata(from: sourceHLSURL)
             artworkSP.end("probe-source", state: probeSpid, "id=\(mediaID)")
@@ -186,10 +185,10 @@ public actor ArtworkVideoProcessor {
             } else {
                 "unknown"
             }
-            artworkLog.info("🖼️ Source probe for media=\(mediaID) cache=\(cacheID) duration=\(durationText)s size=\(sizeText)")
+            PerfLog.info(" Source probe for media=\(mediaID) cache=\(cacheID) duration=\(durationText)s size=\(sizeText)")
             try cleanupItem(at: tempURL)
 
-            artworkLog.info("🖼️ Encoding motion artwork for media=\(mediaID) cache=\(cacheID) with hardware-first preset")
+            PerfLog.info(" Encoding motion artwork for media=\(mediaID) cache=\(cacheID) with hardware-first preset")
             let encodeSpid = artworkSP.begin("encode-artwork", "id=\(mediaID)")
             try await runBestEffortFFmpegCommands(
                 sourceHLSURL: sourceHLSURL,
@@ -205,11 +204,11 @@ public actor ArtworkVideoProcessor {
                 throw ArtworkVideoProcessorError.noOutputProduced
             }
 
-            artworkLog.info("🖼️ Finalizing motion artwork for media=\(mediaID) cache=\(cacheID)")
+            PerfLog.info(" Finalizing motion artwork for media=\(mediaID) cache=\(cacheID)")
             try commitTemporaryOutput(from: tempURL, to: outputURL)
             try? writeCacheProfileMarker(in: cacheDirectory)
             notifyProgress(1, for: cacheID)
-            artworkLog.info("🖼️ Motion artwork ready for media=\(mediaID) cache=\(cacheID)")
+            PerfLog.info(" Motion artwork ready for media=\(mediaID) cache=\(cacheID)")
             return outputURL
         } catch is CancellationError {
             try? cleanupItem(at: tempURL)

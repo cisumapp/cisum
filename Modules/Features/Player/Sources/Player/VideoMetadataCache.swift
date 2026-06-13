@@ -4,7 +4,6 @@ import Foundation
 import Utilities
 import YouTubeSDK
 
-private let cacheLog = CisumLog.cache
 private let cacheSP = CisumSignpost.cache
 
 extension YouTubeVideo: @unchecked Sendable {}
@@ -44,17 +43,17 @@ public actor VideoMetadataCache {
 
     public func get(_ id: String, allowStale: Bool = true) -> Entry? {
         guard var entry = store[id] else {
-            cacheLog.debug("Cache miss id=\(id, privacy: .public)")
+            PerfLog.debug("Cache miss id=\(id)")
             return nil
         }
         if !allowStale, entry.isExpired {
-            cacheLog.debug("Cache stale id=\(id, privacy: .public) expiredAt=\(entry.validUntil, privacy: .public)")
+            PerfLog.debug("Cache stale id=\(id) expiredAt=\(entry.validUntil)")
             return nil
         }
         entry.lastAccessed = Date()
         store[id] = entry
         touch(id)
-        cacheLog.debug("Cache hit id=\(id, privacy: .public)")
+        PerfLog.debug("Cache hit id=\(id)")
         cacheSP.event("cache-hit", "id=\(id)")
         return entry
     }
@@ -98,7 +97,7 @@ public actor VideoMetadataCache {
 
         // Drop stale URL-bearing entries before re-resolve to reduce 403/permission failures.
         if store[id] != nil {
-            cacheLog.info("Evicting stale entry id=\(id, privacy: .public)")
+            PerfLog.info("Evicting stale entry id=\(id)")
             cacheSP.event("stale-evict", "id=\(id)")
             store[id] = nil
             let staleID = id
@@ -109,14 +108,14 @@ public actor VideoMetadataCache {
         }
 
         if let task = inFlight[id] {
-            cacheLog.debug("Coalescing in-flight task id=\(id, privacy: .public)")
+            PerfLog.debug("Coalescing in-flight task id=\(id)")
             cacheSP.event("in-flight-coalesce", "id=\(id)")
             let entry = try await task.value
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=coalesced")
             return entry
         }
 
-        cacheLog.info("Fetching metadata id=\(id, privacy: .public)")
+        PerfLog.info("Fetching metadata id=\(id)")
         cacheSP.event("cache-miss", "id=\(id)")
         let task = Task<Entry, Error> {
             let video = try await fetcher(id)
@@ -145,7 +144,7 @@ public actor VideoMetadataCache {
             if metricsEnabled {
                 let elapsed = Date().timeIntervalSince(startedAt) * 1000
                 await PlaybackMetricsStore.shared.recordResolve(cacheHit: false, durationMs: elapsed)
-                cacheLog.info("Metadata fetched id=\(id, privacy: .public) latency=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms")
+                PerfLog.info("Metadata fetched id=\(id) latency=\(elapsed)ms")
             }
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=network")
             return entry
@@ -232,7 +231,7 @@ public actor VideoMetadataCache {
 
     private func evictIfNeeded() async {
         while lru.count > maxEntries, let last = lru.last {
-            cacheLog.info("LRU eviction id=\(last, privacy: .public) storeSize=\(self.lru.count)")
+            PerfLog.info("LRU eviction id=\(last) storeSize=\(self.lru.count)")
             cacheSP.event("lru-evict", "id=\(last) storeSize=\(lru.count)")
             store[last] = nil
             let staleID = last

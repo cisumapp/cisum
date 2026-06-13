@@ -69,16 +69,17 @@ private struct PlaylistTrackListView: View {
             Color.clear
                 .frame(height: 1900)
                 .contentShape(.rect)
-
-            VStack(alignment: .leading, spacing: 4) {
+                
+            LazyVStack(alignment: .leading, spacing: 4) {
                 if tracks.isEmpty {
                     Text("No tracks found")
                         .foregroundStyle(.secondary)
                         .padding()
                 } else {
-                    ForEach(Array(tracks.enumerated()), id: \.element.itemKey) { index, track in
+                    ForEach(tracks, id: \.itemKey) { track in
                         Button {
                             Task {
+                                let index = tracks.firstIndex(where: { $0.itemKey == track.itemKey }) ?? 0
                                 await playPlaylist(startingAt: index)
                             }
                         } label: {

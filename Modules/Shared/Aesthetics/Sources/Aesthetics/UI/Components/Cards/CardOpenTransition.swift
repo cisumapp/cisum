@@ -47,7 +47,7 @@ public struct CardOpenTransition<Hero: View, Content: View>: View {
             sourceRect = newValue
         })
         #if os(iOS)
-        .fullScreenCover(isPresented: $showFullScreenCover) {
+        .universalOverlay(show: $showFullScreenCover) {
             TransitionFullScreenCover(
                 config: config,
                 backgroundColor: backgroundColor,
@@ -143,30 +143,30 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
         .scaleEffect(dragScale)
         .scaleEffect(buttonScale)
         .ignoresSafeArea()
-        #if os(iOS)
-            .gesture(
-                CardGesture { gesture in
-                    handleGesture(gesture)
-                }
-            )
-        #endif
-            .onGeometryChange(for: EdgeInsets.self) { geo in
-                geo.safeAreaInsets
-            } action: { newValue in
-                safeArea = newValue
+#if os(iOS)
+        .gesture(
+            CardGesture { gesture in
+                handleGesture(gesture)
             }
-            .task {
-                guard !animateContents else { return }
+        )
+#endif
+        .onGeometryChange(for: EdgeInsets.self) { geo in
+            geo.safeAreaInsets
+        } action: { newValue in
+            safeArea = newValue
+        }
+        .task {
+            guard !animateContents else { return }
 
-                withAnimation(config.animation) {
-                    animateContents = true
-                }
+            withAnimation(config.animation) {
+                animateContents = true
             }
-            .presentationBackground {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(animateContents ? 1 : 0)
-            }
+        }
+        .presentationBackground {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(animateContents ? 1 : 0)
+        }
     }
 
     private func dismissButton() -> some View {
@@ -193,7 +193,7 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
         let translation = isHorizontalSwipe ? translationX : translationY
 
         if state == .began {
-            isHorizontalSwipe = gesture.location(in: gesture.view).x < 30
+            isHorizontalSwipe = gesture.location(in: gesture.view).x < 60
         }
 
         if state == .began || state == .changed {
@@ -202,7 +202,7 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
         } else {
             isHorizontalSwipe = false
 
-            if dragScale < 0.9 {
+            if dragScale < 0.95 {
                 dismiss()
             } else {
                 withAnimation(config.animation) {

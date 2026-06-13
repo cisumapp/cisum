@@ -283,7 +283,8 @@ struct SyncedLyricsView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 28) {
-                    ForEach(Array(playerViewModel.syncedLyricsLines.enumerated()), id: \.element.id) { index, line in
+                    ForEach(playerViewModel.syncedLyricsLines.indices, id: \.self) { index in
+                        let line = playerViewModel.syncedLyricsLines[index]
                         let active = isLineActive(line)
                         LyricLineView(
                             line: line,
@@ -447,7 +448,8 @@ struct StreamQualityAndSourceSheet: View {
 
                     if !playerViewModel.playbackCandidates.isEmpty {
                         Section(header: Text("Available Alternatives")) {
-                            ForEach(Array(playerViewModel.playbackCandidates.enumerated()), id: \.offset) { index, candidate in
+                            ForEach(playerViewModel.playbackCandidates.indices, id: \.self) { index in
+                                let candidate = playerViewModel.playbackCandidates[index]
                                 let isSelected = index == playerViewModel.playbackCandidateIndex
                                 let providerName = candidate.providerID?.capitalized ?? "YouTube"
                                 let labels = playerViewModel.playbackLabels(for: candidate)
@@ -515,7 +517,8 @@ struct NowPlayingQueueView: View {
         if let playerViewModel = interfaceViewModel as? PlayerViewModel {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 8) {
-                    ForEach(Array(playerViewModel.queuePreviewItems.enumerated()), id: \.element.id) { index, item in
+                    ForEach(playerViewModel.queuePreviewItems, id: \.id) { item in
+                        let index = playerViewModel.queuePreviewItems.firstIndex(where: { $0.id == item.id }) ?? 0
                         Button {
                             playerViewModel.playQueueEntry(at: index)
                         } label: {

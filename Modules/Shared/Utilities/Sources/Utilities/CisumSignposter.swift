@@ -15,7 +15,7 @@
 //  import Utilities
 //
 //  // Structured logging (visible in Console.app + Instruments):
-//  CisumLog.playback.info("Starting playback for id=\(id, privacy: .public)")
+//  PerfLog.playback.info("Starting playback for id=\(id)")
 //
 //  // Interval spans visible in Instruments → Points of Interest:
 //  let state = CisumSignpost.playback.begin("stream-resolve")
@@ -32,38 +32,6 @@ import os.signpost
 
 private let kSubsystem = "aaravgupta.cisum"
 
-// MARK: - Typed Logger namespace
-
-//
-// NOTE: We use the full type name `os.Logger` / `OSLog.Logger` throughout
-// because `Utilities` already declares a custom `enum Logger { … }`.
-// Clients that import Utilities must use `CisumLog.<category>` rather than
-// constructing loggers directly.
-
-/// Namespace for all `os.Logger` instances used across the cisum codebase.
-/// Each property corresponds to a distinct Instruments category.
-public enum CisumLog {
-    /// App lifecycle — launch, scene transitions, bootstrap.
-    public static let lifecycle: os.Logger = .init(subsystem: kSubsystem, category: "Lifecycle")
-    /// Audio playback engine — AVPlayer, candidates, format selection.
-    public static let playback: os.Logger = .init(subsystem: kSubsystem, category: "Playback")
-    /// Stream resolution — PlaybackURLResolver, provider races.
-    public static let resolver: os.Logger = .init(subsystem: kSubsystem, category: "StreamResolver")
-    /// Metadata cache — VideoMetadataCache hit/miss/eviction.
-    public static let cache: os.Logger = .init(subsystem: kSubsystem, category: "MetadataCache")
-    /// Artwork pipeline — fetch, colour extraction, motion artwork.
-    public static let artwork: os.Logger = .init(subsystem: kSubsystem, category: "Artwork")
-    /// Search — query dispatch, result ranking, cache hints.
-    public static let search: os.Logger = .init(subsystem: kSubsystem, category: "Search")
-    /// Queue management — preloading, radio continuation, skip.
-    public static let queue: os.Logger = .init(subsystem: kSubsystem, category: "Queue")
-    /// Networking — HTTP requests, bandwidth, errors.
-    public static let network: os.Logger = .init(subsystem: kSubsystem, category: "Network")
-    /// SwiftData / persistence — reads, writes, migrations.
-    public static let persistence: os.Logger = .init(subsystem: kSubsystem, category: "Persistence")
-    /// Swift Concurrency — actor contention, task scheduling.
-    public static let concurrency: os.Logger = .init(subsystem: kSubsystem, category: "Concurrency")
-}
 
 // MARK: - OSSignposter namespace
 

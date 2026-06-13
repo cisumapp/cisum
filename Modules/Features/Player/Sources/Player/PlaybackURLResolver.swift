@@ -6,7 +6,6 @@ import Utilities
 import YouTubeSDK
 
 // Aliased for clarity at call sites inside this file.
-private let resolverLog = CisumLog.resolver
 private let resolverSP = CisumSignpost.resolver
 
 /// Lightweight actor to pre-resolve and cache playable stream URLs (HLS preferred)
@@ -44,7 +43,7 @@ public actor PlaybackURLResolver {
     public func cachedURL(for videoID: String) async -> URL? {
         for provider in providers {
             if let url = await provider.cachedURL(for: videoID) {
-                resolverLog.debug("Cached URL hit via \(self.resolverLabel(for: provider), privacy: .public) for \(videoID, privacy: .public)")
+                PerfLog.debug("Cached URL hit via \(self.resolverLabel(for: provider)) for \(videoID)")
                 return url
             }
         }
@@ -96,14 +95,14 @@ public actor PlaybackURLResolver {
         defer {
             resolverSP.end("resolve", state: resolveSpid, "id=\(mediaID)")
             let duration = Date().timeIntervalSince(startTime)
-            resolverLog.notice("⏱️ STREAM RESOLUTION TOOK \(String(format: "%.3f", duration))s for \(mediaID, privacy: .public)")
+            PerfLog.info(" STREAM RESOLUTION TOOK \(String(format: "%.3f", duration))s for \(mediaID)")
         }
 
         // 1. Fast cache path — check all providers' in-memory caches first.
         if !forceDecipher {
             if let cached = await cachedURL(for: mediaID) {
                 let streamKind: PlaybackCandidate.StreamKind = cached.pathExtension.lowercased() == "m3u8" ? .hls : .muxed
-                resolverLog.debug("Cache hit for \(mediaID, privacy: .public)")
+                PerfLog.debug("Cache hit for \(mediaID)")
                 resolverSP.event("cache-hit", "id=\(mediaID)")
                 return [PlaybackCandidate(url: cached, streamKind: streamKind, mimeType: nil, itag: nil, expiresAt: Date().addingTimeInterval(3600), isCompatible: true)]
             }
@@ -157,12 +156,12 @@ public actor PlaybackURLResolver {
             for await (label, result) in group {
                 switch result {
                 case let .success(candidates) where !candidates.isEmpty:
-                    resolverLog.info("\(label, privacy: .public) resolved \(candidates.count) candidate(s) for \(mediaID, privacy: .public) — top MIME: \(candidates.first?.mimeType ?? "unknown", privacy: .public)")
+                    PerfLog.info("\(label) resolved \(candidates.count) candidate(s) for \(mediaID) — top MIME: \(candidates.first?.mimeType ?? "unknown")")
                     resolverSP.event("provider-success", "provider=\(label) id=\(mediaID) count=\(candidates.count)")
                     allCandidates.append(contentsOf: candidates)
                 case let .failure(error) where !(error is CancellationError):
                     lastError = error
-                    resolverLog.warning("\(label, privacy: .public) failed for \(mediaID, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    PerfLog.warning("\(label) failed for \(mediaID): \(error.localizedDescription)")
                     resolverSP.event("provider-failure", "provider=\(label) id=\(mediaID)")
                 default:
                     break
@@ -186,7 +185,7 @@ public actor PlaybackURLResolver {
             let topMime = ranked.first?.mimeType ?? "unknown"
             let topScore = ranked.first.map { qualityScore(for: $0) } ?? 0
             if topScore < 50 {
-                resolverLog.warning("Quality downgrade for \(mediaID, privacy: .public): no hi-res/lossless candidate found, serving \(topMime, privacy: .public)")
+                PerfLog.warning("Quality downgrade for \(mediaID): no hi-res/lossless candidate found, serving \(topMime)")
             }
         }
 

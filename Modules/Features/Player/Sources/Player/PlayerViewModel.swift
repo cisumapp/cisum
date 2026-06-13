@@ -438,7 +438,9 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         Color.resetDynamicAccent()
         currentAccentColor = Color.dynamicAccent
 
-        restoreLastSession()
+        Task {
+            await restoreLastSession()
+        }
     }
 
     private func handleProgressUpdate() {
@@ -626,7 +628,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 }
                 load(entry: nextEntry)
             } else {
-                CisumLog.queue.info("Using distant preloaded id=\(distant.mediaID, privacy: .public)")
+                PerfLog.info("Using distant preloaded id=\(distant.mediaID)")
                 playPreparedQueueEntry(distant)
             }
         } else {
@@ -816,7 +818,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
                     await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
-                    logPlayback("⏱️ COLD START TO PLAY (cache): \(elapsed) ms for \(normalizedMediaID)")
+                    logPlayback(" COLD START TO PLAY (cache): \(elapsed) ms for \(normalizedMediaID)")
                 }
                 return
             }
@@ -937,7 +939,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
                     await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
-                    logPlayback("⏱️ COLD START TO PLAY: \(elapsed) ms for \(normalizedMediaID)")
+                    logPlayback(" COLD START TO PLAY: \(elapsed) ms for \(normalizedMediaID)")
                 }
 
             case let .failure(error):
@@ -1259,7 +1261,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 self.artworkVideoStatus = .failed
                 self.artworkVideoError = error.localizedDescription
                 self.logAnimatedArtwork("Artwork found but failed transcoding for id=\(mediaID): \(error.localizedDescription)")
-                print("⚠️ PlayerViewModel: Artwork video processing failed: \(error.localizedDescription)")
+                PerfLog.debug(" PlayerViewModel: Artwork video processing failed: \(error.localizedDescription)")
             } catch {
                 guard !Task.isCancelled, currentVideoId == mediaID else { return }
 
@@ -1268,7 +1270,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 artworkVideoStatus = .failed
                 artworkVideoError = error.localizedDescription
                 logAnimatedArtwork("Artwork found but failed transcoding for id=\(mediaID): \(error.localizedDescription)")
-                print("⚠️ PlayerViewModel: Artwork video processing failed: \(error.localizedDescription)")
+                PerfLog.debug(" PlayerViewModel: Artwork video processing failed: \(error.localizedDescription)")
             }
         }
     }
@@ -1276,14 +1278,14 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     func logAnimatedArtwork(_ message: String) {
         #if DEBUG
         guard Diagnostics.verboseArtworkLogsEnabled else { return }
-        print("🖼️ PlayerViewModel: \(message)")
+        PerfLog.debug(" PlayerViewModel: \(message)")
         #endif
     }
 
     func logPlayback(_ message: String) {
         #if DEBUG
         guard Diagnostics.verbosePlaybackLogsEnabled else { return }
-        print("🎧 PlayerViewModel: \(message)")
+        PerfLog.debug(" PlayerViewModel: \(message)")
         #endif
     }
 
@@ -1312,7 +1314,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                     if let start = self.pendingPlaybackTelemetryStartedAt {
                         let elapsed = Date().timeIntervalSince(start) * 1000
                         let type = self.pendingPlaybackTelemetryType ?? "playback"
-                        CisumLog.playback.notice("⏱️ TELEMETRY: \(type, privacy: .public) total latency (incl. buffer)=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms id=\(self.currentVideoId ?? "unknown", privacy: .public)")
+                        PerfLog.info(" TELEMETRY: \(type) total latency (incl. buffer)=\(elapsed)ms id=\(self.currentVideoId ?? "unknown")")
                         self.pendingPlaybackTelemetryStartedAt = nil
                         self.pendingPlaybackTelemetryType = nil
                     }
@@ -1338,8 +1340,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                     let logSummary = item.errorLog()?.events.map { event in
                         "{domain=\(String(describing: event.errorDomain)) code=\(String(describing: event.errorStatusCode)) comment=\(String(describing: event.errorComment))}"
                     }.joined(separator: ", ") ?? "[]"
-                    print("❌ PlayerViewModel: AVPlayerItem failed: message=\(errorMessage) domain=\(errorDomain ?? "n/a") code=\(errorCode.map(String.init) ?? "n/a") statusCode=\(statusCode.map(String.init) ?? "n/a") reason=\(failureReason)")
-                    print("❌ PlayerViewModel: AVPlayerItem errorLog=\(logSummary)")
+                    PerfLog.debug(" PlayerViewModel: AVPlayerItem failed: message=\(errorMessage) domain=\(errorDomain ?? "n/a") code=\(errorCode.map(String.init) ?? "n/a") statusCode=\(statusCode.map(String.init) ?? "n/a") reason=\(failureReason)")
+                    PerfLog.debug(" PlayerViewModel: AVPlayerItem errorLog=\(logSummary)")
 
                     // Step 1: Try next local candidate (HLS → muxed → audio)
                     if self.attemptNextPlaybackCandidateIfAvailable(errorMessage: errorMessage) {
@@ -1449,7 +1451,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
             for await _ in notifications where !Task.isCancelled {
                 guard item === self.player.currentItem else { return }
                 self.stallCount += 1
-                CisumLog.playback.warning("⚠️ Playback stalled id=\(self.currentVideoId ?? "unknown", privacy: .public) stallCount=\(self.stallCount)")
+                PerfLog.warning(" Playback stalled id=\(self.currentVideoId ?? "unknown") stallCount=\(self.stallCount)")
                 CisumSignpost.playback.event("playback-stall", "id=\(self.currentVideoId ?? "unknown") count=\(self.stallCount)")
 
                 await self.playbackMetricsStore.recordStall()
@@ -1659,8 +1661,8 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         lastPersistedTime = currentTime
     }
 
-    public func restoreLastSession() {
-        guard let state = queuePersistenceStore.loadLastSession() else { return }
+    public func restoreLastSession() async {
+        guard let state = await queuePersistenceStore.loadLastSession() else { return }
 
         let restoredTrack = CachedRadioTrack(
             videoID: state.mediaID,

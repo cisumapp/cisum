@@ -76,7 +76,8 @@ public struct PlaylistView: View {
                     .padding(.vertical)
 
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(tracks.enumerated()), id: \.element.itemKey) { index, track in
+                        ForEach(tracks, id: \.itemKey) { track in
+                            let index = tracks.firstIndex(where: { $0.itemKey == track.itemKey }) ?? 0
                             PlaylistTrackRow(index: index, track: track) {
                                 Task {
                                     await playPlaylist(startingAt: index)

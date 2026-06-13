@@ -238,35 +238,42 @@ public actor PlaylistLibraryStore {
         for item in existingItems {
             modelContext.delete(item)
         }
+        saveContext()
 
-        for snapshot in snapshots.sorted(by: { $0.sortIndex < $1.sortIndex }) {
-            let created = PlaylistItem(
-                playlistID: playlistID,
-                sortIndex: snapshot.sortIndex,
-                sourceTrackID: snapshot.sourceTrackID,
-                sourceTrackFingerprint: snapshot.sourceTrackFingerprint,
-                title: snapshot.title,
-                artistName: snapshot.artistName,
-                albumName: snapshot.albumName,
-                isrc: snapshot.isrc,
-                durationSeconds: snapshot.durationSeconds,
-                artworkURLString: snapshot.artworkURLString,
-                youtubeID: snapshot.youtubeID,
-                youtubeMusicID: snapshot.youtubeMusicID,
-                spotifyID: snapshot.spotifyID,
-                tidalID: snapshot.tidalID,
-                qobuzID: snapshot.qobuzID,
-                soundcloudID: snapshot.soundcloudID,
-                deezerID: snapshot.deezerID,
-                appleMusicID: snapshot.appleMusicID,
-                resolutionConfidence: snapshot.resolutionConfidence,
-                importStatus: snapshot.importStatus,
-                importErrorCode: snapshot.importErrorCode,
-                importErrorMessage: snapshot.importErrorMessage,
-                createdAt: .now,
-                updatedAt: .now
-            )
-            modelContext.insert(created)
+        let sorted = snapshots.sorted(by: { $0.sortIndex < $1.sortIndex })
+        let batchSize = 200
+        
+        for batch in sorted.chunked(into: batchSize) {
+            for snapshot in batch {
+                let created = PlaylistItem(
+                    playlistID: playlistID,
+                    sortIndex: snapshot.sortIndex,
+                    sourceTrackID: snapshot.sourceTrackID,
+                    sourceTrackFingerprint: snapshot.sourceTrackFingerprint,
+                    title: snapshot.title,
+                    artistName: snapshot.artistName,
+                    albumName: snapshot.albumName,
+                    isrc: snapshot.isrc,
+                    durationSeconds: snapshot.durationSeconds,
+                    artworkURLString: snapshot.artworkURLString,
+                    youtubeID: snapshot.youtubeID,
+                    youtubeMusicID: snapshot.youtubeMusicID,
+                    spotifyID: snapshot.spotifyID,
+                    tidalID: snapshot.tidalID,
+                    qobuzID: snapshot.qobuzID,
+                    soundcloudID: snapshot.soundcloudID,
+                    deezerID: snapshot.deezerID,
+                    appleMusicID: snapshot.appleMusicID,
+                    resolutionConfidence: snapshot.resolutionConfidence,
+                    importStatus: snapshot.importStatus,
+                    importErrorCode: snapshot.importErrorCode,
+                    importErrorMessage: snapshot.importErrorMessage,
+                    createdAt: .now,
+                    updatedAt: .now
+                )
+                modelContext.insert(created)
+            }
+            saveContext()
         }
 
         if let playlist = playlist(playlistID: playlistID) {

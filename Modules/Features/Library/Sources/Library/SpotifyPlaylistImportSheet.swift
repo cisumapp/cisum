@@ -605,13 +605,13 @@ fileprivate extension SpotifyPlaylistImportSheet {
     @MainActor
     func importFromLink() async {
         let trimmed = playlistLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        Utilities.Logger.log("Importing Spotify playlist from link: \(trimmed)")
+        PerfLog.info("Importing Spotify playlist from link: \(trimmed)")
         guard !trimmed.isEmpty else {
-            Utilities.Logger.log("Import link is empty, skipping.")
+            PerfLog.info("Import link is empty, skipping.")
             return
         }
         guard let service = await resolvedImportService() else {
-            Utilities.Logger.log("Spotify SDK unavailable for link import.")
+            PerfLog.info("Spotify SDK unavailable for link import.")
             errorMessage = SpotifyImportError.sdkUnavailable.errorDescription
             return
         }
@@ -621,18 +621,18 @@ fileprivate extension SpotifyPlaylistImportSheet {
 
         do {
             let playlistID = try await service.importPlaylist(fromLink: trimmed)
-            Utilities.Logger.log("Successfully imported Spotify playlist.")
+            PerfLog.info("Successfully imported Spotify playlist.")
             onImported(playlistID)
             dismiss()
         } catch {
-            Utilities.Logger.log("Failed to import playlist from link: \(error.localizedDescription)")
+            PerfLog.info("Failed to import playlist from link: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
 
     @MainActor
     func refreshLibrary() async {
-        Utilities.Logger.log("Refreshing Spotify library...")
+        PerfLog.info("Refreshing Spotify library...")
         errorMessage = nil
         isLoadingLibrary = true
         defer { isLoadingLibrary = false }
@@ -640,36 +640,36 @@ fileprivate extension SpotifyPlaylistImportSheet {
         await coordinator.restoreSessionIfNeeded()
 
         guard coordinator.isAuthenticated else {
-            Utilities.Logger.log("Spotify not authenticated, clearing personal playlists.")
+            PerfLog.info("Spotify not authenticated, clearing personal playlists.")
             personalPlaylists = []
             likedSongsSummary = nil
             return
         }
 
         guard let service = await resolvedImportService() else {
-            Utilities.Logger.log("Spotify SDK unavailable for library refresh.")
+            PerfLog.info("Spotify SDK unavailable for library refresh.")
             errorMessage = SpotifyImportError.sdkUnavailable.errorDescription
             return
         }
 
         do {
-            Utilities.Logger.log("Fetching personal playlists...")
+            PerfLog.info("Fetching personal playlists...")
             personalPlaylists = try await service.fetchPersonalPlaylists(limit: .max)
-            Utilities.Logger.log("Fetched \(personalPlaylists.count) personal playlists.")
+            PerfLog.info("Fetched \(personalPlaylists.count) personal playlists.")
         } catch {
-            Utilities.Logger.log("Failed to fetch personal playlists: \(error.localizedDescription)")
+            PerfLog.info("Failed to fetch personal playlists: \(error.localizedDescription)")
             personalPlaylists = []
             errorMessage = error.localizedDescription
         }
 
         do {
-            Utilities.Logger.log("Fetching liked songs summary...")
+            PerfLog.info("Fetching liked songs summary...")
             likedSongsSummary = try await service.fetchLikedSongsSummary()
-            Utilities.Logger.log(
+            PerfLog.info(
                 "Fetched liked songs summary: \(likedSongsSummary?.trackCount ?? 0) tracks."
             )
         } catch {
-            Utilities.Logger.log("Failed to fetch liked songs summary: \(error.localizedDescription)")
+            PerfLog.info("Failed to fetch liked songs summary: \(error.localizedDescription)")
             likedSongsSummary = nil
             if errorMessage == nil {
                 errorMessage = error.localizedDescription
@@ -679,9 +679,9 @@ fileprivate extension SpotifyPlaylistImportSheet {
 
     @MainActor
     func importPersonalPlaylist(_ playlist: SpotifyPersonalPlaylistSummary) async {
-        Utilities.Logger.log("Importing personal playlist: \(playlist.name) (\(playlist.id))")
+        PerfLog.info("Importing personal playlist: \(playlist.name) (\(playlist.id))")
         guard let service = await resolvedImportService() else {
-            Utilities.Logger.log("Spotify SDK unavailable for personal playlist import.")
+            PerfLog.info("Spotify SDK unavailable for personal playlist import.")
             errorMessage = SpotifyImportError.sdkUnavailable.errorDescription
             return
         }
@@ -693,20 +693,20 @@ fileprivate extension SpotifyPlaylistImportSheet {
             let playlistID = try await service.importPlaylist(
                 id: playlist.id, nameOverride: playlist.name
             )
-            Utilities.Logger.log("Successfully imported Spotify playlist.")
+            PerfLog.info("Successfully imported Spotify playlist.")
             onImported(playlistID)
             dismiss()
         } catch {
-            Utilities.Logger.log("Failed to import personal playlist: \(error.localizedDescription)")
+            PerfLog.info("Failed to import personal playlist: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }
 
     @MainActor
     func importLikedSongs() async {
-        Utilities.Logger.log("Importing Spotify liked songs...")
+        PerfLog.info("Importing Spotify liked songs...")
         guard let service = await resolvedImportService() else {
-            Utilities.Logger.log("Spotify SDK unavailable for liked songs import.")
+            PerfLog.info("Spotify SDK unavailable for liked songs import.")
             errorMessage = SpotifyImportError.sdkUnavailable.errorDescription
             return
         }
@@ -716,13 +716,13 @@ fileprivate extension SpotifyPlaylistImportSheet {
 
         do {
             let playlistID = try await service.importLikedSongs()
-            Utilities.Logger.log(
+            PerfLog.info(
                 "Successfully imported liked songs into playlist"
             )
             onImported(playlistID)
             dismiss()
         } catch {
-            Utilities.Logger.log("Failed to import liked songs: \(error.localizedDescription)")
+            PerfLog.info("Failed to import liked songs: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }

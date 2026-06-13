@@ -19,7 +19,6 @@ import iTunesKit
 import Models
 #endif
 
-private let lyricsLog = CisumLog.playback
 private let lyricsSP = CisumSignpost.playback
 
 @MainActor
@@ -66,7 +65,7 @@ public final class LyricsAggregator {
         // Priority 1: SpicyLyrics (Syllable-level sync if trackId available)
         #if canImport(SpotifySDK)
         if let trackId = spotifyTrackId, let spicyClient = spicyLyricsClient {
-            lyricsLog.debug("Attempting SpicyLyrics for id=\(trackId, privacy: .public)")
+            PerfLog.debug("Attempting SpicyLyrics for id=\(trackId)")
             let spicySpid = lyricsSP.begin("fetch-spicy-lyrics", "id=\(trackId)")
             do {
                 if let spicyLines = try await spicyClient.fetchLyrics(trackId: trackId), !spicyLines.isEmpty {
@@ -92,7 +91,7 @@ public final class LyricsAggregator {
                 lyricsSP.end("fetch-spicy-lyrics", state: spicySpid, "id=\(trackId) success=false")
             } catch {
                 lyricsSP.end("fetch-spicy-lyrics", state: spicySpid, "id=\(trackId) error=\(error.localizedDescription)")
-                lyricsLog.warning("LyricsAggregator: SpicyLyrics failed - \(error.localizedDescription, privacy: .public)")
+                PerfLog.warning("LyricsAggregator: SpicyLyrics failed - \(error.localizedDescription)")
             }
         }
         #endif
@@ -104,7 +103,7 @@ public final class LyricsAggregator {
             let album = albumName ?? "Single"
             let duration = durationHint ?? 0
 
-            lyricsLog.debug("Attempting LRCLIB for title=\(title, privacy: .public) artist=\(artistName, privacy: .public)")
+            PerfLog.debug("Attempting LRCLIB for title=\(title) artist=\(artistName)")
             let lrclibSpid = lyricsSP.begin("fetch-lrclib-lyrics", "title=\(title)")
 
             if duration > 0, let best = try await LyricsKit.shared.bestLyrics(trackName: title, artistName: artistName, albumName: album, durationInSeconds: duration) {
@@ -125,7 +124,7 @@ public final class LyricsAggregator {
             }
             lyricsSP.end("fetch-lrclib-lyrics", state: lrclibSpid, "title=\(title) success=false")
         } catch {
-            lyricsLog.warning("LyricsAggregator: LRCLIB failed - \(error.localizedDescription, privacy: .public)")
+            PerfLog.warning("LyricsAggregator: LRCLIB failed - \(error.localizedDescription)")
         }
         #endif
 

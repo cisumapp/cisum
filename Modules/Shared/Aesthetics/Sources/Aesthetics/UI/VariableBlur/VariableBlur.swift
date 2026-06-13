@@ -10,6 +10,7 @@ import CoreImage.CIFilterBuiltins
 import QuartzCore
 import SwiftUI
 import UIKit
+import Utilities
 
 public enum VariableBlurDirection {
     case blurredTopClearBottom
@@ -44,12 +45,12 @@ open class VariableBlurUIView: UIVisualEffectView {
 
         let clsName = String("retliFAC".reversed())
         guard let Cls = NSClassFromString(clsName)! as? NSObject.Type else {
-            print("[VariableBlur] Error: Can't find filter class")
+            PerfLog.debug("[VariableBlur] Error: Can't find filter class")
             return
         }
         let selName = String(":epyThtiWretlif".reversed())
         guard let variableBlur = Cls.perform(NSSelectorFromString(selName), with: "variableBlur").takeUnretainedValue() as? NSObject else {
-            print("[VariableBlur] Error: Can't create variableBlur filter")
+            PerfLog.debug("[VariableBlur] Error: Can't create variableBlur filter")
             return
         }
 

@@ -294,37 +294,42 @@ public actor PlaylistImportJobStore {
             deleteCandidates(for: existing.trackEntryID)
             modelContext.delete(existing)
         }
-
-        for snapshot in snapshots.sorted(by: { $0.sourceIndex < $1.sourceIndex }) {
-            let created = PlaylistImportTrackEntry(
-                jobID: snapshot.jobID,
-                sourceTrackID: snapshot.sourceTrackID,
-                sourceTrackFingerprint: snapshot.sourceTrackFingerprint,
-                sourceIndex: snapshot.sourceIndex,
-                title: snapshot.title,
-                artistName: snapshot.artistName,
-                albumName: snapshot.albumName,
-                durationSeconds: snapshot.durationSeconds,
-                state: snapshot.state,
-                selectedCandidateID: snapshot.selectedCandidateID,
-                youtubeID: snapshot.youtubeID,
-                youtubeMusicID: snapshot.youtubeMusicID,
-                spotifyID: snapshot.spotifyID,
-                tidalID: snapshot.tidalID,
-                qobuzID: snapshot.qobuzID,
-                soundcloudID: snapshot.soundcloudID,
-                deezerID: snapshot.deezerID,
-                appleMusicID: snapshot.appleMusicID,
-                confidenceScore: snapshot.confidenceScore,
-                needsReview: snapshot.needsReview,
-                errorCode: snapshot.errorCode,
-                errorMessage: snapshot.errorMessage,
-                updatedAt: snapshot.updatedAt
-            )
-            modelContext.insert(created)
-        }
-
         saveContext()
+
+        let sorted = snapshots.sorted(by: { $0.sourceIndex < $1.sourceIndex })
+        let batchSize = 200
+        
+        for batch in sorted.chunked(into: batchSize) {
+            for snapshot in batch {
+                let created = PlaylistImportTrackEntry(
+                    jobID: snapshot.jobID,
+                    sourceTrackID: snapshot.sourceTrackID,
+                    sourceTrackFingerprint: snapshot.sourceTrackFingerprint,
+                    sourceIndex: snapshot.sourceIndex,
+                    title: snapshot.title,
+                    artistName: snapshot.artistName,
+                    albumName: snapshot.albumName,
+                    durationSeconds: snapshot.durationSeconds,
+                    state: snapshot.state,
+                    selectedCandidateID: snapshot.selectedCandidateID,
+                    youtubeID: snapshot.youtubeID,
+                    youtubeMusicID: snapshot.youtubeMusicID,
+                    spotifyID: snapshot.spotifyID,
+                    tidalID: snapshot.tidalID,
+                    qobuzID: snapshot.qobuzID,
+                    soundcloudID: snapshot.soundcloudID,
+                    deezerID: snapshot.deezerID,
+                    appleMusicID: snapshot.appleMusicID,
+                    confidenceScore: snapshot.confidenceScore,
+                    needsReview: snapshot.needsReview,
+                    errorCode: snapshot.errorCode,
+                    errorMessage: snapshot.errorMessage,
+                    updatedAt: snapshot.updatedAt
+                )
+                modelContext.insert(created)
+            }
+            saveContext()
+        }
     }
 
     public func replaceCandidates(for trackEntryID: String, with snapshots: [CandidateSnapshot]) {

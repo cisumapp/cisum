@@ -35,7 +35,6 @@ public extension Color {
     static let cisumDark = Color.cisumAdaptive(light: "#2B221B", dark: "#F2EBDC")
     static let cisumPrimaryText = Color.cisumAdaptive(light: "#151515", dark: "#F7F4EC")
     static let cisumSecondaryText = Color.cisumAdaptive(light: "#68635B", dark: "#B7B1A6")
-    
     static var cisumChromeSubtle: Color {
         .white.opacity(0.1)
     }

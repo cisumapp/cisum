@@ -35,7 +35,7 @@ public struct DiscoverView: View {
             customActions: [
                 ProfileMenuCustomAction(title: "Change Region") {
                     // TODO: Implement Region Change
-                    print("Change Region selected")
+                    PerfLog.debug("Change Region selected")
                 },
             ]
         ) {
@@ -73,7 +73,7 @@ public struct DiscoverView: View {
         .padding(.bottom, 120)
         .contentMargins(.top, 140)
         .task {
-            if let cached = DiscoverCache.load() {
+            if let cached = await DiscoverCache.load() {
                 sections = cached.sections
                 didLoadInitialSections = true
             }
@@ -182,14 +182,18 @@ private struct DiscoverCache: Codable {
         return paths[0].appendingPathComponent("cisum_discover_cache.json")
     }
 
-    static func load() -> DiscoverCache? {
-        guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
-        return try? JSONDecoder().decode(DiscoverCache.self, from: data)
+    static func load() async -> DiscoverCache? {
+        await Task.detached {
+            guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
+            return try? JSONDecoder().decode(DiscoverCache.self, from: data)
+        }.value
     }
 
     func save() {
-        if let data = try? JSONEncoder().encode(self) {
-            try? data.write(to: Self.cacheFileURL)
+        Task.detached { [self] in
+            if let data = try? JSONEncoder().encode(self) {
+                try? data.write(to: Self.cacheFileURL)
+            }
         }
     }
 }

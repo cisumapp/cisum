@@ -3,8 +3,7 @@ import Models
 import Utilities
 import YouTubeSDK
 
-@MainActor
-public final class YouTubePlaylistImportService {
+public final class YouTubePlaylistImportService: Sendable {
     enum PlaylistImportError: LocalizedError {
         case emptyQuery
         case invalidPlaylistLink
@@ -56,7 +55,7 @@ public final class YouTubePlaylistImportService {
     }
 
     public func searchPlaylists(query: String, limit: Int = 30) async throws -> [YouTubePlaylist] {
-        Utilities.Logger.log("YouTubePlaylistImportService: Searching playlists for query: \(query)")
+        PerfLog.info("YouTubePlaylistImportService: Searching playlists for query: \(query)")
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {
             throw PlaylistImportError.emptyQuery
@@ -78,13 +77,13 @@ public final class YouTubePlaylistImportService {
             }
         }
 
-        Utilities.Logger.log("YouTubePlaylistImportService: Found \(deduped.count) playlists.")
+        PerfLog.info("YouTubePlaylistImportService: Found \(deduped.count) playlists.")
         return deduped
     }
 
     @discardableResult
     public func importPlaylist(from playlist: YouTubePlaylist) async throws -> String {
-        Utilities.Logger.log("YouTubePlaylistImportService: Importing playlist from object: \(playlist.title) (\(playlist.id))")
+        PerfLog.info("YouTubePlaylistImportService: Importing playlist from object: \(playlist.title) (\(playlist.id))")
         let info = PlaylistLookupInfo(
             playlistID: playlist.id,
             title: normalizedMusicDisplayTitle(playlist.title, artist: playlist.author),
@@ -102,11 +101,11 @@ public final class YouTubePlaylistImportService {
 
     @discardableResult
     public func importPlaylist(fromLink rawLink: String) async throws -> String {
-        Utilities.Logger.log("YouTubePlaylistImportService: Importing playlist from link: \(rawLink)")
+        PerfLog.info("YouTubePlaylistImportService: Importing playlist from link: \(rawLink)")
         let parsedLink = try parsePlaylistLink(rawLink)
-        Utilities.Logger.log("YouTubePlaylistImportService: Parsed link ID: \(parsedLink.playlistID), isMusic: \(parsedLink.isMusicLink)")
+        PerfLog.info("YouTubePlaylistImportService: Parsed link ID: \(parsedLink.playlistID), isMusic: \(parsedLink.isMusicLink)")
         let lookupInfo = await lookupPlaylistInfo(for: parsedLink.playlistID)
-        Utilities.Logger.log("YouTubePlaylistImportService: Lookup info: \(lookupInfo?.title ?? "None")")
+        PerfLog.info("YouTubePlaylistImportService: Lookup info: \(lookupInfo?.title ?? "None")")
 
         return try await importPlaylist(
             playlistID: parsedLink.playlistID,
@@ -125,13 +124,13 @@ private extension YouTubePlaylistImportService {
         sourceURLString: String,
         lookupInfo: PlaylistLookupInfo?
     ) async throws -> String {
-        Utilities.Logger.log("YouTubePlaylistImportService: Fetching tracks for \(playlistID)...")
+        PerfLog.info("YouTubePlaylistImportService: Fetching tracks for \(playlistID)...")
         let importResult = try await fetchTracks(
             playlistID: playlistID,
             preferredProvider: preferredProvider
         )
         let payloads = importResult.tracks
-        Utilities.Logger.log("YouTubePlaylistImportService: Fetched \(payloads.count) tracks from \(importResult.provider).")
+        PerfLog.info("YouTubePlaylistImportService: Fetched \(payloads.count) tracks from \(importResult.provider).")
 
         guard !payloads.isEmpty else {
             throw PlaylistImportError.playlistHasNoTracks
@@ -188,7 +187,7 @@ private extension YouTubePlaylistImportService {
 
         await playlistStore.upsertPlaylist(playlistSnapshot)
         await playlistStore.replaceItems(for: localPlaylistID, with: itemSnapshots)
-        Utilities.Logger.log("YouTubePlaylistImportService: Import complete for \(title ?? "Imported Playlist").")
+        PerfLog.info("YouTubePlaylistImportService: Import complete for \(title ?? "Imported Playlist").")
         return localPlaylistID
     }
 

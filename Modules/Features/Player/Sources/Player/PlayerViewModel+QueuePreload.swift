@@ -5,7 +5,6 @@ import Utilities
 import YouTubeSDK
 
 private let queueSP = CisumSignpost.queue
-private let queueLog = CisumLog.queue
 
 @MainActor
 extension PlayerViewModel {
@@ -66,7 +65,7 @@ extension PlayerViewModel {
                 return
             }
 
-            queueLog.info("Preload ready id=\(prepared.mediaID, privacy: .public) quality=\(prepared.qualityLabel, privacy: .public)")
+            PerfLog.info("Preload ready id=\(prepared.mediaID) quality=\(prepared.qualityLabel)")
             preparedNextPlayback = prepared
         }
         preloadDistantQueueEntries()
@@ -90,7 +89,7 @@ extension PlayerViewModel {
             guard let self else { return }
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
-            queueLog.info("Time-based prewarm triggered for next track (\(String(format: "%.0f", delay))s into \(String(format: "%.0f", trackDuration))s track)")
+            PerfLog.info("Time-based prewarm triggered for next track (\(String(format: "%.0f", delay))s into \(String(format: "%.0f", trackDuration))s track)")
             preloadNextQueueEntryIfNeeded()
         }
     }
@@ -294,9 +293,7 @@ extension PlayerViewModel {
     }
 
     private func debugQueuePreloadSelection(_ prepared: PreparedQueuePlayback, source: String) {
-        #if DEBUG
-        print("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
-        #endif
+                PerfLog.debug("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
     }
 
     /// Pre-resolves the next 2-5 queue entries in parallel background tasks.
@@ -322,7 +319,7 @@ extension PlayerViewModel {
                 let prepared = await prepareQueuePlayback(for: entry)
                 guard !Task.isCancelled, let prepared else { return }
                 distantPreloadCache[prepared.mediaID] = prepared
-                queueLog.info("Distant preload ready id=\(prepared.mediaID, privacy: .public) offset=\(offset)")
+                PerfLog.info("Distant preload ready id=\(prepared.mediaID) offset=\(offset)")
             }
             distantPreloadTasks.append(task)
         }

@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import MediaPlayer
+import Utilities
 
 @Observable
 @MainActor
@@ -37,7 +38,7 @@ public final class PlaybackEngine {
             // via reactivateSession(), preventing cisum from stealing the audio
             // session from other apps before the user triggers playback.
         } catch {
-            print("Failed to set up audio session category: \(error)")
+            PerfLog.debug("Failed to set up audio session category: \(error)")
         }
         #endif
     }
@@ -106,7 +107,7 @@ public final class PlaybackEngine {
     }
 
     public func fullReset() {
-        print("🔁 PlaybackEngine: Performing full AVPlayer reset")
+        PerfLog.debug(" PlaybackEngine: Performing full AVPlayer reset")
         player.pause()
         player.replaceCurrentItem(with: nil)
 

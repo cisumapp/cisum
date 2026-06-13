@@ -11,7 +11,7 @@ import Foundation
 import Observation
 import YouTubeSDK
 
-private class HomeFeedCache: Codable {
+private final class HomeFeedCache: Codable, Sendable {
     let topSongs: [HomeFeedItem]
     let trending: [HomeFeedItem]
     let items: [HomeFeedItem]
@@ -36,13 +36,17 @@ private class HomeFeedCache: Codable {
     }
 
     func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        try? data.write(to: Self.cacheFileURL, options: .atomic)
+        Task.detached { [self] in
+            guard let data = try? JSONEncoder().encode(self) else { return }
+            try? data.write(to: Self.cacheFileURL, options: .atomic)
+        }
     }
 
-    static func load() -> HomeFeedCache? {
-        guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
-        return try? JSONDecoder().decode(HomeFeedCache.self, from: data)
+    static func load() async -> HomeFeedCache? {
+        await Task.detached {
+            guard let data = try? Data(contentsOf: cacheFileURL) else { return nil }
+            return try? JSONDecoder().decode(HomeFeedCache.self, from: data)
+        }.value
     }
 
     static func clear() {
@@ -149,7 +153,7 @@ final class HomeViewModel {
         if isLoading { return }
         if didLoadInitialFeed, !force { return }
 
-        if !force, let cache = HomeFeedCache.load(), Date().timeIntervalSince(cache.timestamp) < 21600 {
+        if !force, let cache = await HomeFeedCache.load(), Date().timeIntervalSince(cache.timestamp) < 21600 {
             topSongs = cache.topSongs
             trending = cache.trending
             items = cache.items
