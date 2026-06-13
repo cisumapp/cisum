@@ -12,10 +12,10 @@ struct VinylSideLabel {
     let subtitle: String?
 }
 
-public struct Vinyl<Content: View>: View {
+public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     let content: () -> Content
-    let previous: (() -> AnyView)?
-    let upnext: (() -> AnyView)?
+    let previous: (() -> Previous)?
+    let upnext: (() -> UpNext)?
     let previousLabel: VinylSideLabel?
     let upnextLabel: VinylSideLabel?
 
@@ -241,7 +241,7 @@ struct VinylDisk<Content: View>: View {
     .preferredColorScheme(.dark)
 }
 
-public extension Vinyl {
+public extension Vinyl where Previous == EmptyView, UpNext == EmptyView {
     init(
         isPlaying: Bool,
         accentColor: Color,
@@ -255,29 +255,33 @@ public extension Vinyl {
         self.previousLabel = nil
         self.upnextLabel = nil
     }
+}
 
+public extension Vinyl where UpNext == EmptyView {
     init(
         isPlaying: Bool,
         accentColor: Color,
         @ViewBuilder content: @escaping () -> Content,
-        @ViewBuilder previous: @escaping () -> some View,
+        @ViewBuilder previous: @escaping () -> Previous,
         previousTitle: String? = nil,
         previousSubtitle: String? = nil
     ) {
         self.isPlaying = isPlaying
         self.accentColor = accentColor
         self.content = content
-        self.previous = { AnyView(previous()) }
+        self.previous = previous
         self.upnext = nil
         self.previousLabel = Self.makeSideLabel(title: previousTitle, subtitle: previousSubtitle)
         self.upnextLabel = nil
     }
+}
 
+public extension Vinyl where Previous == EmptyView {
     init(
         isPlaying: Bool,
         accentColor: Color,
         @ViewBuilder content: @escaping () -> Content,
-        @ViewBuilder upnext: @escaping () -> some View,
+        @ViewBuilder upnext: @escaping () -> UpNext,
         upnextTitle: String? = nil,
         upnextSubtitle: String? = nil
     ) {
@@ -285,17 +289,19 @@ public extension Vinyl {
         self.accentColor = accentColor
         self.content = content
         self.previous = nil
-        self.upnext = { AnyView(upnext()) }
+        self.upnext = upnext
         self.previousLabel = nil
         self.upnextLabel = Self.makeSideLabel(title: upnextTitle, subtitle: upnextSubtitle)
     }
+}
 
+public extension Vinyl {
     init(
         isPlaying: Bool,
         accentColor: Color,
         @ViewBuilder content: @escaping () -> Content,
-        @ViewBuilder previous: @escaping () -> some View,
-        @ViewBuilder upnext: @escaping () -> some View,
+        @ViewBuilder previous: @escaping () -> Previous,
+        @ViewBuilder upnext: @escaping () -> UpNext,
         previousTitle: String? = nil,
         previousSubtitle: String? = nil,
         upnextTitle: String? = nil,
@@ -304,8 +310,8 @@ public extension Vinyl {
         self.isPlaying = isPlaying
         self.accentColor = accentColor
         self.content = content
-        self.previous = { AnyView(previous()) }
-        self.upnext = { AnyView(upnext()) }
+        self.previous = previous
+        self.upnext = upnext
         self.previousLabel = Self.makeSideLabel(title: previousTitle, subtitle: previousSubtitle)
         self.upnextLabel = Self.makeSideLabel(title: upnextTitle, subtitle: upnextSubtitle)
     }

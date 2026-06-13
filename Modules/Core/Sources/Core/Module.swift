@@ -63,7 +63,7 @@ public final class cisumModule {
             do {
                 _ = try await ProviderManifestStore.shared.importManifest(from: url)
             } catch {
-                print("Failed to import provider manifest: \(error.localizedDescription)")
+                PerfLog.debug("Failed to import provider manifest: \(error.localizedDescription)")
             }
         }
     }
@@ -116,7 +116,7 @@ public final class cisumModule {
                     imageUrl: user.imageUrl
                 )
             } catch {
-                print("Failed to sync: \(error.localizedDescription)")
+                PerfLog.debug("Failed to sync: \(error.localizedDescription)")
             }
             analyticsService.identify(userId: user.id, properties: [
                 "email": user.emailAddresses.first?.emailAddress ?? "",
@@ -232,6 +232,7 @@ public final class cisumModule {
             .environment(container.playbackServices.lastFMSettings)
             .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
             .environment(container.playbackServices.streamingProviderSettings)
+            .modelContainer(modelContainer)
     }
 
     @ViewBuilder

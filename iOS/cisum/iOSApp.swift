@@ -19,7 +19,7 @@ struct iOSApp: App {
     private let cisum: cisumModule
 
     init() {
-        PerfLog.info("🚀 cisum iOS app initializing")
+        PerfLog.info("cisum iOS app initializing")
         let timer = PerfLog.start("ios-app-init")
         self.cisum = cisumModule()
         PerfLog.end(timer)
@@ -35,7 +35,7 @@ struct iOSApp: App {
                 .tint(cisum.playerAccentColor)
                 .modelContainer(cisum.modelContainer)
                 .onOpenURL { url in
-                    PerfLog.info("📱 Handling incoming URL: \(url.absoluteString)")
+                    PerfLog.info("Handling incoming URL: \(url.absoluteString)")
                     cisum.handleIncomingURL(url)
                 }
                 .onAppear {

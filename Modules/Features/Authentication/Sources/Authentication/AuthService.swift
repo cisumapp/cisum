@@ -1,6 +1,7 @@
 public import ClerkKit
 import Foundation
 import Observation
+import Utilities
 
 @Observable
 @MainActor
@@ -42,7 +43,7 @@ public final class AuthService {
         session = Clerk.shared.session
         user = Clerk.shared.user
         error = nil
-        print("[AuthService] checkSession: authenticated=\(isAuthenticated), user=\(user?.id ?? "nil")")
+        PerfLog.debug("[AuthService] checkSession: authenticated=\(isAuthenticated), user=\(user?.id ?? "nil")")
     }
 
     // MARK: - Guest Mode
@@ -50,13 +51,13 @@ public final class AuthService {
     public func enterGuestMode() {
         isGuestMode = true
         defaults.set(true, forKey: Keys.guestMode)
-        print("[AuthService] Entered guest mode")
+        PerfLog.debug("[AuthService] Entered guest mode")
     }
 
     public func exitGuestMode() {
         isGuestMode = false
         defaults.removeObject(forKey: Keys.guestMode)
-        print("[AuthService] Exited guest mode")
+        PerfLog.debug("[AuthService] Exited guest mode")
     }
 
     // MARK: - Sign In / Up
@@ -64,14 +65,14 @@ public final class AuthService {
     public func signInWithEmailPassword(email: String, password: String) async -> SignInResult {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] signIn: attempting with email=\(email)")
+        PerfLog.debug("[AuthService] signIn: attempting with email=\(email)")
 
         do {
             _ = try await Clerk.shared.auth.signInWithPassword(identifier: email, password: password)
             session = Clerk.shared.session
             user = Clerk.shared.user
             error = nil
-            print("[AuthService] signIn: ✅ success, user=\(user?.id ?? "nil")")
+            PerfLog.debug("[AuthService] signIn:  success, user=\(user?.id ?? "nil")")
             return .success
         } catch {
             self.error = error
@@ -88,14 +89,14 @@ public final class AuthService {
     public func signInWithApple() async -> SignInResult {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] signInWithApple: attempting")
+        PerfLog.debug("[AuthService] signInWithApple: attempting")
 
         do {
             let result = try await Clerk.shared.auth.signInWithApple()
             return handleTransferFlowResult(result)
         } catch {
             self.error = error
-            print("[AuthService] signInWithApple: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] signInWithApple:  \(error.localizedDescription)")
             return .failed(error.localizedDescription)
         }
     }
@@ -103,14 +104,14 @@ public final class AuthService {
     public func signInWithGoogle() async -> SignInResult {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] signInWithGoogle: attempting")
+        PerfLog.debug("[AuthService] signInWithGoogle: attempting")
 
         do {
             let result = try await Clerk.shared.auth.signInWithOAuth(provider: .google)
             return handleTransferFlowResult(result)
         } catch {
             self.error = error
-            print("[AuthService] signInWithGoogle: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] signInWithGoogle:  \(error.localizedDescription)")
             return .failed(error.localizedDescription)
         }
     }
@@ -167,7 +168,7 @@ public final class AuthService {
     public func signUpWithEmailPassword(email: String, password: String, firstName: String?, lastName: String?) async -> Bool {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] signUp: attempting with email=\(email), firstName=\(firstName ?? "nil")")
+        PerfLog.debug("[AuthService] signUp: attempting with email=\(email), firstName=\(firstName ?? "nil")")
 
         do {
             _ = try await Clerk.shared.auth.signUp(
@@ -179,12 +180,12 @@ public final class AuthService {
             session = Clerk.shared.session
             user = Clerk.shared.user
             error = nil
-            print("[AuthService] signUp: ✅ success, user=\(user?.id ?? "nil")")
+            PerfLog.debug("[AuthService] signUp:  success, user=\(user?.id ?? "nil")")
             return true
         } catch {
             self.error = error
-            print("[AuthService] signUp: ❌ \(error.localizedDescription)")
-            print("[AuthService] signUp: reflected = \(String(reflecting: error))")
+            PerfLog.debug("[AuthService] signUp:  \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] signUp: reflected = \(String(reflecting: error))")
             return false
         }
     }
@@ -194,18 +195,18 @@ public final class AuthService {
     public func connectAppleAccount() async -> Bool {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] connectAppleAccount: attempting")
+        PerfLog.debug("[AuthService] connectAppleAccount: attempting")
 
         do {
             guard let currentUser = Clerk.shared.user else { return false }
             _ = try await currentUser.connectAppleAccount()
             user = Clerk.shared.user
             error = nil
-            print("[AuthService] connectAppleAccount: ✅ success")
+            PerfLog.debug("[AuthService] connectAppleAccount:  success")
             return true
         } catch {
             self.error = error
-            print("[AuthService] connectAppleAccount: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] connectAppleAccount:  \(error.localizedDescription)")
             return false
         }
     }
@@ -213,7 +214,7 @@ public final class AuthService {
     public func connectGoogleAccount() async -> Bool {
         isLoading = true
         defer { isLoading = false }
-        print("[AuthService] connectGoogleAccount: attempting")
+        PerfLog.debug("[AuthService] connectGoogleAccount: attempting")
 
         do {
             guard let currentUser = Clerk.shared.user else { return false }
@@ -221,11 +222,11 @@ public final class AuthService {
             _ = try await account.reauthorize()
             user = Clerk.shared.user
             error = nil
-            print("[AuthService] connectGoogleAccount: ✅ success")
+            PerfLog.debug("[AuthService] connectGoogleAccount:  success")
             return true
         } catch {
             self.error = error
-            print("[AuthService] connectGoogleAccount: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] connectGoogleAccount:  \(error.localizedDescription)")
             return false
         }
     }
@@ -233,28 +234,28 @@ public final class AuthService {
     // MARK: - Sign Out
 
     public func signOut() async {
-        print("[AuthService] signOut: attempting")
+        PerfLog.debug("[AuthService] signOut: attempting")
         do {
             try await Clerk.shared.auth.signOut()
             session = nil
             user = nil
             error = nil
             exitGuestMode()
-            print("[AuthService] signOut: ✅ success")
+            PerfLog.debug("[AuthService] signOut:  success")
         } catch {
             self.error = error
-            print("[AuthService] signOut: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] signOut:  \(error.localizedDescription)")
         }
     }
 
     public func getSessionToken() async -> String? {
         do {
             let token = try await Clerk.shared.session?.getToken()
-            print("[AuthService] getSessionToken: \(token != nil ? "✅ got token" : "⚠️ nil")")
+            PerfLog.debug("[AuthService] getSessionToken: \(token != nil ? " got token" : " nil")")
             return token
         } catch {
             self.error = error
-            print("[AuthService] getSessionToken: ❌ \(error.localizedDescription)")
+            PerfLog.debug("[AuthService] getSessionToken:  \(error.localizedDescription)")
             return nil
         }
     }

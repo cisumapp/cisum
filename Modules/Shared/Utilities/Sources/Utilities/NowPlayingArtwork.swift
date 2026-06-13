@@ -2,7 +2,7 @@
 //  NowPlayingArtwork.swift
 //  cisum
 //
-//  Created by GitHub Copilot on 29/03/26.
+//  Created by Aarav Gupta on 29/03/26.
 //
 
 import CryptoKit

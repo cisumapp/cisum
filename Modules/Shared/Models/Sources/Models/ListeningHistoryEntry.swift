@@ -2,7 +2,7 @@
 //  ListeningHistoryEntry.swift
 //  Models
 //
-//  Created by Copilot.
+//  Created by Aarav Gupta.
 //
 
 import Foundation

@@ -26,11 +26,10 @@ public struct ProfileMenuCustomAction: Identifiable {
 }
 
 public struct ProfileButton: View {
+    @Environment(\.openURL) var openURL
     public var profileImageURL: URL?
     public var customActions: [ProfileMenuCustomAction]
     public var onAction: (ProfileMenuAction) -> Void
-    
-    @Environment(\.openURL) var openURL
 
     public init(profileImageURL: URL? = nil, customActions: [ProfileMenuCustomAction] = [], onAction: @escaping (ProfileMenuAction) -> Void) {
         self.profileImageURL = profileImageURL

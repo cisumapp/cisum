@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Utilities
 
 extension PlayerViewModel {
     func configureAudioSession() {
@@ -9,7 +10,7 @@ extension PlayerViewModel {
             try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
             try session.setActive(true)
         } catch {
-            print("❌ PlayerViewModel: Failed to configure audio session: \(error)")
+            PerfLog.debug(" PlayerViewModel: Failed to configure audio session: \(error)")
         }
         #endif
     }
@@ -65,7 +66,7 @@ extension PlayerViewModel {
             playbackEngine.setIsPlaying(false)
             updateNowPlayingPlaybackInfo(force: true)
             updateRemoteCommandState()
-            print("⚠️ PlayerViewModel: Audio interruption began")
+            PerfLog.debug(" PlayerViewModel: Audio interruption began")
 
         case .ended:
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue ?? 0)
@@ -75,7 +76,7 @@ extension PlayerViewModel {
                 reactivateAudioSessionIfNeeded()
                 player.play()
                 playbackEngine.setIsPlaying(true)
-                print("✅ PlayerViewModel: Resumed after interruption")
+                PerfLog.debug(" PlayerViewModel: Resumed after interruption")
             }
 
             updateNowPlayingPlaybackInfo(force: true)
@@ -101,7 +102,7 @@ extension PlayerViewModel {
                 playbackEngine.setIsPlaying(false)
                 updateNowPlayingPlaybackInfo(force: true)
                 updateRemoteCommandState()
-                print("⚠️ PlayerViewModel: Paused because audio route became unavailable")
+                PerfLog.debug(" PlayerViewModel: Paused because audio route became unavailable")
             }
         case .newDeviceAvailable:
             if isPlaying {
@@ -119,7 +120,7 @@ extension PlayerViewModel {
         do {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("⚠️ PlayerViewModel: Failed to reactivate audio session: \(error)")
+            PerfLog.debug(" PlayerViewModel: Failed to reactivate audio session: \(error)")
         }
     }
     #else

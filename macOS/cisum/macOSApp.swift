@@ -19,11 +19,11 @@ struct macOSApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     private let youtube: YouTube
-    private let cisum: Module
+    private let cisum: cisumModule
     @State private var searchOverlay = SearchOverlayController()
 
     init() {
-        PerfLog.info("🚀 cisum macOS app initializing")
+        PerfLog.info("cisum macOS app initializing")
         let timer = PerfLog.start("macos-app-init")
         self.youtube = YouTube.shared
         self.cisum = cisumModule()
@@ -40,7 +40,7 @@ struct macOSApp: App {
                     backgroundFill
                 }
                 .onOpenURL { url in
-                    PerfLog.info("💻 Handling incoming URL: \(url.absoluteString)")
+                    PerfLog.info(" Handling incoming URL: \(url.absoluteString)")
                     cisum.handleIncomingURL(url)
                 }
                 .onAppear {

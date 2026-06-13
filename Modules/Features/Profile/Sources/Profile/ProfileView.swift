@@ -432,10 +432,10 @@ public struct ProfileView: View {
 //                                        defer { isConnectingLastFM = false }
 //                                        do {
 //                                            if let scrobbler = lastFMScrobbler {
-//                                                Utilities.Logger.log("Starting LastFM connection flow...")
+//                                                PerfLog.info("Starting LastFM connection flow...")
 //                                                let flow = try await scrobbler.startConnection()
 //                                                pendingFlowId = flow.flowId
-//                                                Utilities.Logger.log("Got flow ID: \(flow.flowId), URL: \(flow.authorizeUrl)")
+//                                                PerfLog.info("Got flow ID: \(flow.flowId), URL: \(flow.authorizeUrl)")
 //                                                if let url = URL(string: flow.authorizeUrl) {
 //                                                    openURL(url)
 //                                                } else {
@@ -518,7 +518,7 @@ public struct ProfileView: View {
                 .padding(.bottom, -8)
 
             ShareLink(
-                item: Logger.getLogFileURL(),
+                item: PerfLog.getLogFileURL(),
                 subject: Text("App Diagnostics"),
                 message: Text("Here are the logs from my session:")
             ) {

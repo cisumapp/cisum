@@ -28,6 +28,7 @@ public struct TrackCard: View {
             VStack(alignment: .leading) {
                 if let artworkURL {
                     KFImage(artworkURL)
+                        .downsampling(size: CGSize(width: 280, height: 280))
                         .resizable()
                         .scaledToFill()
                         .frame(width: 140, height: 140)

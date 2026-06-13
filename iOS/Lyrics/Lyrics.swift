@@ -69,13 +69,13 @@ struct Lyrics: Widget {
 private extension ConfigurationAppIntent {
     static var smiley: ConfigurationAppIntent {
         let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
+        intent.favoriteEmoji = ""
         return intent
     }
 
     static var starEyes: ConfigurationAppIntent {
         let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
+        intent.favoriteEmoji = ""
         return intent
     }
 }

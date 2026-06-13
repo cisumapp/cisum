@@ -36,7 +36,7 @@ public struct AlbumCard: View {
                         .frame(height: 1900)
                         .contentShape(.rect)
 
-                    VStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         if songs.isEmpty {
                             Text("No tracks found")
                                 .foregroundStyle(.secondary)

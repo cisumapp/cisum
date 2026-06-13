@@ -8,6 +8,7 @@ import Foundation
 import Models
 import ProviderSDK
 import YouTubeSDK
+import Utilities
 
 extension PlayerViewModel {
     // MARK: - Playback Resolution & Fallback
@@ -189,7 +190,7 @@ extension PlayerViewModel {
                 playbackError = error.localizedDescription
                 updateNowPlayingPlaybackInfo(force: true)
                 updateRemoteCommandState()
-                print("❌ PlayerViewModel: Playback recovery failed for id=\(mediaID): \(error.localizedDescription)")
+                PerfLog.debug(" PlayerViewModel: Playback recovery failed for id=\(mediaID): \(error.localizedDescription)")
             }
         }
 
@@ -263,6 +264,6 @@ extension PlayerViewModel {
         updateRemoteCommandState()
 
         let videoID = currentVideoId ?? "Unknown"
-        print("❌ PlayerViewModel: Playback failed for ID [\(videoID)]: \(error.localizedDescription)")
+        PerfLog.debug(" PlayerViewModel: Playback failed for ID [\(videoID)]: \(error.localizedDescription)")
     }
 }

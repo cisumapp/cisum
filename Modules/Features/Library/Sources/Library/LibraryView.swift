@@ -461,13 +461,13 @@ public struct LibraryView: View {
         defer { viewModel.isLoadingSpotifySnapshot = false }
 
         do {
-            Utilities.Logger.log("LibraryView: Fetching Spotify snapshot...")
+            PerfLog.info("LibraryView: Fetching Spotify snapshot...")
             async let playlists = sdk.account.playlists(limit: 40)
             async let likedSongsPage = sdk.account.likedSongs(limit: 1)
             let (playlistsResult, likedSongs) = try await (playlists, likedSongsPage)
 
             let count = likedSongs.totalCount ?? likedSongs.items.count
-            Utilities.Logger.log(
+            PerfLog.info(
                 "LibraryView: Spotify snapshot fetched. Playlists: \(playlistsResult.count), Liked Songs: \(count)"
             )
 
@@ -482,7 +482,7 @@ public struct LibraryView: View {
                 featuredPlaylists: Array(playlistsResult.prefix(6))
             )
         } catch {
-            Utilities.Logger.log(
+            PerfLog.info(
                 "LibraryView: Failed to fetch Spotify snapshot: \(error.localizedDescription)"
             )
             viewModel.spotifySnapshot = .empty

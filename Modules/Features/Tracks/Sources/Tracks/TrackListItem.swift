@@ -28,6 +28,7 @@ public struct TrackListItem: View {
                 if let artworkURL {
                     KFImage(artworkURL)
                         .resizable()
+                        .downsampling(size: CGSize(width: 120, height: 120))
                         .scaledToFill()
                         .frame(width: 60, height: 60)
                         .clipShape(RoundedRectangle(cornerRadius: 8))

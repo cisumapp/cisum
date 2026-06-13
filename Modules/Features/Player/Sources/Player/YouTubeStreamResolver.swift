@@ -6,7 +6,6 @@ import ProviderSDK
 import Utilities
 import YouTubeSDK
 
-private let resolverLog = CisumLog.resolver
 private let resolverSP = CisumSignpost.resolver
 
 public struct YouTubeStreamResolver: StreamResolutionProvider {
@@ -66,7 +65,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             return youtubeVideoID.unicodeScalars.allSatisfy { validChars.contains($0) }
         }()
 
-        resolverLog.notice("--- Resolving \(youtubeVideoID, privacy: .public) title=\(title, privacy: .public) artist=\(artist, privacy: .public) ---")
+        PerfLog.info("--- Resolving \(youtubeVideoID) title=\(title) artist=\(artist) ---")
 
         let startTime = Date()
 
@@ -87,14 +86,14 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             // Skip both search phases to save 1-3s on first play.
             let shouldSkipSearch = isValidYTID && depth == 0
             if shouldSkipSearch {
-                resolverLog.debug("Skipping search — valid YouTube ID, going straight to SDK-Direct")
+                PerfLog.debug("Skipping search — valid YouTube ID, going straight to SDK-Direct")
             }
 
             // Method 1: SDK Direct resolve (if we have a valid YouTube ID)
             if isValidYTID {
                 group.addTask {
                     let methodStart = Date()
-                    resolverLog.debug("Race [SDK-Direct] starting for \(youtubeVideoID, privacy: .public)")
+                    PerfLog.debug("Race [SDK-Direct] starting for \(youtubeVideoID)")
                     let raceSpid = resolverSP.begin("race-sdk-direct", "id=\(youtubeVideoID)")
                     defer { resolverSP.end("race-sdk-direct", state: raceSpid, "id=\(youtubeVideoID)") }
 
@@ -129,13 +128,13 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                         }
                         let elapsed = Date().timeIntervalSince(methodStart)
                         if !candidates.isEmpty {
-                            resolverLog.notice("Race [SDK-Direct] ✅ WINNER — \(candidates.count) candidates in \(String(format: "%.2f", elapsed))s")
+                            PerfLog.info("Race [SDK-Direct]  WINNER — \(candidates.count) candidates in \(String(format: "%.2f", elapsed))s")
                             return candidates
                         }
-                        resolverLog.debug("Race [SDK-Direct] no candidates in \(String(format: "%.2f", elapsed))s")
+                        PerfLog.debug("Race [SDK-Direct] no candidates in \(String(format: "%.2f", elapsed))s")
                     } catch {
                         let elapsed = Date().timeIntervalSince(methodStart)
-                        resolverLog.debug("Race [SDK-Direct] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription, privacy: .public)")
+                        PerfLog.debug("Race [SDK-Direct] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription)")
                     }
                     return nil
                 }
@@ -145,7 +144,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             if !shouldSkipSearch, !title.isEmpty, !artist.isEmpty, depth < 1 {
                 group.addTask {
                     let methodStart = Date()
-                    resolverLog.debug("Race [Music-Search] starting for '\(title, privacy: .public) \(artist, privacy: .public)'")
+                    PerfLog.debug("Race [Music-Search] starting for '\(title) \(artist)'")
                     let raceSpid = resolverSP.begin("race-music-search", "query=\(title) \(artist)")
                     defer { resolverSP.end("race-music-search", state: raceSpid, "query=\(title) \(artist)") }
 
@@ -164,13 +163,13 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                             sourceDuration: duration
                         ) {
                             let elapsed = Date().timeIntervalSince(methodStart)
-                            resolverLog.debug("Race [Music-Search] found '\(bestResult.title, privacy: .public)' (score=\(bestResult.score, privacy: .public)) in \(String(format: "%.2f", elapsed))s")
+                            PerfLog.debug("Race [Music-Search] found '\(bestResult.title)' (score=\(bestResult.score)) in \(String(format: "%.2f", elapsed))s")
                             // Return nil here — we'll resolve deduplicated IDs in Phase 2
                             return nil
                         }
                     } catch {
                         let elapsed = Date().timeIntervalSince(methodStart)
-                        resolverLog.debug("Race [Music-Search] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription, privacy: .public)")
+                        PerfLog.debug("Race [Music-Search] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription)")
                     }
                     return nil
                 }
@@ -180,7 +179,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             if !shouldSkipSearch, !title.isEmpty, !artist.isEmpty, depth < 1 {
                 group.addTask {
                     let methodStart = Date()
-                    resolverLog.debug("Race [YT-Search] starting for '\(title, privacy: .public) \(artist, privacy: .public)'")
+                    PerfLog.debug("Race [YT-Search] starting for '\(title) \(artist)'")
                     let raceSpid = resolverSP.begin("race-yt-search", "query=\(title) \(artist)")
                     defer { resolverSP.end("race-yt-search", state: raceSpid, "query=\(title) \(artist)") }
 
@@ -203,13 +202,13 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                             sourceDuration: duration
                         ) {
                             let elapsed = Date().timeIntervalSince(methodStart)
-                            resolverLog.debug("Race [YT-Search] found '\(bestResult.title, privacy: .public)' (score=\(bestResult.score, privacy: .public)) in \(String(format: "%.2f", elapsed))s")
+                            PerfLog.debug("Race [YT-Search] found '\(bestResult.title)' (score=\(bestResult.score)) in \(String(format: "%.2f", elapsed))s")
                             // Return nil here — we'll resolve deduplicated IDs in Phase 2
                             return nil
                         }
                     } catch {
                         let elapsed = Date().timeIntervalSince(methodStart)
-                        resolverLog.debug("Race [YT-Search] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription, privacy: .public)")
+                        PerfLog.debug("Race [YT-Search] failed in \(String(format: "%.2f", elapsed))s: \(error.localizedDescription)")
                     }
                     return nil
                 }
@@ -228,7 +227,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
         // If SDK-Direct already succeeded, return immediately
         if !result.isEmpty {
             let totalElapsed = Date().timeIntervalSince(startTime)
-            resolverLog.notice("⏱️ STREAM RESOLUTION TOOK \(String(format: "%.2f", totalElapsed))s for \(normalizedMediaID, privacy: .public)")
+            PerfLog.info(" STREAM RESOLUTION TOOK \(String(format: "%.2f", totalElapsed))s for \(normalizedMediaID)")
             await mediaCacheStore.savePlaybackResolution(mediaID: normalizedMediaID, candidates: result, validUntil: nil)
             return result
         }
@@ -300,7 +299,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                 seenVideoIDs.insert(candidate.videoId)
             }
 
-            resolverLog.notice("Search dedup: \(uniqueCandidates.count) unique video IDs from \(searchCandidates.count) results")
+            PerfLog.info("Search dedup: \(uniqueCandidates.count) unique video IDs from \(searchCandidates.count) results")
 
             // Resolve unique video IDs in parallel
             let resolvedResult: [PlaybackCandidate]? = await withTaskGroup(of: [PlaybackCandidate]?.self, returning: [PlaybackCandidate]?.self) { group in
@@ -318,7 +317,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                                 duration: candidate.duration
                             )
                             if !candidates.isEmpty {
-                                resolverLog.notice("✅ Resolved '\(candidate.title, privacy: .public)' from \(candidate.source, privacy: .public) (\(candidate.videoId, privacy: .public))")
+                                PerfLog.info(" Resolved '\(candidate.title)' from \(candidate.source) (\(candidate.videoId))")
                                 return candidates
                             }
                         } catch {}
@@ -337,7 +336,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
 
             if let resolved = resolvedResult, !resolved.isEmpty {
                 let totalElapsed = Date().timeIntervalSince(startTime)
-                resolverLog.notice("⏱️ STREAM RESOLUTION TOOK \(String(format: "%.2f", totalElapsed))s for \(normalizedMediaID, privacy: .public)")
+                PerfLog.info(" STREAM RESOLUTION TOOK \(String(format: "%.2f", totalElapsed))s for \(normalizedMediaID)")
                 await mediaCacheStore.savePlaybackResolution(mediaID: normalizedMediaID, candidates: resolved, validUntil: nil)
                 return resolved
             }
@@ -451,7 +450,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             .sorted { $0.score > $1.score }
 
         if let best = ranked.first {
-            resolverLog.debug("Search scoring: best=\(best.title, privacy: .public) score=\(best.score, privacy: .public) (top 3: \(ranked.prefix(3).map { "\($0.title.prefix(30))=\(String(format: "%.2f", $0.score))" }.joined(separator: ", "), privacy: .public))")
+            PerfLog.debug("Search scoring: best=\(best.title) score=\(best.score) (top 3: \(ranked.prefix(3).map { "\($0.title.prefix(30))=\(String(format: "%.2f", $0.score))" }.joined(separator: ", ")))")
         }
 
         // Prefer candidates that pass the threshold, but if none do,
@@ -460,7 +459,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
             return best
         }
         if let fallback = ranked.first {
-            resolverLog.warning("No search candidates passed 0.20 threshold — using top result anyway: '\(fallback.title, privacy: .public)' (score=\(fallback.score, privacy: .public))")
+            PerfLog.warning("No search candidates passed 0.20 threshold — using top result anyway: '\(fallback.title)' (score=\(fallback.score))")
             return fallback
         }
         return nil

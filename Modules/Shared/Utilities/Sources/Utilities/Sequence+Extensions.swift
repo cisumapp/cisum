@@ -20,4 +20,20 @@ public extension Sequence {
         var seen = Set<T>()
         return filter { seen.insert(keyPath($0)).inserted }
     }
+
+    func chunked(into size: Int) -> [[Element]] {
+        var result: [[Element]] = []
+        var chunk: [Element] = []
+        for element in self {
+            chunk.append(element)
+            if chunk.count == size {
+                result.append(chunk)
+                chunk = []
+            }
+        }
+        if !chunk.isEmpty {
+            result.append(chunk)
+        }
+        return result
+    }
 }

@@ -3,6 +3,7 @@ import MediaPlayer
 import Networking
 import SwiftUI
 import Utilities
+import YouTubeSDK
 
 #if os(iOS)
 import AVFoundation
@@ -10,6 +11,10 @@ import UIKit
 
 #if canImport(iTunesKit)
 import iTunesKit
+#endif
+
+#if canImport(SpotifySDK)
+import SpotifySDK
 #endif
 
 #endif
@@ -118,18 +123,44 @@ extension PlayerViewModel {
             return payloadURL
         }
 
-        #if canImport(iTunesKit)
-        if let itunesURL = await Self.resolveHighQualityArtworkURL(
-            using: itunes,
-            title: title,
-            artist: artist
-        ) {
-            await mediaCacheStore.saveHighQualityArtworkURL(itunesURL, for: mediaID)
-            return itunesURL
+        // Load Balancer: Shuffle providers to distribute load evenly
+        let providers: [ArtworkProviderType] = [.spotify, .itunes, .youtube].shuffled()
+
+        for provider in providers {
+            if let highResURL = await resolveArtwork(using: provider, title: title, artist: artist) {
+                await mediaCacheStore.saveHighQualityArtworkURL(highResURL, for: mediaID)
+                
+                // Immediately refresh queue items to inherit the newly cached high-res artwork
+                updateQueuePreviewItems()
+                
+                return highResURL
+            }
         }
-        #endif
 
         return fallbackURL
+    }
+
+    private enum ArtworkProviderType {
+        case spotify, itunes, youtube
+    }
+
+    private func resolveArtwork(using provider: ArtworkProviderType, title: String, artist: String) async -> URL? {
+        switch provider {
+        case .spotify:
+            #if canImport(SpotifySDK)
+            return await resolveSpotifyArtworkURL(title: title, artist: artist)
+            #else
+            return nil
+            #endif
+        case .itunes:
+            #if canImport(iTunesKit)
+            return await resolveITunesArtworkURL(title: title, artist: artist)
+            #else
+            return nil
+            #endif
+        case .youtube:
+            return await resolveYouTubeArtworkURL(title: title, artist: artist)
+        }
     }
 
     private func currentElapsedTimeSnapshot() -> Double {
@@ -300,18 +331,85 @@ extension PlayerViewModel {
         )
     }
 
-    #if canImport(iTunesKit)
-    private nonisolated static func resolveHighQualityArtworkURL(using itunes: iTunesKit, title: String, artist: String) async -> URL? {
+    #if canImport(SpotifySDK)
+    private func resolveSpotifyArtworkURL(title: String, artist: String) async -> URL? {
         do {
             let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
             let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
-            let response = try await itunes.search(term: "\(searchTitle) \(searchArtist)", country: "us", media: "music", limit: 1)
-            return normalizedITunesArtworkURL(from: response.results.first?.artworkUrl100)
+            
+            // We use anonymous mode for public search
+            let spotify = SpotifySDK(mode: .anonymous)
+            let response = try await spotify.search.search("\(searchTitle) \(searchArtist)", limit: 5)
+            
+            // Strict Artist Match Check
+            let lowerSearchArtist = searchArtist.lowercased()
+            guard let bestMatch = response.tracks?.items.first(where: { item in
+                item.artists.contains { artistObj in
+                    let lowerName = artistObj.name.lowercased()
+                    return lowerName.contains(lowerSearchArtist) || lowerSearchArtist.contains(lowerName)
+                }
+            }) else {
+                return nil
+            }
+            
+            // Return largest artwork URL (Spotify sorts images by size descending)
+            if let largestImageURL = bestMatch.album?.images.first?.url {
+                return largestImageURL
+            }
+            return nil
         } catch {
             return nil
         }
     }
     #endif
+
+    #if canImport(iTunesKit)
+    private func resolveITunesArtworkURL(title: String, artist: String) async -> URL? {
+        do {
+            let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
+            let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
+            let response = try await itunes.search(term: "\(searchTitle) \(searchArtist)", country: "us", media: "music", limit: 5)
+            
+            // Strict Artist Match Check
+            let lowerSearchArtist = searchArtist.lowercased()
+            guard let bestMatch = response.results.first(where: { result in
+                guard let artistName = result.artistName else { return false }
+                let lowerName = artistName.lowercased()
+                return lowerName.contains(lowerSearchArtist) || lowerSearchArtist.contains(lowerName)
+            }) else {
+                return nil
+            }
+            
+            return normalizedITunesArtworkURL(from: bestMatch.artworkUrl100)
+        } catch {
+            return nil
+        }
+    }
+    #endif
+
+    private func resolveYouTubeArtworkURL(title: String, artist: String) async -> URL? {
+        do {
+            let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
+            let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
+            let query = "\(searchTitle) \(searchArtist)"
+            let response = try await youtube.music.search(query)
+            
+            // Strict Artist Match Check
+            let lowerSearchArtist = searchArtist.lowercased()
+            guard let bestMatch = response.first(where: { song in
+                let lowerName = song.artistsDisplay.lowercased()
+                return lowerName.contains(lowerSearchArtist) || lowerSearchArtist.contains(lowerName)
+            }) else {
+                return nil
+            }
+            
+            // YouTube thumbnailURL is already normalized using normalizedArtworkURL inside music search,
+            // or we can fallback to replacing sizes. `thumbnailURL` usually is highest available.
+            return bestMatch.thumbnailURL
+        } catch {
+            return nil
+        }
+    }
 
     func resolveMotionArtworkSource(
         for mediaID: String,

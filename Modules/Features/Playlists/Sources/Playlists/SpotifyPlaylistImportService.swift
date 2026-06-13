@@ -69,16 +69,15 @@ public enum SpotifyPlaylistURLParser {
 
 // MARK: - Spotify Playlist Import Service
 
-@MainActor
-public final class SpotifyPlaylistImportService {
+public final class SpotifyPlaylistImportService: Sendable {
     private let sdk: SpotifySDK
     private let playlistStore: PlaylistLibraryStore
-    private let onSpotifyPlaylistImported: ((SpotifyPlaylist) -> Void)?
+    private let onSpotifyPlaylistImported: (@Sendable (SpotifyPlaylist) -> Void)?
 
     public init(
         sdk: SpotifySDK,
         playlistStore: PlaylistLibraryStore,
-        onSpotifyPlaylistImported: ((SpotifyPlaylist) -> Void)? = nil
+        onSpotifyPlaylistImported: (@Sendable (SpotifyPlaylist) -> Void)? = nil
     ) {
         self.sdk = sdk
         self.playlistStore = playlistStore
@@ -86,10 +85,10 @@ public final class SpotifyPlaylistImportService {
     }
 
     public func fetchPersonalPlaylists(limit: Int = 30) async throws -> [SpotifyPersonalPlaylistSummary] {
-        Utilities.Logger.log("SpotifyPlaylistImportService: Fetching personal playlists (limit: \(limit))")
+        PerfLog.info("SpotifyPlaylistImportService: Fetching personal playlists (limit: \(limit))")
         let clampedLimit = max(1, limit)
         let summaries = try await sdk.account.playlists(limit: clampedLimit)
-        Utilities.Logger.log("SpotifyPlaylistImportService: SDK returned \(summaries.count) playlists.")
+        PerfLog.info("SpotifyPlaylistImportService: SDK returned \(summaries.count) playlists.")
         guard !summaries.isEmpty else {
             return []
         }
@@ -111,7 +110,7 @@ public final class SpotifyPlaylistImportService {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
-        Utilities.Logger.log("SpotifyPlaylistImportService: Importing \(uniqueIDs.count) playlists: \(uniqueIDs)")
+        PerfLog.info("SpotifyPlaylistImportService: Importing \(uniqueIDs.count) playlists: \(uniqueIDs)")
 
         guard !uniqueIDs.isEmpty else {
             throw SpotifyImportError.noImportablePlaylists
@@ -125,7 +124,7 @@ public final class SpotifyPlaylistImportService {
                 let playlist = try await importPlaylist(id: playlistID)
                 importedPlaylists.append(playlist)
             } catch {
-                Utilities.Logger.log("SpotifyPlaylistImportService: Failed to import playlist \(playlistID): \(error.localizedDescription)")
+                PerfLog.info("SpotifyPlaylistImportService: Failed to import playlist \(playlistID): \(error.localizedDescription)")
             }
         }
 
@@ -146,18 +145,18 @@ public final class SpotifyPlaylistImportService {
 
     /// Import a Spotify playlist by its raw ID.
     public func importPlaylist(id: String, nameOverride: String? = nil) async throws -> String {
-        Utilities.Logger.log("SpotifyPlaylistImportService: Fetching details for playlist ID: \(id)")
-        let spotifyPlaylist = try await sdk.playlists.details(id: id)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Fetched details for \(spotifyPlaylist.name). Starting import...")
+        PerfLog.info("SpotifyPlaylistImportService: Fetching details for playlist ID: \(id)")
+        let spotifyPlaylist = try await sdk.playlists.detailsWithAllTracks(id: id)
+        PerfLog.info("SpotifyPlaylistImportService: Fetched details for \(spotifyPlaylist.name). Starting import...")
         return try await importSpotifyPlaylist(spotifyPlaylist, nameOverride: nameOverride)
     }
 
     public func importLikedSongs() async throws -> String {
-        Utilities.Logger.log("SpotifyPlaylistImportService: Starting Liked Songs import")
+        PerfLog.info("SpotifyPlaylistImportService: Starting Liked Songs import")
         let likedSongsSummary = try await fetchLikedSongsSummary()
-        Utilities.Logger.log("SpotifyPlaylistImportService: Liked songs summary: \(likedSongsSummary.trackCount ?? 0) tracks. Fetching all tracks...")
+        PerfLog.info("SpotifyPlaylistImportService: Liked songs summary: \(likedSongsSummary.trackCount ?? 0) tracks. Fetching all tracks...")
         let likedSongs = try await fetchAllLikedSongs()
-        Utilities.Logger.log("SpotifyPlaylistImportService: Fetched \(likedSongs.count) liked songs.")
+        PerfLog.info("SpotifyPlaylistImportService: Fetched \(likedSongs.count) liked songs.")
 
         guard !likedSongs.isEmpty else {
             throw SpotifyImportError.emptyPlaylist(likedSongsSummary.name)
@@ -178,10 +177,10 @@ public final class SpotifyPlaylistImportService {
         )
 
         await playlistStore.upsertPlaylist(playlistSnapshot)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Upserted Liked Songs playlist with ID: \(stablePlaylistID), title: \(likedSongsSummary.name)")
+        PerfLog.info("SpotifyPlaylistImportService: Upserted Liked Songs playlist with ID: \(stablePlaylistID), title: \(likedSongsSummary.name)")
         let itemSnapshots = makeItemSnapshots(from: likedSongs.map(\.track))
         await playlistStore.replaceItems(for: stablePlaylistID, with: itemSnapshots)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Liked Songs import complete (\(itemSnapshots.count) items).")
+        PerfLog.info("SpotifyPlaylistImportService: Liked Songs import complete (\(itemSnapshots.count) items).")
 
         return stablePlaylistID
     }
@@ -190,7 +189,7 @@ public final class SpotifyPlaylistImportService {
     public func importSpotifyPlaylist(_ spotifyPlaylist: SpotifyPlaylist, nameOverride: String? = nil) async throws -> String {
         let tracks = spotifyPlaylist.tracks?.items ?? []
         let playlistTitle = nameOverride ?? normalizedSpotifyPlaylistTitle(spotifyPlaylist)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Importing \(tracks.count) tracks for playlist: \(playlistTitle)")
+        PerfLog.info("SpotifyPlaylistImportService: Importing \(tracks.count) tracks for playlist: \(playlistTitle)")
         guard !tracks.isEmpty else {
             throw SpotifyImportError.emptyPlaylist(playlistTitle)
         }
@@ -214,14 +213,14 @@ public final class SpotifyPlaylistImportService {
         )
 
         await playlistStore.upsertPlaylist(playlistSnapshot)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Upserted playlist '\(playlistTitle)' (ID: \(stablePlaylistID), Source: \(spotifyPlaylist.id))")
+        PerfLog.info("SpotifyPlaylistImportService: Upserted playlist '\(playlistTitle)' (ID: \(stablePlaylistID), Source: \(spotifyPlaylist.id))")
         let itemSnapshots = makeItemSnapshots(from: tracks)
         await playlistStore.replaceItems(for: stablePlaylistID, with: itemSnapshots)
-        Utilities.Logger.log("SpotifyPlaylistImportService: Replaced items (\(itemSnapshots.count)) for playlist \(stablePlaylistID).")
+        PerfLog.info("SpotifyPlaylistImportService: Replaced items (\(itemSnapshots.count)) for playlist \(stablePlaylistID).")
 
         if let onSpotifyPlaylistImported {
-            onSpotifyPlaylistImported(spotifyPlaylist)
-            Utilities.Logger.log("SpotifyPlaylistImportService: Notified via onSpotifyPlaylistImported.")
+            await MainActor.run { onSpotifyPlaylistImported(spotifyPlaylist) }
+            PerfLog.info("SpotifyPlaylistImportService: Notified via onSpotifyPlaylistImported.")
         }
 
         return stablePlaylistID
@@ -267,7 +266,7 @@ public final class SpotifyPlaylistImportService {
     private func makeItemSnapshots(from tracks: [SpotifyTrack]) -> [PlaylistLibraryStore.PlaylistItemSnapshot] {
         let snapshots: [PlaylistLibraryStore.PlaylistItemSnapshot] = tracks.enumerated().compactMap { index, track in
             guard !track.id.isEmpty else {
-                Utilities.Logger.log("SpotifyPlaylistImportService: Skipping track '\(track.name)' at index \(index) because ID is empty.")
+                PerfLog.info("SpotifyPlaylistImportService: Skipping track '\(track.name)' at index \(index) because ID is empty.")
                 return nil
             }
 
@@ -289,18 +288,18 @@ public final class SpotifyPlaylistImportService {
             )
         }
 
-        Utilities.Logger.log("SpotifyPlaylistImportService: Created \(snapshots.count) snapshots from \(tracks.count) tracks.")
+        PerfLog.info("SpotifyPlaylistImportService: Created \(snapshots.count) snapshots from \(tracks.count) tracks.")
         return snapshots
     }
 
     private func normalizedSpotifyPlaylistTitle(_ spotifyPlaylist: SpotifyPlaylist) -> String {
         let cleanedName = spotifyPlaylist.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !cleanedName.isEmpty {
-            Utilities.Logger.log("SpotifyPlaylistImportService: Using name '\(cleanedName)' for playlist \(spotifyPlaylist.id)")
+            PerfLog.info("SpotifyPlaylistImportService: Using name '\(cleanedName)' for playlist \(spotifyPlaylist.id)")
             return cleanedName
         }
 
-        Utilities.Logger.log("SpotifyPlaylistImportService: Playlist \(spotifyPlaylist.id) has empty name, falling back to ID.")
+        PerfLog.info("SpotifyPlaylistImportService: Playlist \(spotifyPlaylist.id) has empty name, falling back to ID.")
         if !spotifyPlaylist.id.isEmpty {
             return "Spotify Playlist (\(spotifyPlaylist.id.prefix(8)))"
         }

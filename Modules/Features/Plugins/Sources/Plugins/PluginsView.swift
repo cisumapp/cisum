@@ -3,6 +3,7 @@ import Plugins
 import ProviderSDK
 import SwiftUI
 import YouTubeSDK
+import Utilities
 
 public struct PluginsView: View {
     public init() {}
@@ -30,10 +31,7 @@ public struct PluginsView: View {
                 .foregroundStyle(.secondary)
 
                 Button("Apply Now") {
-                    PluginsLog.info("Applying playback configuration from PluginsView", context: [
-                        "provider_sdk_enabled": String(providerSDKEnabled),
-                        "youtube_fallback_enabled": String(youtubeFallbackEnabled),
-                    ])
+                    PerfLog.info("Applying playback configuration from PluginsView provider_sdk_enabled: \(String(providerSDKEnabled)), youtube_fallback_enabled: \(String(youtubeFallbackEnabled))")
                     applyPlaybackConfiguration()
                 }
             }
@@ -68,9 +66,7 @@ public struct PluginsView: View {
                     HStack {
                         ForEach(Self.sampleManifests) { sample in
                             Button(sample.label) {
-                                PluginsLog.info("Import bundled manifest button tapped", context: [
-                                    "file_name": sample.fileName,
-                                ])
+                                PerfLog.info("Import bundled manifest button tapped file_name: \(sample.fileName)")
                                 Task { await importBundledManifest(sample.fileName) }
                             }
                             .disabled(isImportingManifest)
@@ -84,9 +80,7 @@ public struct PluginsView: View {
 
                 HStack {
                     Button {
-                        PluginsLog.info("Import manifest button tapped", context: [
-                            "url": manifestURLString.trimmingCharacters(in: .whitespacesAndNewlines),
-                        ])
+                        PerfLog.info("Import manifest button tapped url: \(manifestURLString.trimmingCharacters(in: .whitespacesAndNewlines))")
                         Task { await importManifest() }
                     } label: {
                         HStack {
@@ -225,34 +219,28 @@ public struct PluginsView: View {
     private func importManifest() async {
         guard let url = URL(string: manifestURLString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             manifestStore.setErrorMessage("Enter a valid manifest URL.")
-            PluginsLog.error("Invalid manifest URL entered", context: ["value": manifestURLString])
+            PerfLog.error("Invalid manifest URL entered value: \(manifestURLString)")
             return
         }
 
         isImportingManifest = true
         defer { isImportingManifest = false }
 
-        PluginsLog.info("Importing manifest from URL", context: ["url": url.absoluteString])
+        PerfLog.info("Importing manifest from URL: \(url.absoluteString)")
 
         do {
             let manifest = try await manifestStore.importManifest(from: url)
-            PluginsLog.info("Manifest import completed", context: [
-                "provider_id": manifest.id,
-                "provider_name": manifest.name,
-            ])
+            PerfLog.info("Manifest import completed provider_id: \(manifest.id), provider_name: \(manifest.name)")
         } catch {
             manifestStore.setErrorMessage(error.localizedDescription)
-            PluginsLog.error("Manifest import failed", context: [
-                "url": url.absoluteString,
-                "error": error.localizedDescription,
-            ])
+            PerfLog.error("Manifest import failed url: \(url.absoluteString), error: \(error.localizedDescription)")
         }
     }
 
     private func importBundledManifest(_ fileName: String) async {
         guard let url = bundledManifestURL(named: fileName) else {
             manifestStore.setErrorMessage("Bundled manifest \(fileName).cisum is missing.")
-            PluginsLog.error("Bundled manifest missing", context: ["file_name": fileName])
+            PerfLog.error("Bundled manifest missing file_name: \(fileName)")
             return
         }
 
@@ -260,23 +248,14 @@ public struct PluginsView: View {
         isImportingManifest = true
         defer { isImportingManifest = false }
 
-        PluginsLog.info("Importing bundled manifest", context: [
-            "file_name": fileName,
-            "url": url.absoluteString,
-        ])
+        PerfLog.info("Importing bundled manifest file_name: \(fileName), url: \(url.absoluteString)")
 
         do {
             let manifest = try await manifestStore.importManifest(from: url)
-            PluginsLog.info("Bundled manifest import completed", context: [
-                "provider_id": manifest.id,
-                "provider_name": manifest.name,
-            ])
+            PerfLog.info("Bundled manifest import completed provider_id: \(manifest.id), provider_name: \(manifest.name)")
         } catch {
             manifestStore.setErrorMessage(error.localizedDescription)
-            PluginsLog.error("Bundled manifest import failed", context: [
-                "file_name": fileName,
-                "error": error.localizedDescription,
-            ])
+            PerfLog.error("Bundled manifest import failed file_name: \(fileName), error: \(error.localizedDescription)")
         }
     }
 
@@ -289,10 +268,7 @@ public struct PluginsView: View {
     }
 
     private func applyPlaybackConfiguration() {
-        PluginsLog.debug("Applying playback configuration", context: [
-            "provider_sdk_enabled": String(providerSDKEnabled),
-            "youtube_fallback_enabled": String(youtubeFallbackEnabled),
-        ])
+        PerfLog.debug("Applying playback configuration provider_sdk_enabled: \(String(providerSDKEnabled)), youtube_fallback_enabled: \(String(youtubeFallbackEnabled))")
         Plugins.reconfigurePlaybackURLResolver(
             includeProviderSDK: providerSDKEnabled,
             includeYouTubeFallback: youtubeFallbackEnabled

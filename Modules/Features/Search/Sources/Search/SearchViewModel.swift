@@ -163,7 +163,7 @@ public class SearchViewModel: SearchViewModelInterface {
             try? await Task.sleep(for: .seconds(0.6))
             if Task.isCancelled { return }
 
-            Utilities.Logger.log("SearchViewModel: Debounce finished, executing search for '\(searchText)'")
+            PerfLog.info("SearchViewModel: Debounce finished, executing search for '\(searchText)'")
             await executeSearch()
         }
     }
@@ -179,11 +179,11 @@ public class SearchViewModel: SearchViewModelInterface {
         if case .success = state,
            lastCompletedQuery == query
         {
-            Utilities.Logger.log("SearchViewModel: Query '\(query)' matches last completed query, skipping.")
+            PerfLog.info("SearchViewModel: Query '\(query)' matches last completed query, skipping.")
             return
         }
 
-        Utilities.Logger.log("SearchViewModel: Starting parallel unified search for '\(query)'")
+        PerfLog.info("SearchViewModel: Starting parallel unified search for '\(query)'")
         state = .loading
 
         resetFederatedSections(state: .loading)
@@ -509,7 +509,7 @@ public class SearchViewModel: SearchViewModelInterface {
                     payload: .spotify(updatedTrack)
                 )
 
-                Utilities.Logger.log("SearchViewModel: Hydrated Spotify track with ISRC: \(updatedTrack.isrc ?? "none")")
+                PerfLog.info("SearchViewModel: Hydrated Spotify track with ISRC: \(updatedTrack.isrc ?? "none")")
             }
         }
 
@@ -566,7 +566,7 @@ public class SearchViewModel: SearchViewModelInterface {
             let spotify = try await makeSpotifyClient()
             return try await spotify.restClient.fetchTrack(id: id)
         } catch {
-            Utilities.Logger.log("SearchViewModel: Failed to fetch full Spotify track: \(error.localizedDescription)")
+            PerfLog.info("SearchViewModel: Failed to fetch full Spotify track: \(error.localizedDescription)")
             return nil
         }
         #else
@@ -624,7 +624,7 @@ public class SearchViewModel: SearchViewModelInterface {
             return nil
         }()
 
-        Utilities.Logger.log("SearchViewModel: Resolving Spotify fallback in parallel for '\(query)'...")
+        PerfLog.info("SearchViewModel: Resolving Spotify fallback in parallel for '\(query)'...")
 
         return await withTaskGroup(of: ExternalStreamPayload?.self) { group in
             // 1. YouTube Music Task
@@ -728,7 +728,7 @@ public class SearchViewModel: SearchViewModelInterface {
         for item in candidates {
             let key = unifiedResultDedupKey(for: item)
             let score = unifiedResultScore(for: item, context: context)
-            Utilities.Logger.log("SearchRanking: [\(item.service.rawValue)] '\(item.title) - \(primaryArtistName(from: item.subtitle))' -> Total Score: \(String(format: "%.3f", score))")
+            PerfLog.info("SearchRanking: [\(item.service.rawValue)] '\(item.title) - \(primaryArtistName(from: item.subtitle))' -> Total Score: \(String(format: "%.3f", score))")
             groupedCandidates[key, default: []].append((item: item, score: score))
         }
 
@@ -754,9 +754,9 @@ public class SearchViewModel: SearchViewModelInterface {
             queryHasArtistHint: context.queryHasArtistHint
         )
 
-        Utilities.Logger.log("SearchViewModel: Unified ranking order for '\(query)':")
+        PerfLog.info("SearchViewModel: Unified ranking order for '\(query)':")
         for (index, item) in finalResults.enumerated() {
-            Utilities.Logger.log("  [\(index)] \(item.title) - \(item.subtitle) (Source: \(item.service))")
+            PerfLog.info("  [\(index)] \(item.title) - \(item.subtitle) (Source: \(item.service))")
         }
 
         return finalResults
@@ -922,7 +922,7 @@ public class SearchViewModel: SearchViewModelInterface {
             + playabilityBoost
             + artistBoost
 
-        Utilities.Logger.log("SearchRankingBreakdown: '\(item.title)' -> overlap:\(String(format: "%.2f", 0.68 * overlap)) contains:\(containsBoost) prefix:\(prefixBoost) provider:\(providerBoost) quality:\(qualityBoost) playability:\(playabilityBoost) artist:\(String(format: "%.2f", artistBoost))")
+        PerfLog.info("SearchRankingBreakdown: '\(item.title)' -> overlap:\(String(format: "%.2f", 0.68 * overlap)) contains:\(containsBoost) prefix:\(prefixBoost) provider:\(providerBoost) quality:\(qualityBoost) playability:\(playabilityBoost) artist:\(String(format: "%.2f", artistBoost))")
 
         return totalScore
     }
@@ -1011,9 +1011,9 @@ public class SearchViewModel: SearchViewModelInterface {
         }
 
         // Log the final selected group for debugging
-        Utilities.Logger.log("SearchRanking: --- Final Top Results ---")
+        PerfLog.info("SearchRanking: --- Final Top Results ---")
         for (i, finalItem) in selected.enumerated() {
-            Utilities.Logger.log("SearchRanking: #\(i + 1) [\(finalItem.service.rawValue)] '\(finalItem.title)'")
+            PerfLog.info("SearchRanking: #\(i + 1) [\(finalItem.service.rawValue)] '\(finalItem.title)'")
         }
 
         return selected
@@ -1272,7 +1272,7 @@ public class SearchViewModel: SearchViewModelInterface {
                 return .failure(error)
             }
 
-            Utilities.Logger.log("SearchViewModel: video search retrying with raw query '\(fallbackQuery)' after rewritten query '\(query)' failed")
+            PerfLog.info("SearchViewModel: video search retrying with raw query '\(fallbackQuery)' after rewritten query '\(query)' failed")
 
             do {
                 let continuation = try await youtube.main.search(fallbackQuery)
@@ -1341,15 +1341,15 @@ public class SearchViewModel: SearchViewModelInterface {
 
         do {
             for try await batch in stream {
-                Utilities.Logger.log("SearchViewModel: ProviderSDK received batch of \(batch.count) tracks")
+                PerfLog.info("SearchViewModel: ProviderSDK received batch of \(batch.count) tracks")
                 allTracks.append(contentsOf: batch)
             }
         } catch {
             // Non-fatal — use whatever was accumulated before the stream error.
-            Utilities.Logger.log("SearchViewModel: ProviderSDK search stream error (partial results kept): \(error.localizedDescription)")
+            PerfLog.info("SearchViewModel: ProviderSDK search stream error (partial results kept): \(error.localizedDescription)")
         }
 
-        Utilities.Logger.log("SearchViewModel: ProviderSDK search completed with \(allTracks.count) tracks")
+        PerfLog.info("SearchViewModel: ProviderSDK search completed with \(allTracks.count) tracks")
 
         guard !allTracks.isEmpty else { return .success([]) }
 

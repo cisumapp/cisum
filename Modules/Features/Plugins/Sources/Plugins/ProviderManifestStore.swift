@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ProviderSDK
+import Utilities
 
 @Observable
 @MainActor
@@ -30,27 +31,21 @@ public final class ProviderManifestStore {
         self.manifests = []
         self.enabledProviderIDs = Self.loadEnabledProviderIDs()
 
-        PluginsLog.info("Initializing ProviderManifestStore", context: [
-            "storage_path": storageURL.path,
-        ])
+        PerfLog.info("Initializing ProviderManifestStore storage_path: \(storageURL.path)")
 
-        do {
-            self.manifests = try Self.loadManifests(from: fileManager, decoder: decoder)
-            if enabledProviderIDs.isEmpty, !manifests.isEmpty {
-                self.enabledProviderIDs = Set(manifests.map(\.id))
-                Self.saveEnabledProviderIDs(enabledProviderIDs)
+        Task {
+            do {
+                self.manifests = try await Self.loadManifests(from: fileManager, decoder: decoder)
+                if enabledProviderIDs.isEmpty, !manifests.isEmpty {
+                    self.enabledProviderIDs = Set(manifests.map(\.id))
+                    Self.saveEnabledProviderIDs(enabledProviderIDs)
+                }
+                PerfLog.info("Loaded persisted manifests count: \(String(manifests.count)), storage_path: \(storageURL.path)")
+            } catch {
+                self.manifests = []
+                self.lastErrorMessage = "Failed to load saved manifests: \(error.localizedDescription)"
+                PerfLog.error("Failed to load persisted manifests error: \(error.localizedDescription), storage_path: \(storageURL.path)")
             }
-            PluginsLog.info("Loaded persisted manifests", context: [
-                "count": String(manifests.count),
-                "storage_path": storageURL.path,
-            ])
-        } catch {
-            self.manifests = []
-            self.lastErrorMessage = "Failed to load saved manifests: \(error.localizedDescription)"
-            PluginsLog.error("Failed to load persisted manifests", context: [
-                "error": error.localizedDescription,
-                "storage_path": storageURL.path,
-            ])
         }
     }
 
@@ -67,13 +62,10 @@ public final class ProviderManifestStore {
     }
 
     public func importManifest(from url: URL) async throws -> ProviderManifest {
-        PluginsLog.info("Importing manifest", context: ["url": url.absoluteString])
+        PerfLog.info("Importing manifest url: \(url.absoluteString)")
         let sourceURL = try resolvedSourceURL(for: url)
         let data = try await loadRemoteData(from: sourceURL)
-        PluginsLog.debug("Loaded manifest payload", context: [
-            "source_url": sourceURL.absoluteString,
-            "byte_count": String(data.count),
-        ])
+        PerfLog.debug("Loaded manifest payload source_url: \(sourceURL.absoluteString), byte_count: \(String(data.count))")
 
         let loader = ProviderManifestLoader()
         var manifest = try loader.load(from: data)
@@ -86,11 +78,7 @@ public final class ProviderManifestStore {
 
         lastStatusMessage = "Imported \(manifest.name)"
         lastErrorMessage = nil
-        PluginsLog.info("Imported manifest successfully", context: [
-            "provider_id": manifest.id,
-            "provider_name": manifest.name,
-            "source": sourceURL.absoluteString,
-        ])
+        PerfLog.info("Imported manifest successfully provider_id: \(manifest.id), provider_name: \(manifest.name), source: \(sourceURL.absoluteString)")
         return manifest
     }
 
@@ -121,14 +109,14 @@ public final class ProviderManifestStore {
                     do {
                         await providerSDK.unregisterProvider(providerID)
                         try await providerSDK.registerManifest(manifest)
-                        PluginsLog.info("Dynamically registered manifest", context: ["provider_id": providerID])
+                        PerfLog.info("Dynamically registered manifest provider_id: \(providerID)")
                     } catch {
-                        PluginsLog.error("Failed to dynamically register manifest", context: ["provider_id": providerID, "error": error.localizedDescription])
+                        PerfLog.error("Failed to dynamically register manifest provider_id: \(providerID), error: \(error.localizedDescription)")
                     }
                 }
             } else {
                 await providerSDK.unregisterProvider(providerID)
-                PluginsLog.info("Dynamically unregistered manifest", context: ["provider_id": providerID])
+                PerfLog.info("Dynamically unregistered manifest provider_id: \(providerID)")
             }
         }
     }
@@ -141,25 +129,23 @@ public final class ProviderManifestStore {
         guard let providerSDK = await Plugins.sharedProviderSDK() else { return }
         await providerSDK.unregisterProvider(providerID)
         lastStatusMessage = "Removed \(providerID)"
-        PluginsLog.info("Removed provider manifest", context: ["provider_id": providerID])
+        PerfLog.info("Removed provider manifest provider_id: \(providerID)")
     }
 
     public func reconcilePersistedManifests() async {
         if didReconcile { return }
         didReconcile = true
 
-        PluginsLog.info("Reconciling persisted manifests", context: [
-            "count": String(manifests.count),
-        ])
+        PerfLog.info("Reconciling persisted manifests count: \(String(manifests.count))")
         guard let providerSDK = await Plugins.sharedProviderSDK() else {
             lastStatusMessage = "Saved manifests will load when ProviderSDK is ready."
-            PluginsLog.warning("ProviderSDK unavailable while reconciling manifests")
+            PerfLog.warning("ProviderSDK unavailable while reconciling manifests")
             return
         }
 
         // First: unregister any previously-enabled manifests that are now disabled
         for manifest in manifests where !enabledProviderIDs.contains(manifest.id) {
-            PluginsLog.debug("Unregistering disabled manifest", context: ["provider_id": manifest.id])
+            PerfLog.debug("Unregistering disabled manifest provider_id: \(manifest.id)")
             await providerSDK.unregisterProvider(manifest.id)
         }
 
@@ -167,24 +153,14 @@ public final class ProviderManifestStore {
         var restoredCount = 0
         for manifest in manifests where enabledProviderIDs.contains(manifest.id) {
             do {
-                PluginsLog.debug("Restoring manifest", context: [
-                    "provider_id": manifest.id,
-                    "provider_name": manifest.name,
-                ])
+                PerfLog.debug("Restoring manifest provider_id: \(manifest.id), provider_name: \(manifest.name)")
                 await providerSDK.unregisterProvider(manifest.id)
                 try await providerSDK.registerManifest(manifest)
                 restoredCount += 1
-                PluginsLog.info("Restored manifest", context: [
-                    "provider_id": manifest.id,
-                    "provider_name": manifest.name,
-                ])
+                PerfLog.info("Restored manifest provider_id: \(manifest.id), provider_name: \(manifest.name)")
             } catch {
                 lastErrorMessage = "Failed to restore \(manifest.name): \(error.localizedDescription)"
-                PluginsLog.error("Failed to restore manifest", context: [
-                    "provider_id": manifest.id,
-                    "provider_name": manifest.name,
-                    "error": error.localizedDescription,
-                ])
+                PerfLog.error("Failed to restore manifest provider_id: \(manifest.id), provider_name: \(manifest.name), error: \(error.localizedDescription)")
             }
         }
 
@@ -202,22 +178,19 @@ public final class ProviderManifestStore {
     public func setStatusMessage(_ message: String?) {
         lastStatusMessage = message
         if let message {
-            PluginsLog.info("Manifest store status updated", context: ["message": message])
+            PerfLog.info("Manifest store status updated message: \(message)")
         }
     }
 
     public func setErrorMessage(_ message: String?) {
         lastErrorMessage = message
         if let message {
-            PluginsLog.error("Manifest store error updated", context: ["message": message])
+            PerfLog.error("Manifest store error updated message: \(message)")
         }
     }
 
     private func upsert(_ manifest: ProviderManifest) throws {
-        PluginsLog.debug("Upserting manifest", context: [
-            "provider_id": manifest.id,
-            "provider_name": manifest.name,
-        ])
+        PerfLog.debug("Upserting manifest provider_id: \(manifest.id), provider_name: \(manifest.name)")
         manifests.removeAll { $0.id == manifest.id }
         manifests.insert(manifest, at: 0)
         try persist()
@@ -225,10 +198,7 @@ public final class ProviderManifestStore {
 
     private func persist() throws {
         let storageURL = storageURL
-        PluginsLog.debug("Persisting manifests", context: [
-            "count": String(manifests.count),
-            "storage_path": storageURL.path,
-        ])
+        PerfLog.debug("Persisting manifests count: \(String(manifests.count)), storage_path: \(storageURL.path)")
         try fileManager.createDirectory(
             at: storageURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -236,67 +206,44 @@ public final class ProviderManifestStore {
 
         let data = try encoder.encode(manifests)
         try data.write(to: storageURL, options: [.atomic])
-        PluginsLog.info("Persisted manifests", context: [
-            "count": String(manifests.count),
-            "storage_path": storageURL.path,
-            "byte_count": String(data.count),
-        ])
+        PerfLog.info("Persisted manifests count: \(String(manifests.count)), storage_path: \(storageURL.path), byte_count: \(String(data.count))")
     }
 
     private func register(_ manifest: ProviderManifest) async throws {
         guard let providerSDK = await Plugins.sharedProviderSDK() else {
             lastStatusMessage = "Saved \(manifest.name); it will register when ProviderSDK is ready."
-            PluginsLog.warning("ProviderSDK unavailable during manifest registration", context: [
-                "provider_id": manifest.id,
-                "provider_name": manifest.name,
-            ])
+            PerfLog.warning("ProviderSDK unavailable during manifest registration provider_id: \(manifest.id), provider_name: \(manifest.name)")
             return
         }
 
-        PluginsLog.debug("Registering manifest with ProviderSDK", context: [
-            "provider_id": manifest.id,
-            "provider_name": manifest.name,
-        ])
+        PerfLog.debug("Registering manifest with ProviderSDK provider_id: \(manifest.id), provider_name: \(manifest.name)")
         await providerSDK.unregisterProvider(manifest.id)
         try await providerSDK.registerManifest(manifest)
-        PluginsLog.info("Manifest registered with ProviderSDK", context: [
-            "provider_id": manifest.id,
-            "provider_name": manifest.name,
-        ])
+        PerfLog.info("Manifest registered with ProviderSDK provider_id: \(manifest.id), provider_name: \(manifest.name)")
     }
 
     private func loadRemoteData(from url: URL) async throws -> Data {
         if url.isFileURL {
-            let data = try Data(contentsOf: url)
-            PluginsLog.debug("Loaded local manifest file", context: [
-                "url": url.absoluteString,
-                "byte_count": String(data.count),
-            ])
+            let data = try await URLSession.shared.data(from: url).0
+            PerfLog.debug("Loaded local manifest file url: \(url.absoluteString), byte_count: \(String(data.count))")
             return data
         }
 
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        PluginsLog.debug("Fetching remote manifest", context: ["url": url.absoluteString])
+        PerfLog.debug("Fetching remote manifest url: \(url.absoluteString)")
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,
               (200 ... 299).contains(httpResponse.statusCode)
         else {
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            PluginsLog.error("Manifest request failed", context: [
-                "url": url.absoluteString,
-                "status_code": String(statusCode),
-            ])
+            PerfLog.error("Manifest request failed url: \(url.absoluteString), status_code: \(String(statusCode))")
             throw SDKError.manifestDeserializationError(details: "Manifest request failed for \(url.absoluteString)")
         }
 
-        PluginsLog.debug("Fetched remote manifest", context: [
-            "url": url.absoluteString,
-            "status_code": String(httpResponse.statusCode),
-            "byte_count": String(data.count),
-        ])
+        PerfLog.debug("Fetched remote manifest url: \(url.absoluteString), status_code: \(String(httpResponse.statusCode)), byte_count: \(String(data.count))")
 
         return data
     }
@@ -311,14 +258,11 @@ public final class ProviderManifestStore {
             ?? components?.queryItems?.first(where: { $0.name == "manifest" })?.value
 
         guard let nestedURLString, let nestedURL = URL(string: nestedURLString) else {
-            PluginsLog.warning("Failed to resolve cisum import URL", context: ["url": url.absoluteString])
+            PerfLog.warning("Failed to resolve cisum import URL: \(url.absoluteString)")
             throw SDKError.manifestDeserializationError(details: "cisum URL is missing a manifest URL")
         }
 
-        PluginsLog.debug("Resolved cisum import URL", context: [
-            "url": url.absoluteString,
-            "resolved_url": nestedURL.absoluteString,
-        ])
+        PerfLog.debug("Resolved cisum import URL: \(url.absoluteString), resolved_url: \(nestedURL.absoluteString)")
         return nestedURL
     }
 
@@ -338,7 +282,7 @@ public final class ProviderManifestStore {
         UserDefaults.standard.set(data, forKey: enabledProvidersKey)
     }
 
-    private static func loadManifests(from fileManager: FileManager, decoder: JSONDecoder) throws -> [ProviderManifest] {
+    private static func loadManifests(from fileManager: FileManager, decoder: JSONDecoder) async throws -> [ProviderManifest] {
         let storageURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.temporaryDirectory
         let manifestsURL = storageURL
@@ -346,15 +290,12 @@ public final class ProviderManifestStore {
             .appendingPathComponent(Constants.fileName)
 
         guard fileManager.fileExists(atPath: manifestsURL.path) else {
-            PluginsLog.debug("No persisted manifests found", context: ["storage_path": manifestsURL.path])
+            PerfLog.debug("No persisted manifests found storage_path: \(manifestsURL.path)")
             return []
         }
 
-        let data = try Data(contentsOf: manifestsURL)
-        PluginsLog.debug("Decoding persisted manifests", context: [
-            "storage_path": manifestsURL.path,
-            "byte_count": String(data.count),
-        ])
+        let data = try await URLSession.shared.data(from: manifestsURL).0
+        PerfLog.debug("Decoding persisted manifests storage_path: \(manifestsURL.path), byte_count: \(String(data.count))")
         return try decoder.decode([ProviderManifest].self, from: data)
     }
 }

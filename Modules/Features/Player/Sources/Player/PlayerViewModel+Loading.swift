@@ -12,7 +12,6 @@ import YouTubeSDK
 import WebKit
 #endif
 
-private let loadingLog = CisumLog.playback
 private let loadingSP = CisumSignpost.playback
 
 public extension PlayerViewModel {
@@ -150,7 +149,7 @@ public extension PlayerViewModel {
                 if Task.isCancelled { return }
                 guard currentVideoId == targetMediaID else { return }
 
-                loadingLog.info("Candidates resolved id=\(targetMediaID, privacy: .public) count=\(candidates.count)")
+                PerfLog.info("Candidates resolved id=\(targetMediaID) count=\(candidates.count)")
                 configurePlaybackCandidates(for: video.id, candidates: candidates)
                 playCurrentPlaybackCandidate()
                 startArtworkVideoProcessingIfNeeded(
@@ -174,7 +173,7 @@ public extension PlayerViewModel {
                 if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
                     await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
-                    loadingLog.info("tap-to-play latency=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms id=\(targetMediaID, privacy: .public)")
+                    PerfLog.info("tap-to-play latency=\(elapsed)ms id=\(targetMediaID)")
                 }
             } catch {
                 if error is CancellationError { return }
@@ -341,7 +340,7 @@ public extension PlayerViewModel {
                 if Task.isCancelled { return }
                 guard currentVideoId == targetMediaID else { return }
 
-                loadingLog.info("Candidates resolved id=\(targetMediaID, privacy: .public) count=\(youtubeCandidates.count)")
+                PerfLog.info("Candidates resolved id=\(targetMediaID) count=\(youtubeCandidates.count)")
                 configurePlaybackCandidates(for: mediaID, candidates: youtubeCandidates)
                 playCurrentPlaybackCandidate()
                 startArtworkVideoProcessingIfNeeded(
@@ -357,7 +356,7 @@ public extension PlayerViewModel {
                 if settings.metricsEnabled {
                     let elapsed = Date().timeIntervalSince(tapStartedAt) * 1000
                     await playbackMetricsStore.recordTapToPlay(durationMs: elapsed)
-                    loadingLog.info("tap-to-play latency=\(elapsed, format: .fixed(precision: 1), privacy: .public)ms id=\(targetMediaID, privacy: .public)")
+                    PerfLog.info("tap-to-play latency=\(elapsed)ms id=\(targetMediaID)")
                 }
 
             } catch {

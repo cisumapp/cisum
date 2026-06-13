@@ -23,30 +23,28 @@ import SwiftData
 import Utilities
 import YouTubeSDK
 
-private let lifecycleLog = CisumLog.lifecycle
 private let lifecycleSP = CisumSignpost.lifecycle
 
 @MainActor
 enum AppBootstrap {
     static func makeDependenciesOrFallback(youtube: YouTube, router: Router) -> ServicesContainer {
-        Logger.initCrashReporter()
         let spid = lifecycleSP.begin("app-bootstrap")
-        lifecycleLog.info("Bootstrap started")
+        PerfLog.info("Bootstrap started")
         // FORCE IN-MEMORY FOR DIAGNOSTICS
         // return makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: NSError(domain: "ManualBypass", code: 0))
 
         do {
             let container = try makeDependencies(youtube: youtube, router: router)
             lifecycleSP.end("app-bootstrap", state: spid, "path=persistent")
-            lifecycleLog.info("Bootstrap complete (persistent store)")
+            PerfLog.info("Bootstrap complete (persistent store)")
             return container
         } catch {
-            lifecycleLog.error("Bootstrap persistent store error: \(error.localizedDescription, privacy: .public)")
+            PerfLog.error("Bootstrap persistent store error: \(error.localizedDescription)")
             lifecycleSP.event("bootstrap-fallback", "error=\(error.localizedDescription)")
             // assertionFailure("Persistent bootstrap failed: \(error.localizedDescription). Falling back to in-memory dependencies.")
             let container = makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: error)
             lifecycleSP.end("app-bootstrap", state: spid, "path=in-memory")
-            lifecycleLog.warning("Bootstrap complete (in-memory fallback)")
+            PerfLog.warning("Bootstrap complete (in-memory fallback)")
             return container
         }
     }

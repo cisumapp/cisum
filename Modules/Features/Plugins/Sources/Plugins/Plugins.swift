@@ -3,13 +3,14 @@ import Foundation
 import Player
 import ProviderSDK
 import YouTubeSDK
+import Utilities
 
 public enum Plugins {
     @MainActor private static var cachedProviderSDK: ProviderSDK?
 
     @MainActor
     public static func makeProviderSDK() -> ProviderSDK {
-        PluginsLog.info("Creating ProviderSDK instance")
+        PerfLog.info("Creating ProviderSDK instance")
         let providerSDK = ProviderSDK()
         cachedProviderSDK = providerSDK
         return providerSDK
@@ -17,13 +18,13 @@ public enum Plugins {
 
     @MainActor
     public static func sharedProviderSDK() -> ProviderSDK? {
-        PluginsLog.debug("Querying shared ProviderSDK", context: ["available": String(cachedProviderSDK != nil)])
+        PerfLog.debug("Querying shared ProviderSDK available: \(String(cachedProviderSDK != nil))")
         return cachedProviderSDK
     }
 
     @MainActor
     public static func setSharedProviderSDK(_ providerSDK: ProviderSDK) {
-        PluginsLog.info("Setting shared ProviderSDK instance")
+        PerfLog.info("Setting shared ProviderSDK instance")
         cachedProviderSDK = providerSDK
     }
 
@@ -36,10 +37,7 @@ public enum Plugins {
         includeYouTubeFallback: Bool = true
     ) -> [any StreamResolutionProvider] {
         var providers: [any StreamResolutionProvider] = []
-        PluginsLog.debug("Building playback providers", context: [
-            "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback),
-        ])
+        PerfLog.debug("Building playback providers include_provider_sdk: \(String(includeProviderSDK)), include_youtube_fallback: \(String(includeYouTubeFallback))")
 
         if includeProviderSDK {
             providers.append(ProviderSDKStreamResolver(providerSDK: providerSDK, mediaCacheStore: mediaCacheStore))
@@ -74,19 +72,14 @@ public enum Plugins {
         cachedYouTube = youtube
         cachedMediaCacheStore = mediaCacheStore
         cachedMetadataCache = metadataCache
-        PluginsLog.info("Configuring playback URL resolver", context: [
-            "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback),
-        ])
+        PerfLog.info("Configuring playback URL resolver include_provider_sdk: \(String(includeProviderSDK)), include_youtube_fallback: \(String(includeYouTubeFallback))")
 
         let providerSDK = providerSDK ?? cachedProviderSDK ?? ProviderSDK()
         let isReplacingProviderSDK = cachedProviderSDK !== providerSDK
         cachedProviderSDK = providerSDK
 
         if isReplacingProviderSDK {
-            PluginsLog.info("ProviderSDK selected for playback resolver", context: [
-                "source": providerSDK === cachedProviderSDK ? "cached" : "new",
-            ])
+            PerfLog.info("ProviderSDK selected for playback resolver source: \(providerSDK === cachedProviderSDK ? "cached" : "new")")
         }
 
         Task { @MainActor in
@@ -114,14 +107,11 @@ public enum Plugins {
               let mediaCacheStore = cachedMediaCacheStore,
               let metadataCache = cachedMetadataCache
         else {
-            PluginsLog.warning("Cannot reconfigure playback URL resolver because cached dependencies are missing")
+            PerfLog.warning("Cannot reconfigure playback URL resolver because cached dependencies are missing")
             return
         }
 
-        PluginsLog.info("Reconfiguring playback URL resolver", context: [
-            "include_provider_sdk": String(includeProviderSDK),
-            "include_youtube_fallback": String(includeYouTubeFallback),
-        ])
+        PerfLog.info("Reconfiguring playback URL resolver include_provider_sdk: \(String(includeProviderSDK)), include_youtube_fallback: \(String(includeYouTubeFallback))")
         configurePlaybackURLResolver(
             youtube: youtube,
             mediaCacheStore: mediaCacheStore,
