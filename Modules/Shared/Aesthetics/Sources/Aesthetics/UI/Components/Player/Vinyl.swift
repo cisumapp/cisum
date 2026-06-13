@@ -34,36 +34,38 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
 
     public var body: some View {
         GeometryReader { geo in
+            let sizes = ResponsiveLayout.VinylSizes(screenWidth: geo.size.width)
+            
             TimelineView(.animation) { timeline in
                 ZStack {
                     VStack {
                         HStack {
                             ZStack {
-                                previousVinyl
+                                previousVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetPrevious)
 
                                 if let previousLabel {
                                     sideLabel(previousLabel, alignment: .leading)
-                                        .offset(x: -35, y: -40)
+                                        .offset(x: sizes.sideLabelOffsetPrevious.width, y: sizes.sideLabelOffsetPrevious.height)
                                 }
                             }
 
                             Spacer()
 
                             ZStack {
-                                nextVinyl
+                                nextVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetNext)
 
                                 if let upnextLabel {
                                     sideLabel(upnextLabel, alignment: .trailing)
-                                        .offset(x: 45, y: -35)
+                                        .offset(x: sizes.sideLabelOffsetNext.width, y: sizes.sideLabelOffsetNext.height)
                                 }
                             }
                         }
 
                         Spacer()
                     }
-                    .offset(y: 35)
+                    .offset(y: sizes.mainVStackOffsetY)
 
-                    heroVinyl(timeline: timeline)
+                    heroVinyl(timeline: timeline, size: sizes.heroDiskSize)
                         .overlay {
                             vinylShade
                         }
@@ -84,27 +86,27 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     }
 
     @ViewBuilder
-    var previousVinyl: some View {
+    func previousVinyl(size: CGFloat, offsetX: CGFloat) -> some View {
         if let previous {
-            VinylDisk(size: 200) {
+            VinylDisk(size: size) {
                 previous()
             }
-            .offset(x: -60)
+            .offset(x: offsetX)
         }
     }
 
     @ViewBuilder
-    var nextVinyl: some View {
+    func nextVinyl(size: CGFloat, offsetX: CGFloat) -> some View {
         if let upnext {
-            VinylDisk(size: 200) {
+            VinylDisk(size: size) {
                 upnext()
             }
-            .offset(x: 55)
+            .offset(x: offsetX)
         }
     }
 
-    func heroVinyl(timeline: TimelineViewDefaultContext) -> some View {
-        VinylDisk(size: 1080) {
+    func heroVinyl(timeline: TimelineViewDefaultContext, size: CGFloat) -> some View {
+        VinylDisk(size: size) {
             content()
         }
         .rotationEffect(.degrees(rotation(at: timeline.date)))

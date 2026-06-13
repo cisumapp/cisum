@@ -24,6 +24,9 @@ public struct TrackCard: View {
     }
 
     public var body: some View {
+        let screenWidth = UIScreen.main.bounds.width
+        let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
+        
         ZStack {
             VStack(alignment: .leading) {
                 if let artworkURL {
@@ -31,12 +34,13 @@ public struct TrackCard: View {
                         .downsampling(size: CGSize(width: 280, height: 280))
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 140, height: 140)
+                        .frame(width: 140 * scale, height: 140 * scale)
                         .clipped()
+                        .shadow(radius: 5, x: 3, y: 3)
                 } else {
                     RoundedRectangle(cornerRadius: 0)
                         .fill(artworkColor.opacity(0.3))
-                        .frame(width: 140, height: 140)
+                        .frame(width: 140 * scale, height: 140 * scale)
                 }
 
                 HStack {
@@ -48,7 +52,7 @@ public struct TrackCard: View {
 
                         Text(artistName)
                             .foregroundStyle(Color.secondary)
-                            .font(.system(size: 10))
+                            .font(.system(size: 10 * scale))
                             .fontWeight(.semibold)
                             .lineLimit(1)
                     }
@@ -58,9 +62,9 @@ public struct TrackCard: View {
                     if !duration.isEmpty {
                         Text(duration)
                             .foregroundStyle(Color.secondary)
-                            .font(.system(size: 10))
+                            .font(.system(size: 10 * scale))
                             .fontWeight(.semibold)
-                            .padding(.trailing, 25)
+                            .padding(.trailing, 25 * scale)
                     }
                 }
             }
@@ -68,30 +72,29 @@ public struct TrackCard: View {
                 ZStack {
                     Image.vinylGrooves
                         .resizable()
-                        .frame(width: 140, height: 140)
+                        .frame(width: 140 * scale, height: 140 * scale)
                         .background {
                             Color.black
                                 .mask {
                                     Image.vinylGrooves
                                         .resizable()
-                                        .frame(width: 140, height: 140)
+                                        .frame(width: 140 * scale, height: 140 * scale)
                                 }
                         }
                     Image.vinylOverlay
                         .resizable()
-                        .frame(width: 140, height: 140)
+                        .frame(width: 140 * scale, height: 140 * scale)
                     Image.vinylCenter
                         .resizable()
-                        .frame(width: 140, height: 140)
+                        .frame(width: 140 * scale, height: 140 * scale)
                 }
                 .rotationEffect(.degrees(180))
-                .frame(width: 140, height: 140)
+                .frame(width: 140 * scale, height: 140 * scale)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             )
-            .frame(width: 160)
-            .padding(8)
+            .frame(width: 160 * scale)
+            .padding(8 * scale)
         }
-//        .fontWidth(.expanded)
     }
 }
 
