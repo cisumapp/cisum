@@ -1,5 +1,6 @@
 import Kingfisher
 import SwiftUI
+import Aesthetics
 
 public struct TrackListItem: View {
     let trackName: String
@@ -23,6 +24,9 @@ public struct TrackListItem: View {
     }
 
     public var body: some View {
+        let screenWidth = UIScreen.main.bounds.width
+        let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
+        
         VStack(alignment: .leading) {
             HStack {
                 if let artworkURL {
@@ -30,12 +34,12 @@ public struct TrackListItem: View {
                         .resizable()
                         .downsampling(size: CGSize(width: 120, height: 120))
                         .scaledToFill()
-                        .frame(width: 60, height: 60)
+                        .frame(width: 60 * scale, height: 60 * scale)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color.cisumChromeStrong)
-                        .frame(width: 60, height: 60)
+                        .frame(width: 60 * scale, height: 60 * scale)
                 }
 
                 VStack(alignment: .leading) {
@@ -48,7 +52,7 @@ public struct TrackListItem: View {
                         if isExplicit {
                             Image(systemName: "e.square.fill")
                                 .foregroundStyle(Color.secondary)
-                                .font(.system(size: 10))
+                                .font(.system(size: 10 * scale))
                         }
 
                         Text(artistName)
@@ -61,7 +65,7 @@ public struct TrackListItem: View {
 
                 Spacer()
 
-                HStack(spacing: 10) {
+                HStack(spacing: 10 * scale) {
                     if !duration.isEmpty {
                         Text(duration)
                             .foregroundStyle(Color.secondary)
@@ -72,13 +76,12 @@ public struct TrackListItem: View {
                     Image(systemName: "ellipsis")
                         .font(.title2)
                 }
-                .padding(.trailing, 10)
+                .padding(.trailing, 10 * scale)
             }
         }
-        .frame(height: 70)
-        .padding(8)
+        .frame(height: 70 * scale)
+        .padding(8 * scale)
         .contentShape(Rectangle())
-//        .fontWidth(.expanded)
     }
 }
 
