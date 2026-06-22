@@ -55,7 +55,7 @@ public final class SupabaseService {
             deleted_at: nil
         )
 
-        _ = try await client.database
+        _ = try await client
             .from("app_users")
             .upsert(payload, onConflict: "clerk_user_id")
             .execute()
@@ -75,7 +75,7 @@ public final class SupabaseService {
             deleted_at: ISO8601DateFormatter().string(from: Date())
         )
 
-        _ = try await client.database
+        _ = try await client
             .from("app_users")
             .upsert(payload, onConflict: "clerk_user_id")
             .execute()

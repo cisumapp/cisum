@@ -8,19 +8,20 @@ let package = Package(
         .library(name: "Player", targets: ["Player"]),
     ],
     dependencies: [
+        .package(path: "../Radio"),
+        .package(path: "../Tracks"),
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
         .package(path: "../../Shared/Aesthetics"),
         .package(path: "../../Shared/Networking"),
-        .package(path: "../../Shared/Caching"),
-        .package(path: "../Radio"),
+        .package(path: "../../Shared/Caching"),    
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
         .package(path: "../../../Packages/StreamingKit/iTunesKit"),
         .package(path: "../../../Packages/StreamingKit/LyricsKit"),
         .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
-        .package(path: "../Tracks"),
+        .package(url: "https://github.com/tylerjonesio/ffmpeg-kit-spm.git", .upToNextMajor(from: "5.1.2")),
     ],
     targets: [
         .target(
@@ -39,6 +40,7 @@ let package = Package(
                 .product(name: "iTunesKit", package: "iTunesKit"),
                 .product(name: "LyricsKit", package: "LyricsKit"),
                 .product(name: "Tracks", package: "Tracks"),
+                .product(name: "FFmpeg-Kit", package: "ffmpeg-kit-spm")
             ]
         ),
     ]

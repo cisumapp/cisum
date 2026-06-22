@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		776B8BDE2FDFD02E00352279 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 776B8BDD2FDFD02E00352279 /* Core */; };
 		777B92BA2FA48CE000ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92B92FA48CE000ECAF15 /* Core */; };
 		777B92D62FA4AA2400ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92D52FA4AA2400ECAF15 /* Core */; };
 /* End PBXBuildFile section */
@@ -43,6 +44,7 @@
 			files = (
 				777B92BA2FA48CE000ECAF15 /* Core in Frameworks */,
 				777B92D62FA4AA2400ECAF15 /* Core in Frameworks */,
+				776B8BDE2FDFD02E00352279 /* Core in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -87,6 +89,7 @@
 			packageProductDependencies = (
 				777B92B92FA48CE000ECAF15 /* Core */,
 				777B92D52FA4AA2400ECAF15 /* Core */,
+				776B8BDD2FDFD02E00352279 /* Core */,
 			);
 			productName = macOS;
 			productReference = 772039692F6AAAD500E85D4A /* cisum.app */;
@@ -117,7 +120,7 @@
 			mainGroup = 772039602F6AAAD500E85D4A;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				777B92D42FA4AA2400ECAF15 /* XCLocalSwiftPackageReference "../Modules/Core" */,
+				776B8BDC2FDFD02E00352279 /* XCLocalSwiftPackageReference "../Modules/Core" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7720396A2F6AAAD500E85D4A /* Products */;
@@ -410,13 +413,17 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		777B92D42FA4AA2400ECAF15 /* XCLocalSwiftPackageReference "../Modules/Core" */ = {
+		776B8BDC2FDFD02E00352279 /* XCLocalSwiftPackageReference "../Modules/Core" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../Modules/Core;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		776B8BDD2FDFD02E00352279 /* Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Core;
+		};
 		777B92B92FA48CE000ECAF15 /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Core;

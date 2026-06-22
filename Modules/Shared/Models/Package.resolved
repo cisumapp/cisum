@@ -1,5 +1,5 @@
 {
-  "originHash" : "e9fe129719a6987977d545b8dfdd6f54a26a262f7a048f9d66991fbddc7603be",
+  "originHash" : "99309aa73abd792a870f8037b37debd8f61504fc3e798347ea8e00945cba3c4a",
   "pins" : [
     {
       "identity" : "javascriptkit",
@@ -7,7 +7,34 @@
       "location" : "https://github.com/swiftwasm/JavaScriptKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "403ae956d68503957699b6dc4c07b73caad031b7"
+        "revision" : "fba3be0d4647583b139a8a0af0e187ab97855713"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
+        "version" : "1.7.1"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
+        "version" : "3.15.1"
+      }
+    },
+    {
+      "identity" : "swift-java-jni-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-java-jni-core",
+      "state" : {
+        "revision" : "b440a0be98381550cf189c903782e817619ffa05",
+        "version" : "0.5.1"
       }
     },
     {
@@ -15,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax",
       "state" : {
-        "revision" : "9de99a78f099e59caf2b2beec65a4c45d54b2081",
-        "version" : "603.0.1"
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
       }
     }
   ],

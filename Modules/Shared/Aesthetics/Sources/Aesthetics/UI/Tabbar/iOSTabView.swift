@@ -8,6 +8,16 @@
 import SwiftUI
 
 #if os(iOS)
+#if DEBUG
+/// Namespace for debug-only feature flags that are not valid as static stored
+/// properties on generic types.
+public enum iOSTabViewDebug {
+    /// When `true`, renders the custom tab bar overlaid on the native iOS 26
+    /// bar so you can compare them pixel-for-pixel in the simulator.
+    public nonisolated(unsafe) static var showBothTabBars: Bool = false
+}
+#endif
+
 public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     @Environment(\.tabBarVisibility) private var tabBarVisibility
     @Environment(\.tabBarBottomAccessory) private var tabBarBottomAccessory
@@ -52,6 +62,33 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     public var body: some View {
         Group {
             if #available(iOS 26.0, *) {
+                #if DEBUG
+                if iOSTabViewDebug.showBothTabBars {
+                    // Side-by-side debug: native bar underneath, custom bar on top (non-interactive)
+                    ZStack {
+                        NativeTabView
+                            .tabViewBottomAccessory {
+                                if let accessory = tabBarBottomAccessory {
+                                    accessory
+                                        .contentShape(.rect)
+                                        .onTapGesture { expandMiniPlayer.toggle() }
+                                }
+                            }
+                        iOS26TabView
+                            .allowsHitTesting(false)
+                            .opacity(0.6)
+                    }
+                } else {
+                    NativeTabView
+                        .tabViewBottomAccessory {
+                            if let accessory = tabBarBottomAccessory {
+                                accessory
+                                    .contentShape(.rect)
+                                    .onTapGesture { expandMiniPlayer.toggle() }
+                            }
+                        }
+                }
+                #else
                 NativeTabView
                     .tabViewBottomAccessory {
                         if let accessory = tabBarBottomAccessory {
@@ -62,6 +99,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                                 }
                         }
                     }
+                #endif
             } else {
                 iOS26TabView
             }
@@ -73,6 +111,20 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         .environment(\.isSearchExpanded, $isSearchExpanded)
         .onAppear {
             isSearchExpanded = isSearchTabSelection(selection)
+            // Seed the store immediately so ExpandablePlayer has valid offsets
+            // even before the first layout pass on iOS 26 (where bottomTabBar isn't called).
+            if #available(iOS 26.0, *) {
+                let w = UIScreen.main.bounds.width
+                let sa = (UIApplication.shared.connectedScenes.first as? UIWindowScene)
+                    .flatMap { $0.windows.first(where: \.isKeyWindow) }
+                    .map { $0.safeAreaInsets.bottom } ?? 0
+                let hasSearch = tabs.contains { $0.role == .search }
+                let phase: ResponsiveLayout.AccessoryPhase = hasSearch ? .inlineWithSearch : .inline
+                // tabBarHeight = 0 → uses measured iOS 26 constant (91 pt)
+                TabBarStateStore.shared.accessoryOffsets = .init(
+                    phase: phase, screenWidth: w, safeAreaBottom: sa
+                )
+            }
         }
         .onChange(of: selection) { _, newValue in
             let isSearchSelected = isSearchTabSelection(newValue)
@@ -108,6 +160,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                 }
             }
         }
+        .tabViewSearchActivation(.searchTabSelection)
     }
 
     // MARK: - TabView (iOS 17+)
@@ -117,8 +170,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
             let safeBottom = proxy.safeAreaInsets.bottom
             ZStack {
                 if let searchTab = tabs.first(where: { $0.role == .search }),
-                   selection == searchTab.value
-                {
+                   selection == searchTab.value {
                     searchTab.content
                 } else {
                     ForEach(visibleTabs) { tab in
@@ -136,7 +188,14 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     }
 
     private func bottomTabBar(safeBottom: CGFloat) -> some View {
+        // Use the true screen width — NOT a GeometryProxy inside the tab area.
+        // A proxy here reports a reduced height and mis-detects the device.
         let screenW = UIScreen.main.bounds.width
+        let screenScale = ResponsiveLayout.DeviceSizeClass(width: screenW).scaleFactor(for: screenW)
+        // iOS26TabBar is always exactly 56 * screenScale tall (see iOS26TabBar.swift line 145).
+        // Search expansion only changes internal layout, NOT the bar's outer frame.
+        let customTabBarHeight: CGFloat = 56 * screenScale
+
         let phase: ResponsiveLayout.AccessoryPhase = {
             let hasSearch = tabs.contains { $0.role == .search }
             if tabBarVisibility == .visible {
@@ -148,20 +207,26 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         let offsets = ResponsiveLayout.AccessoryOffsets(
             phase: phase,
             screenWidth: screenW,
-            safeAreaBottom: safeBottom
+            safeAreaBottom: safeBottom,
+            tabBarHeight: customTabBarHeight,  // triggers iOS 17/18 formula
+            isSearchExpanded: isSearchExpanded
         )
 
         return ZStack(alignment: .bottom) {
-            if let accessory = tabBarBottomAccessory {
-                accessory
-                    .frame(width: offsets.width, height: offsets.accessoryHeight)
-                    .contentShape(.rect)
-                    .onTapGesture {
-                        expandMiniPlayer.toggle()
-                    }
-                    // Sit the accessory immediately above the tab bar (+ a small gap),
-                    // then subtract the safe area so it's relative to the ZStack bottom.
-                    .padding(.bottom, offsets.tabBarHeight + 8)
+            if #available(iOS 26.0, *) {
+                if let accessory = tabBarBottomAccessory {
+                    accessory
+                        .frame(width: offsets.width, height: offsets.accessoryHeight)
+                        .contentShape(.rect)
+                        .onTapGesture {
+                            expandMiniPlayer.toggle()
+                        }
+                        // `bottomInsetFromSafeArea` converts the screen-bottom-relative
+                        // measured offset (91/21 pt) into a padding value relative to the
+                        // safeAreaInset boundary so the pill lands in the correct position.
+                        .padding(.bottom, offsets.bottomInsetFromSafeArea)
+                        .animation(.spring(response: 0.38, dampingFraction: 0.78), value: offsets.bottomOffset)
+                }
             }
 
             if tabBarVisibility == .visible {
@@ -180,11 +245,23 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                         onSearchSubmit()
                     }
                 )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .bottom).combined(with: .opacity)
+                    )
+                )
             }
         }
-        .animation(.smooth(duration: 0.3), value: tabBarVisibility)
+        // Spring feels more natural than easeInOut when the bar snaps in/out.
+        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: tabBarVisibility)
         .environment(\.tabBarAccessoryOffsets, offsets)
+        // Defer the store write to after the view is committed.
+        // Writing an @Observable property directly during body evaluation
+        // triggers "AttributeGraph: setting value during update" and can crash.
+        .task(id: offsets) {
+            TabBarStateStore.shared.accessoryOffsets = offsets
+        }
     }
 }
 #endif

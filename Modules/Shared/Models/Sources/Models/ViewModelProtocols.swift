@@ -1,5 +1,4 @@
 import Foundation
-import Models
 import Observation
 import SwiftUI
 import YouTubeSDK

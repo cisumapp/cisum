@@ -6,8 +6,6 @@ import YouTubeSDK
 
 private let cacheSP = CisumSignpost.cache
 
-extension YouTubeVideo: @unchecked Sendable {}
-
 public actor VideoMetadataCache {
     public static let shared = VideoMetadataCache()
 

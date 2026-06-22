@@ -103,7 +103,7 @@ public final class ProviderManifestStore {
         Self.saveEnabledProviderIDs(enabledProviderIDs)
 
         Task {
-            guard let providerSDK = await Plugins.sharedProviderSDK() else { return }
+            guard let providerSDK = Plugins.sharedProviderSDK() else { return }
             if isEnabled {
                 if let manifest = manifests.first(where: { $0.id == providerID }) {
                     do {
@@ -126,7 +126,7 @@ public final class ProviderManifestStore {
         Self.saveEnabledProviderIDs(enabledProviderIDs)
         manifests.removeAll { $0.id == providerID }
         try? persist()
-        guard let providerSDK = await Plugins.sharedProviderSDK() else { return }
+        guard let providerSDK = Plugins.sharedProviderSDK() else { return }
         await providerSDK.unregisterProvider(providerID)
         lastStatusMessage = "Removed \(providerID)"
         PerfLog.info("Removed provider manifest provider_id: \(providerID)")
@@ -137,7 +137,7 @@ public final class ProviderManifestStore {
         didReconcile = true
 
         PerfLog.info("Reconciling persisted manifests count: \(String(manifests.count))")
-        guard let providerSDK = await Plugins.sharedProviderSDK() else {
+        guard let providerSDK = Plugins.sharedProviderSDK() else {
             lastStatusMessage = "Saved manifests will load when ProviderSDK is ready."
             PerfLog.warning("ProviderSDK unavailable while reconciling manifests")
             return
@@ -210,7 +210,7 @@ public final class ProviderManifestStore {
     }
 
     private func register(_ manifest: ProviderManifest) async throws {
-        guard let providerSDK = await Plugins.sharedProviderSDK() else {
+        guard let providerSDK = Plugins.sharedProviderSDK() else {
             lastStatusMessage = "Saved \(manifest.name); it will register when ProviderSDK is ready."
             PerfLog.warning("ProviderSDK unavailable during manifest registration provider_id: \(manifest.id), provider_name: \(manifest.name)")
             return

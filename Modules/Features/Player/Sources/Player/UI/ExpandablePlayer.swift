@@ -51,11 +51,32 @@ private struct ExpandablePlayerInner: View {
     }
 
     var isTabbarVisible: Bool {
-        if tabBarVisibility == .visible {
-            true
-        } else {
-            false
+        tabBarVisibility == .visible
+    }
+
+    // MARK: - Collapsed position helpers
+
+    /// Bottom padding that places the mini-player pill exactly where the
+    /// system's tab bar accessory sits — sourced from `TabBarStateStore` when
+    /// available, or computed from `ResponsiveLayout` as a fallback.
+    private var collapsedBottomPadding: CGFloat {
+        if let offsets = TabBarStateStore.shared.accessoryOffsets {
+            return offsets.bottomInsetFromScreenEdge
         }
+        // Fallback: ResponsiveLayout estimate before first layout pass.
+        let scale = ResponsiveLayout.DeviceSizeClass(width: size.width).scaleFactor(for: size.width)
+        return safeArea.bottom + (isSearchFieldExpanded ? 77 * scale : 88 * scale)
+    }
+
+    /// Horizontal padding in the collapsed state.
+    private var collapsedHorizontalPadding: CGFloat {
+        if let offsets = TabBarStateStore.shared.accessoryOffsets {
+            return offsets.sideInset
+        }
+        let scale = ResponsiveLayout.DeviceSizeClass(width: size.width).scaleFactor(for: size.width)
+        return isTabbarVisible
+            ? (isSearchFieldExpanded ? 30 * scale : 20 * scale)
+            : (isSearchFieldExpanded ? 20 * scale : 10 * scale)
     }
 
     @Namespace private var namespace
@@ -76,23 +97,11 @@ private struct ExpandablePlayerInner: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(
                         .bottom,
-                        isPlayerExpanded
-                            ? 0
-                            : (
-                                isSearchFieldExpanded
-                                    ? (isTabbarVisible ? safeArea.bottom + 18 : -12)
-                                    : safeArea.bottom + 25
-                            )
+                        isPlayerExpanded ? 0 : collapsedBottomPadding
                     )
                     .padding(
                         .horizontal,
-                        isPlayerExpanded
-                            ? 0
-                            : (
-                                isTabbarVisible
-                                    ? (isSearchFieldExpanded ? 30 : 20)
-                                    : (isSearchFieldExpanded ? 20 : 10)
-                            )
+                        isPlayerExpanded ? 0 : collapsedHorizontalPadding
                     )
                     .gesture(
                         PanGesture { newValue in
@@ -120,10 +129,9 @@ private struct ExpandablePlayerInner: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     .padding(
                         .bottom,
-                        isPlayerExpanded
-                            ? 0 : safeArea.bottom + (isSearchExpanded.wrappedValue ? 77 : 88)
+                        isPlayerExpanded ? 0 : collapsedBottomPadding
                     )
-                    .padding(.horizontal, isPlayerExpanded ? 0 : 20)
+                    .padding(.horizontal, isPlayerExpanded ? 0 : collapsedHorizontalPadding)
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in

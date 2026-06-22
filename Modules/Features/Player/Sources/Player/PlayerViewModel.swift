@@ -6,10 +6,10 @@
 //
 
 public import Aesthetics
-public import Combine
 public import Models
 import AVFoundation
 import AVKit
+import Combine
 import MediaPlayer
 import ProviderSDK
 import SwiftData

@@ -5,6 +5,7 @@ import Plugins
 import SwiftUI
 import YouTubeSDK
 
+@MainActor
 public final class ProfileModule {
     private let prefetchSettings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor

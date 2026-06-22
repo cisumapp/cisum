@@ -30,16 +30,18 @@ public final class PlaybackEngine {
 
     private func setupAudioSession() {
         #if os(iOS)
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio)
-            // try AVAudioSession.sharedInstance().setActive(true)
-
-            // setActive(true) is intentionally deferred to the first actual load
-            // via reactivateSession(), preventing cisum from stealing the audio
-            // session from other apps before the user triggers playback.
-        } catch {
-            PerfLog.debug("Failed to set up audio session category: \(error)")
-        }
+//        Task.detached {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio)
+                // try AVAudioSession.sharedInstance().setActive(true)
+                
+                // setActive(true) is intentionally deferred to the first actual load
+                // via reactivateSession(), preventing cisum from stealing the audio
+                // session from other apps before the user triggers playback.
+            } catch {
+                PerfLog.debug("Failed to set up audio session category: \(error)")
+            }
+//        }
         #endif
     }
 
@@ -49,25 +51,27 @@ public final class PlaybackEngine {
         }
 
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { [weak self] time in
-            guard let self else { return }
-            let nextTime = max(time.seconds, 0)
-            if abs(currentTime - nextTime) > 0.001 {
-                currentTime = nextTime
-            }
-
-            if let duration = player.currentItem?.duration.seconds, duration.isFinite {
-                if abs(self.duration - duration) > 0.001 {
-                    self.duration = duration
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let nextTime = max(time.seconds, 0)
+                if abs(currentTime - nextTime) > 0.001 {
+                    currentTime = nextTime
                 }
-            }
 
-            // Fallback sync in case KVO misses something
-            let isActuallyPlaying = player.rate != 0
-            if isPlaying != isActuallyPlaying {
-                setIsPlaying(isActuallyPlaying)
-            }
+                if let duration = player.currentItem?.duration.seconds, duration.isFinite {
+                    if abs(self.duration - duration) > 0.001 {
+                        self.duration = duration
+                    }
+                }
 
-            onProgressUpdate?()
+                // Fallback sync in case KVO misses something
+                let isActuallyPlaying = player.rate != 0
+                if isPlaying != isActuallyPlaying {
+                    setIsPlaying(isActuallyPlaying)
+                }
+
+                onProgressUpdate?()
+            }
         }
     }
 
@@ -138,7 +142,9 @@ public final class PlaybackEngine {
 
     public func reactivateSession() {
         #if os(iOS)
-        try? AVAudioSession.sharedInstance().setActive(true)
+//        Task.detached {
+            try? AVAudioSession.sharedInstance().setActive(true)
+//        }
         #endif
     }
 }

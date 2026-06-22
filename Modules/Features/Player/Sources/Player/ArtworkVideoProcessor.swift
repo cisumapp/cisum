@@ -157,8 +157,6 @@ public actor ArtworkVideoProcessor {
         cacheDirectory: URL
     ) async throws -> URL {
         let tempURL = try temporaryOutputURL(for: cacheID)
-        let sourceMetadata = await loadSourceMetadata(from: sourceHLSURL)
-        let estimatedDuration = sourceMetadata.duration
 
         defer {
             inFlight[cacheID] = nil
@@ -603,12 +601,12 @@ public actor ArtworkVideoProcessor {
                 "-t 5",
                 "-map \(streamMap)",
                 "-vf \(quotedFFmpegArgument(videoFilter))",
-                "-an",
+                "-an"
             ]
                 + codecArguments
                 + [
                     "-movflags +faststart",
-                    quotedFFmpegArgument(outputURL.path(percentEncoded: false)),
+                    quotedFFmpegArgument(outputURL.path(percentEncoded: false))
                 ]
         ).joined(separator: " ")
     }

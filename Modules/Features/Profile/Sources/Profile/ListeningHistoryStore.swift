@@ -1,6 +1,5 @@
 import Foundation
 import Models
-import Profile
 import SwiftData
 
 @ModelActor

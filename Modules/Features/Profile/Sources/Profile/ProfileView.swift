@@ -7,6 +7,7 @@
 
 import Aesthetics
 import Authentication
+import Models
 import ProviderSDK
 import SwiftUI
 import Utilities
@@ -311,7 +312,7 @@ public struct ProfileView: View {
                     if hasOAuthSession {
                         Button(role: .destructive) {
                             Task {
-                                await YouTubeOAuthClient.logout()
+                                YouTubeOAuthClient.logout()
                                 refreshSessionState()
                             }
                         } label: {

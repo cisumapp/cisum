@@ -137,8 +137,8 @@ extension PlayerViewModel {
                 )
                 let candidates = try await resolvePlaybackCandidates(
                     forID: video.id,
-                    title: video.title ?? "",
-                    artist: video.author ?? "",
+                    title: video.title,
+                    artist: video.author,
                     representations: [representation]
                 )
                 guard let candidate = candidates.first else { return nil }

@@ -1,6 +1,5 @@
 import Aesthetics
 import Kingfisher
-import Library
 import Models
 import Playlists
 import Plugins
@@ -62,7 +61,6 @@ public struct LibraryView: View {
                 fallbackSymbolProvider: fallbackSymbol,
                 fallbackGradientProvider: fallbackGradient
             )
-            .equatable()
 
             sectionDivider
 
@@ -81,7 +79,6 @@ public struct LibraryView: View {
                 fallbackGradientProvider: fallbackGradient,
                 songsLabelProvider: songsLabel
             )
-            .equatable()
 
             sectionDivider
 
@@ -95,7 +92,6 @@ public struct LibraryView: View {
                 fallbackGradientProvider: fallbackGradient,
                 songsLabelProvider: songsLabel
             )
-            .equatable()
         }
         .safeAreaPadding(.bottom, 140)
         // YouTube import sheet
@@ -771,19 +767,13 @@ private struct ImportedPlaylistButtonView: View {
     }
 }
 
-private struct LibraryPinsSectionView: View, Equatable {
+private struct LibraryPinsSectionView: View {
     @Binding var isExpanded: Bool
     let pinnedPlaylist: Playlist?
     let onNavigate: (Playlist) -> Void
     let onDelete: (Playlist) -> Void
     let fallbackSymbolProvider: (PlaylistSource) -> String
     let fallbackGradientProvider: (Playlist) -> LinearGradient
-
-    nonisolated static func == (lhs: LibraryPinsSectionView, rhs: LibraryPinsSectionView) -> Bool {
-        lhs.isExpanded == rhs.isExpanded &&
-            lhs.pinnedPlaylist?.playlistID == rhs.pinnedPlaylist?.playlistID &&
-            lhs.pinnedPlaylist?.updatedAt == rhs.pinnedPlaylist?.updatedAt
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -817,7 +807,7 @@ private struct LibraryPinsSectionView: View, Equatable {
     }
 }
 
-private struct LibraryPlaylistsShelfSectionView: View, Equatable {
+private struct LibraryPlaylistsShelfSectionView: View {
     @Binding var isExpanded: Bool
     let shelfPlaylists: [Playlist]
     let isCompactShelfMode: Bool
@@ -831,18 +821,6 @@ private struct LibraryPlaylistsShelfSectionView: View, Equatable {
     let fallbackSymbolProvider: (PlaylistSource) -> String
     let fallbackGradientProvider: (Playlist) -> LinearGradient
     let songsLabelProvider: (Int) -> String
-
-    nonisolated static func == (lhs: LibraryPlaylistsShelfSectionView, rhs: LibraryPlaylistsShelfSectionView) -> Bool {
-        lhs.isExpanded == rhs.isExpanded &&
-            lhs.isCompactShelfMode == rhs.isCompactShelfMode &&
-            lhs.isAuthenticated == rhs.isAuthenticated &&
-            lhs.isSyncingLikedSongs == rhs.isSyncingLikedSongs &&
-            lhs.likedSongsTitle == rhs.likedSongsTitle &&
-            lhs.likedSongsCount == rhs.likedSongsCount &&
-            lhs.shelfPlaylists.count == rhs.shelfPlaylists.count &&
-            lhs.shelfPlaylists.map(\.playlistID) == rhs.shelfPlaylists.map(\.playlistID) &&
-            lhs.shelfPlaylists.map(\.updatedAt) == rhs.shelfPlaylists.map(\.updatedAt)
-    }
 
     var body: some View {
         let shelfCardSize: CGFloat = isCompactShelfMode ? 148 : 160
@@ -900,7 +878,7 @@ private struct LibraryPlaylistsShelfSectionView: View, Equatable {
     }
 }
 
-private struct LibraryRecentlyAddedSectionView: View, Equatable {
+private struct LibraryRecentlyAddedSectionView: View {
     @Binding var isExpanded: Bool
     let recentlyAddedPlaylists: [Playlist]
     let isCompactShelfMode: Bool
@@ -909,14 +887,6 @@ private struct LibraryRecentlyAddedSectionView: View, Equatable {
     let fallbackSymbolProvider: (PlaylistSource) -> String
     let fallbackGradientProvider: (Playlist) -> LinearGradient
     let songsLabelProvider: (Int) -> String
-
-    nonisolated static func == (lhs: LibraryRecentlyAddedSectionView, rhs: LibraryRecentlyAddedSectionView) -> Bool {
-        lhs.isExpanded == rhs.isExpanded &&
-            lhs.isCompactShelfMode == rhs.isCompactShelfMode &&
-            lhs.recentlyAddedPlaylists.count == rhs.recentlyAddedPlaylists.count &&
-            lhs.recentlyAddedPlaylists.map(\.playlistID) == rhs.recentlyAddedPlaylists.map(\.playlistID) &&
-            lhs.recentlyAddedPlaylists.map(\.updatedAt) == rhs.recentlyAddedPlaylists.map(\.updatedAt)
-    }
 
     var body: some View {
         let shelfCardSize: CGFloat = isCompactShelfMode ? 148 : 160
