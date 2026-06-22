@@ -7,10 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		7747D96B2FC2A58000C4246D /* FFmpeg-Kit in Frameworks */ = {isa = PBXBuildFile; productRef = 7799E1672FAB428F008E0E98 /* FFmpeg-Kit */; };
-		7747D9812FC2A67C00C4246D /* FFmpeg-Kit in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 7799E1672FAB428F008E0E98 /* FFmpeg-Kit */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		777B92B72FA48CC200ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92B62FA48CC200ECAF15 /* Core */; };
-		777B92D02FA4AA0E00ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92CF2FA4AA0E00ECAF15 /* Core */; };
+		770826772FDF2255009046DC /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 770826762FDF2255009046DC /* Core */; };
 		777B92D32FA4AA1B00ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92D22FA4AA1B00ECAF15 /* Core */; };
 		77C8BF5A2F6E36D200E7354F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF592F6E36D200E7354F /* WidgetKit.framework */; };
 		77C8BF5C2F6E36D200E7354F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF5B2F6E36D200E7354F /* SwiftUI.framework */; };
@@ -53,7 +50,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				7747D9812FC2A67C00C4246D /* FFmpeg-Kit in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -110,10 +106,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7747D96B2FC2A58000C4246D /* FFmpeg-Kit in Frameworks */,
-				777B92D02FA4AA0E00ECAF15 /* Core in Frameworks */,
-				777B92B72FA48CC200ECAF15 /* Core in Frameworks */,
 				777B92D32FA4AA1B00ECAF15 /* Core in Frameworks */,
+				770826772FDF2255009046DC /* Core in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -192,10 +186,8 @@
 			);
 			name = cisum;
 			packageProductDependencies = (
-				777B92B62FA48CC200ECAF15 /* Core */,
-				777B92CF2FA4AA0E00ECAF15 /* Core */,
 				777B92D22FA4AA1B00ECAF15 /* Core */,
-				7799E1672FAB428F008E0E98 /* FFmpeg-Kit */,
+				770826762FDF2255009046DC /* Core */,
 			);
 			productName = iOS;
 			productReference = 772039522F6AAAA700E85D4A /* cisum.app */;
@@ -274,8 +266,7 @@
 			mainGroup = 772039492F6AAAA700E85D4A;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				777B92D12FA4AA1B00ECAF15 /* XCLocalSwiftPackageReference "../Modules/Core" */,
-				7799E1662FAB428F008E0E98 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */,
+				770826752FDF2255009046DC /* XCLocalSwiftPackageReference "../Modules/Core" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 772039532F6AAAA700E85D4A /* Products */;
@@ -518,7 +509,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = cisum/iOS.entitlements;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 3YK32DPS3W;
 				ENABLE_PREVIEWS = YES;
 				GCC_DYNAMIC_NO_PIC = NO;
@@ -561,7 +552,7 @@
 				CODE_SIGN_ENTITLEMENTS = cisum/iOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 3YK32DPS3W;
 				ENABLE_PREVIEWS = YES;
@@ -699,40 +690,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		777B92D12FA4AA1B00ECAF15 /* XCLocalSwiftPackageReference "../Modules/Core" */ = {
+		770826752FDF2255009046DC /* XCLocalSwiftPackageReference "../Modules/Core" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../Modules/Core;
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		7799E1662FAB428F008E0E98 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tylerjonesio/ffmpeg-kit-spm";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		777B92B62FA48CC200ECAF15 /* Core */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = Core;
-		};
-		777B92CF2FA4AA0E00ECAF15 /* Core */ = {
+		770826762FDF2255009046DC /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Core;
 		};
 		777B92D22FA4AA1B00ECAF15 /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Core;
-		};
-		7799E1672FAB428F008E0E98 /* FFmpeg-Kit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7799E1662FAB428F008E0E98 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */;
-			productName = "FFmpeg-Kit";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -4,7 +4,6 @@ import Models
 import Networking
 import Player
 import Plugins
-import Search
 import SwiftUI
 import YouTubeSDK
 

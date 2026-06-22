@@ -15,10 +15,7 @@ import Utilities
 import YouTubeSDK
 
 public struct DiscoverView: View {
-    @Environment(\.youtube) private var youtubeOptional
-    private var youtube: YouTube {
-        youtubeOptional ?? YouTube.shared
-    }
+    @Environment(\.youtube) private var youtube
 
     public init() {}
 

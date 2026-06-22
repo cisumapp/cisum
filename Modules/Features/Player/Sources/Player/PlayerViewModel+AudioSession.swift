@@ -5,13 +5,15 @@ import Utilities
 extension PlayerViewModel {
     func configureAudioSession() {
         #if os(iOS)
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
-            try session.setActive(true)
-        } catch {
-            PerfLog.debug(" PlayerViewModel: Failed to configure audio session: \(error)")
-        }
+//        Task.detached {
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playback, mode: .default, policy: .longFormAudio)
+                try session.setActive(true)
+            } catch {
+                PerfLog.debug(" PlayerViewModel: Failed to configure audio session: \(error)")
+            }
+//        }
         #endif
     }
 
@@ -117,11 +119,13 @@ extension PlayerViewModel {
     }
 
     func reactivateAudioSessionIfNeeded() {
-        do {
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            PerfLog.debug(" PlayerViewModel: Failed to reactivate audio session: \(error)")
-        }
+//        Task.detached {
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                PerfLog.debug(" PlayerViewModel: Failed to reactivate audio session: \(error)")
+            }
+//        }
     }
     #else
     func setupAudioLifecycleObservers() {}

@@ -21,7 +21,7 @@ import YouTubeSDK
 //        return result?.toString()
 //    }
 //
-//    public func callFunction(_ name: String, withArguments arguments: [Any]) async throws -> String? {
+//    public func callFunctiozn(_ name: String, withArguments arguments: [Any]) async throws -> String? {
 //        guard let function = context.objectForKeyedSubscript(name) else {
 //            return nil
 //        }

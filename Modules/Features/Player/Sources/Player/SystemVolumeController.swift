@@ -1,8 +1,6 @@
 #if os(iOS)
-
 import AVFoundation
 import MediaPlayer
-import Player
 import SwiftUI
 import UIKit
 
@@ -32,12 +30,13 @@ public final class SystemVolumeController {
     /// Controls whether the backing MPVolumeView is visually hidden.
     public var showsSystemVolumeHUD: Bool = false {
         didSet {
-            volumeView.alpha = showsSystemVolumeHUD ? 1.0 : 0.0001
+            volumeView?.alpha = showsSystemVolumeHUD ? 1.0 : 0.0001
         }
     }
 
     /// Hidden MPVolumeView used to hijack the system volume UI.
-    private let volumeView: MPVolumeView
+    @ObservationIgnored
+    private var volumeView: MPVolumeView?
     private weak var window: UIWindow?
     private var isActivated = false
 
@@ -55,10 +54,7 @@ public final class SystemVolumeController {
         let session = AVAudioSession.sharedInstance()
         self.volume = Double(session.outputVolume)
         self.inferredComparisonVolume = session.outputVolume
-        self.volumeView = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
-        volumeView.showsVolumeSlider = true
-        volumeView.isUserInteractionEnabled = false
-        volumeView.alpha = 0.0001
+        // MPVolumeView is initialized lazily to avoid deadlocks during app launch.
 
         self.observation = session.observe(\.outputVolume, options: [.old, .new]) {
             [weak self] _, change in
@@ -76,7 +72,7 @@ public final class SystemVolumeController {
 
     /// Lazily finds the UISlider inside the on-screen MPVolumeView and sets volume.
     public func applyVolumeToSystem() {
-        guard let slider = volumeView.subviews.first(where: { $0 is UISlider }) as? UISlider
+        guard let slider = volumeView?.subviews.first(where: { $0 is UISlider }) as? UISlider
         else { return }
         slider.setValue(Float(volume), animated: false)
     }
@@ -90,7 +86,7 @@ public final class SystemVolumeController {
     public func deactivate() {
         guard isActivated else { return }
         isActivated = false
-        volumeView.removeFromSuperview()
+        volumeView?.removeFromSuperview()
     }
 
     public func registerWindow(_ window: UIWindow) {
@@ -100,7 +96,16 @@ public final class SystemVolumeController {
 
     private func attachVolumeViewIfNeeded() {
         guard isActivated, let window else { return }
-        if volumeView.superview !== window {
+        
+        if volumeView == nil {
+            let view = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            view.showsVolumeSlider = true
+            view.isUserInteractionEnabled = false
+            view.alpha = showsSystemVolumeHUD ? 1.0 : 0.0001
+            volumeView = view
+        }
+        
+        if let volumeView, volumeView.superview !== window {
             volumeView.removeFromSuperview()
             window.addSubview(volumeView)
         }
@@ -238,7 +243,7 @@ public final class SystemVolumeController {
             NotificationCenter.default.removeObserver(token)
         }
         systemVolumeObserverTokens.removeAll()
-        volumeView.removeFromSuperview()
+        volumeView?.removeFromSuperview()
     }
 }
 #endif

@@ -6,7 +6,6 @@ import Observation
 import Player
 import Plugins
 import ProviderSDK
-import Search
 import SwiftUI
 import Utilities
 import YouTubeSDK

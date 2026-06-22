@@ -186,7 +186,9 @@ private nonisolated func musicDisplaySeparators() -> [String] {
 private nonisolated func musicNoiseKeywords() -> [String] {
     [
         "official music video",
+        "official video",
         "official audio",
+        "official lyric video",
         "lyric video",
         "lyrics",
         "live performance",
@@ -222,15 +224,13 @@ public nonisolated func resolvedInnerTubeRegionCode() -> String? {
 public nonisolated func resolvedInnerTubeLanguageCode() -> String {
     if #available(iOS 16.0, macOS 13.0, *) {
         if let code = Locale.current.language.languageCode?.identifier,
-           !code.isEmpty
-        {
+           !code.isEmpty {
             return code.lowercased()
         }
     }
 
     if let legacyCode = Locale.current.languageCode,
-       !legacyCode.isEmpty
-    {
+       !legacyCode.isEmpty {
         return legacyCode.lowercased()
     }
 

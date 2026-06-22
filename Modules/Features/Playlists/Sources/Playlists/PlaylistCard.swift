@@ -9,7 +9,7 @@ import SwiftUI
 import Tracks
 import YouTubeSDK
 
-public struct PlaylistCard: View, Equatable {
+public struct PlaylistCard: View {
     @State private var viewModel = PlaylistViewModel()
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     public let playlist: Models.Playlist
@@ -19,11 +19,6 @@ public struct PlaylistCard: View, Equatable {
     public init(playlist: Models.Playlist, showAllImages: Bool = true) {
         self.playlist = playlist
         self.showAllImages = showAllImages
-    }
-
-    public nonisolated static func == (lhs: PlaylistCard, rhs: PlaylistCard) -> Bool {
-        lhs.playlist.playlistID == rhs.playlist.playlistID &&
-            lhs.playlist.updatedAt == rhs.playlist.updatedAt
     }
 
     public var body: some View {

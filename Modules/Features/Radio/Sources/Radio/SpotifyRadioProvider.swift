@@ -1,6 +1,5 @@
 import Foundation
 import Models
-import Radio
 import SpotifySDK
 
 public struct SpotifyRadioProvider: RadioEngineProvider {

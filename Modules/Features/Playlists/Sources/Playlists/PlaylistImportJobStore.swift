@@ -1,6 +1,5 @@
 import Foundation
 import Models
-import Playlists
 import SwiftData
 
 @ModelActor

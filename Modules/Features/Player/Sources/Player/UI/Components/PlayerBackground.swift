@@ -1,3 +1,4 @@
+import Models
 //
 //  PlayerBackground.swift
 //  cisum
@@ -37,13 +38,13 @@ struct PlayerBackground: View {
                                 accentColor: playerViewModel.currentAccentColor,
                                 content: {
                                     KFImage(playerViewModel.currentImageURL)
-//                                        .downsampling(size: CGSize(width: 300, height: 300))
                                         .resizable()
                                         .scaledToFill()
                                 },
                                 previous: {
                                     if let pvm = playerViewModel as? PlayerViewModel, let previous = pvm.previousQueuePreviewItem {
                                         KFImage(previous.artworkURL)
+                                            .blur(radius: 100)
                                             .downsampling(size: CGSize(width: 256, height: 256))
                                             .resizable()
                                             .scaledToFill()
@@ -54,6 +55,7 @@ struct PlayerBackground: View {
                                 upnext: {
                                     if let pvm = playerViewModel as? PlayerViewModel, let next = pvm.nextQueuePreviewItem {
                                         KFImage(next.artworkURL)
+                                            .blur(radius: 100)
                                             .downsampling(size: CGSize(width: 256, height: 256))
                                             .resizable()
                                             .scaledToFill()

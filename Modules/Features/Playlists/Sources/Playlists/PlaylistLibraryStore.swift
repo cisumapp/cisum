@@ -1,6 +1,5 @@
 import Foundation
 import Models
-import Playlists
 import SwiftData
 import SwiftUI
 
@@ -181,7 +180,7 @@ public actor PlaylistLibraryStore {
             sourceChecksum: p.sourceChecksum,
             itemCount: p.itemCount,
             importedAt: p.importedAt ?? .now,
-            updatedAt: p.updatedAt ?? .now,
+            updatedAt: p.updatedAt,
             lastPlayedAt: p.lastPlayedAt
         )
     }
@@ -346,7 +345,7 @@ public struct PlaylistLibraryStoreKey: EnvironmentKey {
 }
 
 public extension EnvironmentValues {
-    public var playlistLibraryStore: PlaylistLibraryStore? {
+    var playlistLibraryStore: PlaylistLibraryStore? {
         get { self[PlaylistLibraryStoreKey.self] }
         set { self[PlaylistLibraryStoreKey.self] = newValue }
     }

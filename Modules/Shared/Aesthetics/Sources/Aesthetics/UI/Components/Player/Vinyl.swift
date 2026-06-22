@@ -40,25 +40,29 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
                 ZStack {
                     VStack {
                         HStack {
-                            ZStack {
+                            ZStack(alignment: .topLeading) {
                                 previousVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetPrevious)
 
                                 if let previousLabel {
                                     sideLabel(previousLabel, alignment: .leading)
-                                        .offset(x: sizes.sideLabelOffsetPrevious.width, y: sizes.sideLabelOffsetPrevious.height)
+                                        .padding(.leading, sizes.sideLabelInset)
+                                        .padding(.top, sizes.sideLabelTopInset)
                                 }
                             }
+                            .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
 
-                            Spacer()
+                            Spacer(minLength: 0)
 
-                            ZStack {
+                            ZStack(alignment: .topTrailing) {
                                 nextVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetNext)
 
                                 if let upnextLabel {
                                     sideLabel(upnextLabel, alignment: .trailing)
-                                        .offset(x: sizes.sideLabelOffsetNext.width, y: sizes.sideLabelOffsetNext.height)
+                                        .padding(.trailing, sizes.sideLabelInset)
+                                        .padding(.top, sizes.sideLabelTopInset)
                                 }
                             }
+                            .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
                         }
 
                         Spacer()
@@ -131,14 +135,18 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     private func sideLabel(_ label: VinylSideLabel, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment) {
             Text(label.title)
+                .font(.system(size: 17))
+                .lineLimit(1)
 
             if let subtitle = label.subtitle,
-               !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            {
+               !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(subtitle)
                     .font(.caption)
+                    .lineLimit(1)
             }
         }
+        .frame(maxWidth: 140, alignment: alignment == .leading ? .leading : .trailing)
+        .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(.white)
         .fontWeight(.semibold)
     }
@@ -233,13 +241,23 @@ struct VinylDisk<Content: View>: View {
 }
 
 #Preview {
-    Vinyl(isPlaying: false, accentColor: .blue) {
-        Color.gray
-    } previous: {
-        Color.clear
-    } upnext: {
-        Color.clear
-    }
+    Vinyl(
+        isPlaying: false,
+        accentColor: .blue,
+        content: {
+            Color.gray
+        },
+        previous: {
+            Color.gray
+        },
+        upnext: {
+            Color.gray
+        },
+        previousTitle: "title",
+        previousSubtitle: "subtitle",
+        upnextTitle: "title",
+        upnextSubtitle: "subtitle"
+    )
     .preferredColorScheme(.dark)
 }
 

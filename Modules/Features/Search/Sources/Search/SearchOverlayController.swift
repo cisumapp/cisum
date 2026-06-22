@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 public enum OverlaySearchScope: Hashable, Identifiable, Sendable {
     case global
@@ -76,9 +77,6 @@ public struct SearchOverlayContextPreferenceKey: PreferenceKey {
         value = nextValue()
     }
 }
-
-import Search
-import SwiftUI
 
 public extension View {
     func searchOverlayContext(_ context: SearchOverlayContext) -> some View {

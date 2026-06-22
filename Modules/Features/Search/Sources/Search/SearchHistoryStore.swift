@@ -1,7 +1,6 @@
 import Foundation
 import Models
 import Observation
-import Search
 import SwiftData
 
 public struct SearchHistoryEntrySnapshot: Sendable {

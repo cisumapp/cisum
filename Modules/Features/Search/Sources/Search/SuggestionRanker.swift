@@ -1,5 +1,4 @@
 import Foundation
-import Search
 
 public struct SuggestionCandidate {
     public let text: String

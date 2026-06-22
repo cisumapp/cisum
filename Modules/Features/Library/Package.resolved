@@ -1,13 +1,22 @@
 {
-  "originHash" : "2c5542ee507dd2e11a828daa72dfdd5d83c2cc042f7201c6877e159bde8aae20",
+  "originHash" : "6876a00e8faf9893e18e25352c66caf42ef9989501769e396ded7edfd5e97d22",
   "pins" : [
     {
       "identity" : "clerk-ios",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/clerk/clerk-ios",
       "state" : {
-        "revision" : "5f9567a1ef4cd47ac4cfe9b1d4c0d400af62202b",
-        "version" : "1.1.3"
+        "revision" : "76bbbe374f3aa49f1dde793d9a465864b3c03d9d",
+        "version" : "1.2.3"
+      }
+    },
+    {
+      "identity" : "ffmpeg-kit-spm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tylerjonesio/ffmpeg-kit-spm.git",
+      "state" : {
+        "revision" : "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
+        "version" : "5.1.2"
       }
     },
     {
@@ -16,7 +25,7 @@
       "location" : "https://github.com/swiftwasm/JavaScriptKit.git",
       "state" : {
         "branch" : "main",
-        "revision" : "403ae956d68503957699b6dc4c07b73caad031b7"
+        "revision" : "fba3be0d4647583b139a8a0af0e187ab97855713"
       }
     },
     {
@@ -24,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
       "state" : {
-        "revision" : "cf8be20d07654570554c8a8a4952bc8a5766a8b0",
-        "version" : "8.9.0"
+        "revision" : "ac632bd26a1c00f139ff62fd01806f21cf67325e",
+        "version" : "8.10.0"
       }
     },
     {
@@ -33,17 +42,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/kean/Nuke.git",
       "state" : {
-        "revision" : "83e19143355b02e9261edb2323b3e1e93287ebb9",
-        "version" : "12.9.0"
+        "revision" : "63a8fcbd6621340a2410bc3e9575ac97058615f4",
+        "version" : "13.0.6"
       }
     },
     {
       "identity" : "phonenumberkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/marmelroy/PhoneNumberKit",
+      "location" : "https://github.com/PhoneNumberKit/PhoneNumberKit",
       "state" : {
-        "revision" : "169ab10234347fb19b37441f2867ace896a284b0",
-        "version" : "4.3.0"
+        "revision" : "ebde4c008bad416588627d83ac07b991c204f72b",
+        "version" : "5.0.2"
       }
     },
     {
@@ -51,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase/supabase-swift",
       "state" : {
-        "revision" : "dd29b624b9ceea87612d0b00457e1400f7d22c2e",
-        "version" : "2.46.0"
+        "revision" : "a4e684d979f4a5fa017ebd9d5f635a4bc03830fb",
+        "version" : "2.47.0"
       }
     },
     {
@@ -60,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "eb50cbd14606a9161cbc5d452f18797c90ef0bab",
-        "version" : "1.7.0"
+        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
+        "version" : "1.7.1"
       }
     },
     {
@@ -69,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-clocks",
       "state" : {
-        "revision" : "cc46202b53476d64e824e0b6612da09d84ffde8e",
-        "version" : "1.0.6"
+        "revision" : "72d749bf341b78851203066ab421869b783ec42a",
+        "version" : "1.1.0"
       }
     },
     {
@@ -87,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "1b6b2e274e85105bfa155183145a1dcfd63331f1",
-        "version" : "4.5.0"
+        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
+        "version" : "3.15.1"
       }
     },
     {
@@ -96,8 +105,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-http-types.git",
       "state" : {
-        "revision" : "45eb0224913ea070ec4fba17291b9e7ecf4749ca",
-        "version" : "1.5.1"
+        "revision" : "db774a277f60063a32d854f2980299caf06da041",
+        "version" : "1.6.0"
+      }
+    },
+    {
+      "identity" : "swift-java-jni-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-java-jni-core",
+      "state" : {
+        "revision" : "b440a0be98381550cf189c903782e817619ffa05",
+        "version" : "0.5.1"
       }
     },
     {
@@ -105,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax",
       "state" : {
-        "revision" : "9de99a78f099e59caf2b2beec65a4c45d54b2081",
-        "version" : "603.0.1"
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
       }
     },
     {
@@ -114,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "dfd70507def84cb5fb821278448a262c6ff2bbad",
-        "version" : "1.9.0"
+        "revision" : "cb281f343fd953280336dcbd3822cdf47c182f5b",
+        "version" : "1.10.0"
       }
     }
   ],

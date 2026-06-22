@@ -15,15 +15,22 @@ public final class AnalyticsService {
     }
 
     private func setupPostHog() {
-        let config = PostHogConfig(projectToken: projectToken, host: host)
-        PostHogSDK.shared.setup(config)
-        isInitialized = true
+        let currentProjectToken = self.projectToken
+        let currentHost = self.host
+        Task.detached {
+            let config = PostHogConfig(projectToken: currentProjectToken, host: currentHost)
+            config.preloadFeatureFlags = false
+            PostHogSDK.shared.setup(config)
+            await MainActor.run {
+                self.isInitialized = true
+            }
+        }
     }
 
     /// Identify the current user
     /// This must be called after successful authentication to link events to the user
     public func identify(userId: String, properties: [String: Any]? = nil) {
-        var props = properties ?? [:]
+        let props = properties ?? [:]
         PostHogSDK.shared.identify(userId, userProperties: props)
     }
 

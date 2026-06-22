@@ -5,7 +5,6 @@ import SwiftUI
 import Utilities
 
 #if canImport(SpotifySDK)
-import Library
 import SpotifySDK
 #endif
 
@@ -615,7 +614,7 @@ public struct CentralMediaStoreKey: EnvironmentKey {
 }
 
 public extension EnvironmentValues {
-    public var centralMediaStore: CentralMediaStore? {
+    var centralMediaStore: CentralMediaStore? {
         get { self[CentralMediaStoreKey.self] }
         set { self[CentralMediaStoreKey.self] = newValue }
     }

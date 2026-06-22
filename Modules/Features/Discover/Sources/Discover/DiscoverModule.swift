@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 public final class DiscoverModule {
     public init() {}
 

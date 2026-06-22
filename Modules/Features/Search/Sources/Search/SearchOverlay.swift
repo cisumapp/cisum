@@ -1,6 +1,5 @@
 import Aesthetics
 import Models
-import Search
 import SwiftUI
 
 public struct SearchOverlayBar: View {

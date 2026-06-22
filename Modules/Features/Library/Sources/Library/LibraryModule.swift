@@ -1,6 +1,7 @@
 import Playlists
 import SwiftUI
 
+@MainActor
 public final class LibraryModule {
     public init() {}
 

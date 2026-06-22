@@ -3,6 +3,7 @@ import Combine
 import Player
 import Search
 import SwiftUI
+import SwiftData
 import Utilities
 #if os(iOS)
 import UIKit

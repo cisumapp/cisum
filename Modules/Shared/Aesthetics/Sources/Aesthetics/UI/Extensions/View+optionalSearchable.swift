@@ -20,18 +20,22 @@ public extension View {
             }
         }
         #else
-        searchable(
-            text: text,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "Search music"
-        ) {
-            ForEach(suggestions, id: \.self) { suggestion in
-                Button {
-                    onSuggestionTap?(suggestion)
-                } label: {
-                    Label(suggestion, systemImage: "magnifyingglass")
+        if #available(iOS 26.0, *) {
+            searchable(
+                text: text,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search music"
+            ) {
+                ForEach(suggestions, id: \.self) { suggestion in
+                    Button {
+                        onSuggestionTap?(suggestion)
+                    } label: {
+                        Label(suggestion, systemImage: "magnifyingglass")
+                    }
                 }
             }
+        } else {
+            self
         }
         #endif
     }

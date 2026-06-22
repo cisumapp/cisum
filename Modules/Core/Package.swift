@@ -18,13 +18,11 @@ let package = Package(
         .package(path: "../Shared/Utilities"),
 
         .package(path: "../Features/Authentication"),
-        .package(path: "../Features/Onboarding"),
         .package(path: "../Features/Plugins"),
 
         .package(path: "../Features/Artists"),
         .package(path: "../Features/Albums"),
         .package(path: "../Features/Playlists"),
-        .package(path: "../Features/Tracks"),
 
         .package(path: "../Features/Home"),
         .package(path: "../Features/Discover"),
@@ -45,12 +43,10 @@ let package = Package(
                 .product(name: "Caching", package: "Caching"),
 
                 .product(name: "Authentication", package: "Authentication"),
-                .product(name: "Onboarding", package: "Onboarding"),
                 .product(name: "Plugins", package: "Plugins"),
 
                 .product(name: "Artists", package: "Artists"),
                 .product(name: "Albums", package: "Albums"),
-                .product(name: "Tracks", package: "Tracks"),
                 .product(name: "Playlists", package: "Playlists"),
 
                 .product(name: "Home", package: "Home"),

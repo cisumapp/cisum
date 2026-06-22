@@ -1,9 +1,8 @@
 import Player
-import Plugins
 import ProviderSDK
 import SwiftUI
-import YouTubeSDK
 import Utilities
+import YouTubeSDK
 
 public struct PluginsView: View {
     public init() {}

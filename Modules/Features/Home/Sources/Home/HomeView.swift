@@ -134,11 +134,11 @@ public struct HomeView: View {
             updateUniqueHistoryItems()
             await viewModel.loadIfNeeded()
         }
-        .refreshable {
-            await viewModel.refresh()
-        }
         .onChange(of: recentHistory.count) { _, _ in
             updateUniqueHistoryItems()
+        }
+        .pullToRefresh(scrollOffset: scrollOffset) {
+            await viewModel.refresh()
         }
     }
 
