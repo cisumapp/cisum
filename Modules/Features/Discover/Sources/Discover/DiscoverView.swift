@@ -15,7 +15,7 @@ import Utilities
 import YouTubeSDK
 
 public struct DiscoverView: View {
-    @Environment(\.youtube) private var youtube
+    private let youtube = YouTube.shared
 
     public init() {}
 

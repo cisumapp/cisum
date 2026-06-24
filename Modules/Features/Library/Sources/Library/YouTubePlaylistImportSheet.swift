@@ -19,7 +19,7 @@ public struct YouTubePlaylistImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
 
-    @Environment(\.youtube) private var youtube
+    private let youtube = YouTube.shared
 
     public let onImported: (String) -> Void
 
@@ -38,10 +38,10 @@ public struct YouTubePlaylistImportSheet: View {
     @State private var errorMessage: String?
 
     private var importService: YouTubePlaylistImportService? {
-        guard let youtubeService = youtube, let playlistLibraryStore else {
+        guard let playlistLibraryStore else {
             return nil
         }
-        return YouTubePlaylistImportService(youtube: youtubeService, playlistStore: playlistLibraryStore)
+        return YouTubePlaylistImportService(youtube: youtube, playlistStore: playlistLibraryStore)
     }
 
     public var body: some View {

@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import YouTubeSDK
 
 public nonisolated func normalizedMusicDisplayTitle(_ title: String, artist: String? = nil) -> String {
     let trimmedTitle = collapsedMusicWhitespace(title)
@@ -235,33 +234,6 @@ public nonisolated func resolvedInnerTubeLanguageCode() -> String {
     }
 
     return "en"
-}
-
-public nonisolated func shouldKeepMusicHomeItem(_ item: YouTubeItem) -> Bool {
-    switch item {
-    case .song:
-        true
-    case let .video(video):
-        shouldKeepMusicVideoResult(video)
-    case let .channel(channel):
-        shouldKeepMusicChannel(channel)
-    case let .playlist(playlist):
-        shouldKeepMusicPlaylist(playlist)
-    case let .shelf(shelf):
-        isLikelyMusicMetadata(title: shelf.title, secondaryText: nil)
-    }
-}
-
-public nonisolated func shouldKeepMusicVideoResult(_ video: YouTubeVideo) -> Bool {
-    isLikelyMusicMetadata(title: video.title, secondaryText: video.author)
-}
-
-public nonisolated func shouldKeepMusicChannel(_ channel: YouTubeChannel) -> Bool {
-    isLikelyArtistChannelName(channel.title)
-}
-
-public nonisolated func shouldKeepMusicPlaylist(_ playlist: YouTubePlaylist) -> Bool {
-    isLikelyMusicMetadata(title: playlist.title, secondaryText: playlist.author)
 }
 
 public nonisolated func isLikelyArtistChannelName(_ channelName: String) -> Bool {

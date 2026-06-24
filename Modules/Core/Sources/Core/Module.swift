@@ -218,7 +218,6 @@ public final class cisumModule {
             .environment(container.appServices.searchOverlayController)
             .environment(\.playerViewModel, container.playbackServices.playerViewModel)
             .environment(\.searchViewModel, container.searchServices.searchViewModel)
-            .environment(\.youtube, container.providerServices.youtube)
             .environment(container.userServices.authService)
             .environment(container.userServices.spotifySessionCoordinator)
             .environment(container.userServices.supabaseService)
