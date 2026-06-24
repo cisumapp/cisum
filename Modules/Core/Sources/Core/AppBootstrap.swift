@@ -202,74 +202,17 @@ enum AppBootstrap {
         )
         #endif
 
-        let coreDomain = CoreDomain(
-            streamingProviderSettings: streamingProviderSettings,
-            prefetchSettings: prefetchSettings,
-            networkMonitor: networkMonitor
-        )
-
-        let playbackDomain: PlaybackDomain
-        #if os(iOS)
-        playbackDomain = PlaybackDomain(
-            playerViewModel: playerViewModel,
-            playbackControlSettings: playbackControlSettings,
-            playbackMetricsStore: playbackMetricsStore,
-            systemVolumeController: SystemVolumeController.shared,
-            volumeButtonSkipController: VolumeButtonSkipController.shared,
-            radioSessionStore: radioSessionStore,
-            artworkVideoProcessor: artworkVideoProcessor,
-            artworkColorExtractor: artworkColorExtractor
-        )
-        #else
-        playbackDomain = PlaybackDomain(
-            playerViewModel: playerViewModel,
-            playbackControlSettings: playbackControlSettings,
-            playbackMetricsStore: playbackMetricsStore,
-            radioSessionStore: radioSessionStore,
-            artworkVideoProcessor: artworkVideoProcessor
-        )
-        #endif
-
-        let searchDomain = SearchDomain(
-            searchViewModel: SearchViewModel(
-                youtube: youtube,
-                settings: prefetchSettings,
-                networkMonitor: networkMonitor,
-                historyStore: historyStore,
-                searchCacheHintStore: searchCacheHintStore,
-                streamingProviderSettings: streamingProviderSettings,
-                centralMediaStore: centralMediaStore,
-                metadataCache: metadataCache,
-                searchCache: searchCache,
-                providerSDK: providerSDK // H-1: wire up all streaming providers for unified search
-            ),
+        let searchViewModel = SearchViewModel(
+            youtube: youtube,
+            settings: prefetchSettings,
+            networkMonitor: networkMonitor,
             historyStore: historyStore,
             searchCacheHintStore: searchCacheHintStore,
-            searchCache: searchCache,
-            suggestionRanker: SuggestionRanker.self
-        )
-
-        let libraryDomain = LibraryDomain(
-            playlistLibraryStore: playlistLibraryStore,
-            playlistImportJobStore: playlistImportJobStore,
+            streamingProviderSettings: streamingProviderSettings,
             centralMediaStore: centralMediaStore,
-            mediaCacheStore: mediaCacheStore,
-            metadataCache: metadataCache
-        )
-
-        let userDomain = UserDomain(
-            spotifySessionCoordinator: spotifySessionCoordinator,
-            authService: authService,
-            supabaseService: supabaseService,
-            analyticsService: analyticsService
-        )
-
-        let appDomain = AppDomain(
-            youtube: youtube,
-            router: router,
-            modelContainer: modelContainer,
-            playerPresentationController: playerPresentationController,
-            searchOverlayController: searchOverlayController
+            metadataCache: metadataCache,
+            searchCache: searchCache,
+            providerSDK: providerSDK // H-1: wire up all streaming providers for unified search
         )
 
         let playbackServices = PlaybackServices(
@@ -291,7 +234,7 @@ enum AppBootstrap {
             suggestionRanker: SuggestionRanker.self,
             networkMonitor: networkMonitor,
             prefetchSettings: prefetchSettings,
-            searchViewModel: searchDomain.searchViewModel
+            searchViewModel: searchViewModel
         )
 
         let libraryServices = LibraryServices(
