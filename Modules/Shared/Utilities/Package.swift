@@ -11,15 +11,9 @@ let package = Package(
     products: [
         .library(name: "Utilities", targets: ["Utilities"]),
     ],
-    dependencies: [
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-    ],
     targets: [
         .target(
-            name: "Utilities",
-            dependencies: [
-                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-            ]
+            name: "Utilities"
         ),
     ],
     swiftLanguageModes: [.v6]

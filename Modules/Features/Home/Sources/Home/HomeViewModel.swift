@@ -8,6 +8,7 @@ import Utilities
 //
 
 import Foundation
+import Models
 import Observation
 import YouTubeSDK
 

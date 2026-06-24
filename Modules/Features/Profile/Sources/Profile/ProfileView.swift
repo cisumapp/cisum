@@ -20,7 +20,7 @@ import SpotifySDK
 public struct ProfileView: View {
     public init() {}
 
-    @Environment(\.youtube) private var youtube
+    private let youtube = YouTube.shared
     @Environment(\.playerViewModel) private var playerViewModel
     @Environment(AuthService.self) private var authService
     @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
