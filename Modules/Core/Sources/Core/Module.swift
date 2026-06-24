@@ -34,27 +34,21 @@ public final class cisumModule {
     public let navigationState: NavigationState
     private let appRouter: AppRouter
     public let container: ServicesContainer
-    private let coreDomain: CoreInterface
-    private let playbackDomain: PlaybackInterface
-    private let searchDomain: SearchInterface
-    private let libraryDomain: LibraryInterface
-    private let userDomain: UserInterface
-    private let appDomain: AppInterface
 
     public var router: Router {
         appRouter
     }
 
     public var modelContainer: ModelContainer {
-        appDomain.modelContainer
+        container.appServices.modelContainer
     }
 
     public func handleScenePhaseChange(_ phase: ScenePhase) {
         player.handleScenePhaseChange(phase)
 
         if phase != .active {
-            coreDomain.prefetchSettings.flushPendingWrites()
-            playbackDomain.playbackControlSettings.flushPendingWrites()
+            container.coreServices.prefetchSettings.flushPendingWrites()
+            container.playbackServices.playbackControlSettings.flushPendingWrites()
         }
     }
 
@@ -220,8 +214,8 @@ public final class cisumModule {
             .environment(container.userServices)
             .environment(container.providerServices)
             .environment(container.appServices)
-            .environment(container.app.playerPresentationController)
-            .environment(container.app.searchOverlayController)
+            .environment(container.appServices.playerPresentationController)
+            .environment(container.appServices.searchOverlayController)
             .environment(\.playerViewModel, container.playbackServices.playerViewModel)
             .environment(\.searchViewModel, container.searchServices.searchViewModel)
             .environment(\.youtube, container.providerServices.youtube)
@@ -283,44 +277,36 @@ public final class cisumModule {
         let container = AppBootstrap.makeDependenciesOrFallback(youtube: youtube, router: appRouter)
         self.container = container
 
-        // 1. Store Interfaces
-        self.coreDomain = container.core
-        self.playbackDomain = container.playback
-        self.searchDomain = container.search
-        self.libraryDomain = container.library
-        self.userDomain = container.user
-        self.appDomain = container.app
-
-        // 2. Initialize Features
+        // Initialize Features
         self.home = HomeModule(youtube: youtube)
         self.discover = DiscoverModule()
         self.library = LibraryModule()
 
         self.player = PlayerModule(
-            dependencies: PlayerDependencies(viewModel: container.playback.playerViewModel)
+            dependencies: PlayerDependencies(viewModel: container.playbackServices.playerViewModel)
         )
 
         self.profile = ProfileModule(
-            prefetchSettings: container.core.prefetchSettings,
-            networkMonitor: container.core.networkMonitor,
-            playbackControlSettings: container.playback.playbackControlSettings,
-            streamingProviderSettings: container.playback.streamingProviderSettings,
+            prefetchSettings: container.coreServices.prefetchSettings,
+            networkMonitor: container.coreServices.networkMonitor,
+            playbackControlSettings: container.playbackServices.playbackControlSettings,
+            streamingProviderSettings: container.playbackServices.streamingProviderSettings,
             lastFMSettings: container.playbackServices.lastFMSettings
         )
 
         self.search = SearchModule(
             dependencies: SearchDependencies(
-                youtube: container.app.youtube,
-                settings: container.core.prefetchSettings,
-                networkMonitor: container.core.networkMonitor,
-                historyStore: container.search.historyStore,
-                searchCacheHintStore: container.search.searchCacheHintStore,
-                streamingProviderSettings: container.playback.streamingProviderSettings,
-                centralMediaStore: container.library.centralMediaStore,
-                metadataCache: container.library.metadataCache,
-                searchCache: container.search.searchCache,
-                spotifySessionCoordinator: container.user.spotifySessionCoordinator,
-                viewModel: container.search.searchViewModel
+                youtube: container.providerServices.youtube,
+                settings: container.coreServices.prefetchSettings,
+                networkMonitor: container.coreServices.networkMonitor,
+                historyStore: container.searchServices.historyStore,
+                searchCacheHintStore: container.searchServices.searchCacheHintStore,
+                streamingProviderSettings: container.playbackServices.streamingProviderSettings,
+                centralMediaStore: container.libraryServices.centralMediaStore,
+                metadataCache: container.libraryServices.metadataCache,
+                searchCache: container.searchServices.searchCache,
+                spotifySessionCoordinator: container.userServices.spotifySessionCoordinator,
+                viewModel: container.searchServices.searchViewModel
             )
         )
     }

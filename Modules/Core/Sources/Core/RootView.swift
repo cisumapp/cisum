@@ -31,7 +31,7 @@ public struct RootView: View {
     @State private var appOrientation = AppOrientation(UIDevice.current.orientation)
     #else
     private var searchOverlay: SearchOverlayController {
-        container.app.searchOverlayController
+        container.appServices.searchOverlayController
     }
 
     @Environment(\.isDynamicPlayerExpanded) private var isDynamicPlayerExpanded
@@ -44,7 +44,7 @@ public struct RootView: View {
 
     public var body: some View {
         #if os(iOS)
-        @Bindable var presentation = container.app.playerPresentationController
+        @Bindable var presentation = container.appServices.playerPresentationController
         @Bindable var nav = navigationState
 
         iOSTabView(
@@ -147,21 +147,21 @@ public struct RootView: View {
     @ViewBuilder
     private var spotifyBackgroundRefresh: some View {
         #if canImport(SpotifySDK)
-        if let session = container.user.spotifySessionCoordinator.session {
+        if let session = container.userServices.spotifySessionCoordinator.session {
             SpotifySilentRefreshView(session: session)
         }
-        if let fallbackSession = container.user.spotifySessionCoordinator.anonymousFallbackSession {
+        if let fallbackSession = container.userServices.spotifySessionCoordinator.anonymousFallbackSession {
             SpotifySilentRefreshView(session: fallbackSession)
         }
         #endif
     }
 
     private var profileImageURL: URL? {
-        if let clerkUser = container.user.authService.user,
+        if let clerkUser = container.userServices.authService.user,
            let url = URL(string: clerkUser.imageUrl) {
             return url
         }
-        if let avatar = container.user.spotifySessionCoordinator.accountProfile?.avatarImages.first {
+        if let avatar = container.userServices.spotifySessionCoordinator.accountProfile?.avatarImages.first {
             return avatar.url
         }
         return nil
@@ -187,15 +187,15 @@ public struct RootView: View {
     }
 
     private func expandPlayer() {
-        container.app.playerPresentationController.expand()
+        container.appServices.playerPresentationController.expand()
     }
 
     private func collapsePlayer() {
-        container.app.playerPresentationController.collapse()
+        container.appServices.playerPresentationController.collapse()
     }
 
     private func togglePlayerExpansion() {
-        container.app.playerPresentationController.toggle()
+        container.appServices.playerPresentationController.toggle()
     }
 
     private func updateAppOrientation() {
