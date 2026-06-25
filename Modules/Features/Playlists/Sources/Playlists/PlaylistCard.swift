@@ -34,6 +34,7 @@ public struct PlaylistCard: View {
                 PlaylistTrackListView(playlist: playlist)
             }
             .frame(width: 175 * scale, height: 175 * scale)
+            .legibilityBackground(viewModel.backgroundColor)
 
             Spacer()
         }
@@ -71,7 +72,7 @@ private struct PlaylistTrackListView: View {
             LazyVStack(alignment: .leading, spacing: 4) {
                 if tracks.isEmpty {
                     Text("No tracks found")
-                        .foregroundStyle(.secondary)
+                        .legibleForeground(.secondary)
                         .padding()
                 } else {
                     ForEach(tracks, id: \.itemKey) { track in
@@ -181,53 +182,26 @@ private struct PlaylistTrackListView: View {
         let payload: FederatedSearchPayload
         let mediaID: String
 
+        func providerPayload(_ providerID: String, _ id: String) -> FederatedSearchPayload {
+            let rep = MediaRepresentation(providerID: providerID, providerTrackID: id, title: track.title, artist: artistName, durationSeconds: duration, isrc: track.isrc, artworkURL: artworkURL)
+            return .providerSDK(ProviderMediaRef(canonicalID: id, title: track.title, artist: artistName, album: track.albumName, artworkURL: artworkURL, durationSeconds: duration, representations: [rep]))
+        }
+
         if let tidalID = validID(track.tidalID) {
             mediaID = tidalID
-            let rep = TrackRepresentation(providerID: "tidal", providerTrackID: tidalID, title: track.title, artist: artistName, duration: duration, isrc: track.isrc, artworkURL: artworkURL)
-            let sdkTrack = Track(
-                id: CanonicalID(value: tidalID),
-                title: track.title,
-                artists: [Artist(id: ArtistIdentifier(provider: "tidal", value: artistName), name: artistName)],
-                album: Album(id: AlbumIdentifier(provider: "tidal", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "tidal", value: artistName), name: artistName)),
-                isrc: track.isrc.flatMap { try? ISRC($0) },
-                duration: duration ?? 0,
-                representations: [rep]
-            )
-            payload = .providerSDKTrack(sdkTrack)
+            payload = providerPayload("tidal", tidalID)
         } else if let qobuzID = validID(track.qobuzID) {
             mediaID = qobuzID
-            let rep = TrackRepresentation(providerID: "qobuz", providerTrackID: qobuzID, title: track.title, artist: artistName, duration: duration, isrc: track.isrc, artworkURL: artworkURL)
-            let sdkTrack = Track(
-                id: CanonicalID(value: qobuzID),
-                title: track.title,
-                artists: [Artist(id: ArtistIdentifier(provider: "qobuz", value: artistName), name: artistName)],
-                album: Album(id: AlbumIdentifier(provider: "qobuz", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "qobuz", value: artistName), name: artistName)),
-                isrc: track.isrc.flatMap { try? ISRC($0) },
-                duration: duration ?? 0,
-                representations: [rep]
-            )
-            payload = .providerSDKTrack(sdkTrack)
+            payload = providerPayload("qobuz", qobuzID)
         } else if let appleID = validID(track.appleMusicID) {
             mediaID = appleID
-            let rep = TrackRepresentation(providerID: "appleMusic", providerTrackID: appleID, title: track.title, artist: artistName, duration: duration, isrc: track.isrc, artworkURL: artworkURL)
-            let sdkTrack = Track(
-                id: CanonicalID(value: appleID),
-                title: track.title,
-                artists: [Artist(id: ArtistIdentifier(provider: "appleMusic", value: artistName), name: artistName)],
-                album: Album(id: AlbumIdentifier(provider: "appleMusic", value: track.albumName ?? ""), title: track.albumName ?? "", artist: Artist(id: ArtistIdentifier(provider: "appleMusic", value: artistName), name: artistName)),
-                isrc: track.isrc.flatMap { try? ISRC($0) },
-                duration: duration ?? 0,
-                representations: [rep]
-            )
-            payload = .providerSDKTrack(sdkTrack)
+            payload = providerPayload("appleMusic", appleID)
         } else if let ytMusicID = validID(track.youtubeMusicID) {
             mediaID = ytMusicID
-            let ytSong = YouTubeMusicSong(id: ytMusicID, title: track.title, artists: [artistName].filter { !$0.isEmpty }, album: track.albumName, duration: duration.map { TimeInterval($0) }, thumbnailURL: artworkURL, videoId: ytMusicID, isExplicit: false)
-            payload = .youtubeMusic(ytSong)
+            payload = .youtube(YouTubeMediaRef(videoID: ytMusicID, title: track.title, artist: artistName, album: track.albumName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: true))
         } else if let ytID = validID(track.youtubeID) {
             mediaID = ytID
-            let ytVideo = makeSyntheticYouTubeVideo(videoID: ytID, title: track.title, author: artistName, durationSeconds: duration, artworkURL: artworkURL)
-            payload = .youtubeVideo(ytVideo)
+            payload = .youtube(YouTubeMediaRef(videoID: ytID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: false))
         } else if let spotifyID = validID(track.spotifyID) {
             mediaID = spotifyID
             let spotifyTrack = SpotifySearchTrack(id: spotifyID, title: track.title, artistName: artistName, albumName: track.albumName, artworkURL: artworkURL, durationSeconds: duration ?? 0, previewURL: nil, isrc: track.isrc)
@@ -240,8 +214,7 @@ private struct PlaylistTrackListView: View {
         } else {
             let youtubeID = track.sourceTrackID ?? track.itemKey
             mediaID = youtubeID
-            let youtubeVideo = makeSyntheticYouTubeVideo(videoID: youtubeID, title: track.title, author: artistName, durationSeconds: duration, artworkURL: artworkURL)
-            payload = .youtubeVideo(youtubeVideo)
+            payload = .youtube(YouTubeMediaRef(videoID: youtubeID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: false))
         }
 
         return FederatedSearchItem(
@@ -255,23 +228,6 @@ private struct PlaylistTrackListView: View {
             audioQualityLabel: nil,
             audioCodecLabel: nil,
             payload: payload
-        )
-    }
-
-    private func makeSyntheticYouTubeVideo(
-        videoID: String,
-        title: String,
-        author: String,
-        durationSeconds: Double?,
-        artworkURL: URL?
-    ) -> YouTubeVideo {
-        let lengthStr = durationSeconds.map { String(Int($0)) } ?? "0"
-        return YouTubeVideo(
-            id: videoID,
-            title: title,
-            author: author,
-            lengthInSeconds: lengthStr,
-            thumbnailURL: artworkURL?.absoluteString
         )
     }
 }

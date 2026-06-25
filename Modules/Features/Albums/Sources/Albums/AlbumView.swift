@@ -60,6 +60,7 @@ public struct AlbumView: View {
                         }
                     }
                     .background(viewModel.backgroundColor.opacity(0.1))
+                    .legibilityBackground(viewModel.backgroundColor)
                 }
             }
             .ignoresSafeArea(edges: .top)
@@ -98,7 +99,7 @@ public struct AlbumView: View {
                     videoId: ytID,
                     isExplicit: track.isExplicit
                 )
-                payload = .youtubeMusic(ytSong)
+                payload = .youtube(YouTubeMediaRef(song: ytSong))
             } else {
                 return nil
             }
@@ -155,14 +156,16 @@ private struct AlbumTrackRow: View {
                     Text("\(index + 1)")
                         .font(.caption.monospacedDigit())
                         .frame(width: 24, alignment: .leading)
+                        .legibleForeground(.secondary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.title)
                             .lineLimit(1)
+                            .legibleForeground(.primary)
 
                         Text(track.primaryArtistName ?? "")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .legibleForeground(.secondary)
                             .lineLimit(1)
                     }
 
@@ -171,7 +174,7 @@ private struct AlbumTrackRow: View {
                     Group {
                         if track.isExplicit {
                             Image(systemName: "e.square.fill")
-                                .foregroundStyle(.secondary)
+                                .legibleForeground(.secondary)
                         }
 
                         Menu {
@@ -180,6 +183,7 @@ private struct AlbumTrackRow: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
+                                .legibleForeground(.secondary)
                         }
                         .menuStyle(.button)
                         .buttonStyle(.plain)
