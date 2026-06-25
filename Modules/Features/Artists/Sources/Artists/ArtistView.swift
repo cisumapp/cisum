@@ -63,6 +63,7 @@ public struct ArtistView: View {
                     ArtistDiscography(artist: artist)
                 }
             }
+            .legibilityBackground(palette?.background ?? .cisumBg)
         }
         .ignoresSafeArea()
     }
@@ -99,7 +100,7 @@ public struct ArtistView: View {
                     videoId: ytID,
                     isExplicit: track.isExplicit
                 )
-                payload = .youtubeMusic(ytSong)
+                payload = .youtube(YouTubeMediaRef(song: ytSong))
             } else {
                 return nil
             }

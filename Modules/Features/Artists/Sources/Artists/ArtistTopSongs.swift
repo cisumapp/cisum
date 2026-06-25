@@ -5,6 +5,7 @@
 //  Created by Aarav Gupta on 01/05/26.
 //
 
+import Aesthetics
 import Models
 import SwiftData
 import SwiftUI
@@ -34,6 +35,7 @@ struct ArtistTopSongs: View {
                         .font(.system(size: 18))
                 }
                 .bold()
+                .legibleForeground(.primary)
                 .padding(.bottom)
 
                 ForEach(Array(topTracks.enumerated()), id: \.element.songID) { index, track in
