@@ -47,16 +47,17 @@ public struct TrackListItem: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .lineLimit(1)
+                        .legibleForeground(.primary)
 
                     HStack(spacing: 4) {
                         if isExplicit {
                             Image(systemName: "e.square.fill")
-                                .foregroundStyle(Color.secondary)
+                                .legibleForeground(.secondary)
                                 .font(.system(size: 10 * scale))
                         }
 
                         Text(artistName)
-                            .foregroundStyle(Color.secondary)
+                            .legibleForeground(.secondary)
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .lineLimit(1)
@@ -68,13 +69,14 @@ public struct TrackListItem: View {
                 HStack(spacing: 10 * scale) {
                     if !duration.isEmpty {
                         Text(duration)
-                            .foregroundStyle(Color.secondary)
+                            .legibleForeground(.secondary)
                             .font(.caption)
                             .fontWeight(.semibold)
                     }
 
                     Image(systemName: "ellipsis")
                         .font(.title2)
+                        .legibleForeground(.secondary)
                 }
                 .padding(.trailing, 10 * scale)
             }
