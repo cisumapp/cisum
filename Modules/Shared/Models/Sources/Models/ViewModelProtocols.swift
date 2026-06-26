@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 import SwiftUI
-import YouTubeSDK
 
 public enum ArtworkVideoProcessingStatus: Equatable, Sendable {
     case idle
@@ -39,8 +38,7 @@ public protocol PlayerViewModelInterface: AnyObject, Observable {
     func skipToNext()
     func skipToPrevious()
     func seek(to timestamp: Double)
-    func load(song: YouTubeMusicSong, preserveQueue: Bool)
-    func load(video: YouTubeVideo, preserveQueue: Bool)
+    func load(youtube ref: YouTubeMediaRef, preserveQueue: Bool)
     func load(external track: ExternalQueueTrack, preserveQueue: Bool)
     func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int)
 
@@ -65,8 +63,6 @@ public protocol SearchViewModelInterface: AnyObject, Observable {
     func removeRecentSearch(_ query: String)
 
     // Results
-    var musicResults: [YouTubeMusicSong] { get }
-    var videoResults: [YouTubeSearchResult] { get }
     var spotifyTrackResults: [FederatedSearchItem] { get }
     var spotifyArtistResults: [FederatedSearchItem] { get }
     var spotifyPlaylistResults: [FederatedSearchItem] { get }
@@ -80,7 +76,6 @@ public protocol SearchViewModelInterface: AnyObject, Observable {
 
     // Pagination helpers
     var isVideoPaginationLoading: Bool { get }
-    func loadMoreVideosIfNeeded(for item: YouTubeSearchResult)
     func performDebouncedSearch()
 }
 

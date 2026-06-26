@@ -79,7 +79,7 @@ public struct ProfileView: View {
                                 }
                             }
                         } catch {
-                            // Flow may have expired or not been completed yet
+                            PerfLog.error("Profile: Last.fm completeConnection failed: \(error.localizedDescription)")
                         }
                     }
                 }
@@ -240,7 +240,9 @@ public struct ProfileView: View {
                             Button {
                                 Task {
                                     isConnectingApple = true
-                                    _ = await authService.connectAppleAccount()
+                                    if await authService.connectAppleAccount() == false {
+                                        PerfLog.error("Profile: Apple account connect failed")
+                                    }
                                     isConnectingApple = false
                                 }
                             } label: {
@@ -275,7 +277,9 @@ public struct ProfileView: View {
                             Button {
                                 Task {
                                     isConnectingGoogle = true
-                                    _ = await authService.connectGoogleAccount()
+                                    if await authService.connectGoogleAccount() == false {
+                                        PerfLog.error("Profile: Google account connect failed")
+                                    }
                                     isConnectingGoogle = false
                                 }
                             } label: {
@@ -383,13 +387,11 @@ public struct ProfileView: View {
                     }
 
                     #if os(iOS) && canImport(SpotifySDK)
-                    if !spotifyCoordinator.hasSession {
-                        Toggle(
-                            "Use Anonymous Fallback",
-                            isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
-                        )
-                        .font(.subheadline)
-                    }
+                    Toggle(
+                        "Anonymous Spotify Mode",
+                        isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
+                    )
+                    .font(.subheadline)
                     #endif
                 }
 
@@ -570,7 +572,7 @@ public struct ProfileView: View {
                 lastFMSettings.updateConnectionStatus(connected: status.connected, username: status.lastfmUsername)
             }
         } catch {
-            // Unauthenticated or network error
+            PerfLog.warning("Profile: Last.fm status refresh failed (unauthenticated or network): \(error.localizedDescription)")
         }
     }
 }

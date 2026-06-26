@@ -18,6 +18,8 @@ let package = Package(
     dependencies: [
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
+        .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Networking"),
         .package(path: "../Authentication"),
         .package(path: "../../Shared/Caching"),
@@ -29,6 +31,8 @@ let package = Package(
             dependencies: [
                 .product(name: "ProviderSDK", package: "ProviderSDK"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "SpotifySDK", package: "SpotifySDK"),
+                .product(name: "Models", package: "Models"),
                 .product(name: "Networking", package: "Networking"),
                 .product(name: "Authentication", package: "Authentication"),
                 .product(name: "Caching", package: "Caching"),

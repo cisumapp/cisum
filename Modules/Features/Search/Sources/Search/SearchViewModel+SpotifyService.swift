@@ -65,8 +65,8 @@ extension SearchViewModel {
         // identifying the same recording across providers.
         if let sourceISRC, !sourceISRC.isEmpty {
             let candidateISRC: String? = switch candidate.payload {
-            case let .providerSDKTrack(track):
-                track.isrc?.value
+            case let .providerSDK(ref):
+                ref.representations.first?.isrc
             case let .spotify(track):
                 track.isrc
             default:

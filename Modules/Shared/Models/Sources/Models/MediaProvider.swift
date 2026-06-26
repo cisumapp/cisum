@@ -12,6 +12,9 @@ public enum MediaProvider: String, Codable, CaseIterable, Sendable {
     case soundcloud
     case deezer
 
+    // local files (document picker import)
+    case local
+
     // others
     case kuwo
     case kugou

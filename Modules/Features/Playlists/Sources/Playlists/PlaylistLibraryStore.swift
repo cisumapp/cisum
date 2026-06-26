@@ -73,6 +73,7 @@ public actor PlaylistLibraryStore {
         public let deezerID: String?
         public let appleMusicID: String?
         public let resolutionConfidence: Double?
+        public let canonicalSongID: String?
         public let importStatus: PlaylistItemImportStatus
         public let importErrorCode: String?
         public let importErrorMessage: String?
@@ -96,6 +97,7 @@ public actor PlaylistLibraryStore {
             deezerID: String? = nil,
             appleMusicID: String? = nil,
             resolutionConfidence: Double? = nil,
+            canonicalSongID: String? = nil,
             importStatus: PlaylistItemImportStatus = .pending,
             importErrorCode: String? = nil,
             importErrorMessage: String? = nil
@@ -118,6 +120,7 @@ public actor PlaylistLibraryStore {
             self.deezerID = deezerID
             self.appleMusicID = appleMusicID
             self.resolutionConfidence = resolutionConfidence
+            self.canonicalSongID = canonicalSongID
             self.importStatus = importStatus
             self.importErrorCode = importErrorCode
             self.importErrorMessage = importErrorMessage
@@ -264,6 +267,7 @@ public actor PlaylistLibraryStore {
                     deezerID: snapshot.deezerID,
                     appleMusicID: snapshot.appleMusicID,
                     resolutionConfidence: snapshot.resolutionConfidence,
+                    canonicalSongID: snapshot.canonicalSongID,
                     importStatus: snapshot.importStatus,
                     importErrorCode: snapshot.importErrorCode,
                     importErrorMessage: snapshot.importErrorMessage,

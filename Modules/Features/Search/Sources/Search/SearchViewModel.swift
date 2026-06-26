@@ -367,23 +367,13 @@ public class SearchViewModel: SearchViewModelInterface {
 
     public func resolveExternalStream(for item: FederatedSearchItem, spotifyItem: FederatedSearchItem?) async throws -> ExternalStreamPayload? {
         switch item.payload {
-        case let .youtubeVideo(video):
+        case let .youtube(ref):
             try await resolveYouTubeExternalStream(
-                for: video.id,
-                title: video.title,
-                artist: video.author,
-                artworkURL: video.thumbnailURL.flatMap { URL(string: $0) },
-                service: .youtube,
-                spotifyItem: spotifyItem
-            )
-
-        case let .youtubeMusic(song):
-            try await resolveYouTubeExternalStream(
-                for: song.videoId,
-                title: song.title,
-                artist: song.artists.first ?? "Unknown",
-                artworkURL: song.thumbnailURL,
-                service: .youtubeMusic,
+                for: ref.videoID,
+                title: ref.title,
+                artist: ref.artist,
+                artworkURL: ref.artworkURL,
+                service: ref.isMusic ? .youtubeMusic : .youtube,
                 spotifyItem: spotifyItem
             )
 
@@ -393,8 +383,8 @@ public class SearchViewModel: SearchViewModelInterface {
         case .spotifyArtist, .spotifyPlaylist:
             nil
 
-        case let .providerSDKTrack(track):
-            try await resolveProviderSDKExternalStream(for: track, fallbackSpotifyItem: spotifyItem)
+        case let .providerSDK(ref):
+            try await resolveProviderSDKExternalStream(for: ref, fallbackSpotifyItem: spotifyItem)
         }
     }
 
@@ -843,12 +833,12 @@ public class SearchViewModel: SearchViewModelInterface {
 
         let youtubeItems = candidates.filter { $0.service == .youtube }
         for (index, item) in youtubeItems.enumerated() {
-            guard case let .youtubeVideo(video) = item.payload else { continue }
+            guard case let .youtube(ref) = item.payload, !ref.isMusic else { continue }
 
-            let artist = normalizedRankingText(normalizedMusicDisplayArtist(video.author, title: video.title))
+            let artist = normalizedRankingText(normalizedMusicDisplayArtist(ref.artist, title: ref.title))
             guard !artist.isEmpty else { continue }
 
-            let viewCount = parseYouTubeViewCount(video.viewCount)
+            let viewCount = parseYouTubeViewCount(ref.viewCount ?? "")
             let positionWeight = max(0.30, 1.0 - (Double(index) * 0.16))
             let viewWeight = log10(max(10.0, viewCount + 10.0))
             let totalWeight = positionWeight + (viewWeight * 0.22)
@@ -1213,7 +1203,7 @@ public class SearchViewModel: SearchViewModelInterface {
                     isExplicit: song.isExplicit,
                     audioQualityLabel: nil,
                     audioCodecLabel: nil,
-                    payload: .youtubeMusic(song)
+                    payload: .youtube(YouTubeMediaRef(videoID: song.videoId, title: song.title, artist: song.artistsDisplay, album: song.album, artworkURL: song.thumbnailURL, durationSeconds: song.duration, isExplicit: song.isExplicit, isMusic: true))
                 )
             }
 
@@ -1260,7 +1250,7 @@ public class SearchViewModel: SearchViewModelInterface {
                     isExplicit: false,
                     audioQualityLabel: nil,
                     audioCodecLabel: nil,
-                    payload: .youtubeVideo(video)
+                    payload: .youtube(YouTubeMediaRef(videoID: video.id, title: video.title, artist: video.author, artworkURL: normalizedArtworkURL(from: video.thumbnailURL), durationSeconds: self.parseVideoDurationSeconds(video.lengthInSeconds), isExplicit: false, isMusic: false, viewCount: video.viewCount))
                 )
             }
 
@@ -1311,7 +1301,7 @@ public class SearchViewModel: SearchViewModelInterface {
                         isExplicit: false,
                         audioQualityLabel: nil,
                         audioCodecLabel: nil,
-                        payload: .youtubeVideo(video)
+                        payload: .youtube(YouTubeMediaRef(videoID: video.id, title: video.title, artist: video.author, artworkURL: normalizedArtworkURL(from: video.thumbnailURL), durationSeconds: self.parseVideoDurationSeconds(video.lengthInSeconds), isExplicit: false, isMusic: false, viewCount: video.viewCount))
                     )
                 }
 
@@ -1375,7 +1365,28 @@ public class SearchViewModel: SearchViewModelInterface {
                 isExplicit: track.isExplicit,
                 audioQualityLabel: qualityLabel,
                 audioCodecLabel: codecLabel,
-                payload: .providerSDKTrack(track)
+                payload: .providerSDK(
+                    ProviderMediaRef(
+                        canonicalID: track.id.value,
+                        title: track.title,
+                        artist: artistName,
+                        album: albumTitle,
+                        artworkURL: artworkURL,
+                        durationSeconds: track.duration,
+                        representations: track.representations.map { rep in
+                            MediaRepresentation(
+                                providerID: rep.providerID,
+                                providerTrackID: rep.providerTrackID,
+                                title: rep.title,
+                                artist: rep.artist,
+                                album: rep.album,
+                                durationSeconds: rep.duration,
+                                isrc: rep.isrc,
+                                artworkURL: rep.artworkURL
+                            )
+                        }
+                    )
+                )
             )
         }
 
@@ -1416,38 +1427,37 @@ public class SearchViewModel: SearchViewModelInterface {
     /// Resolves a ProviderSDK `Track` directly to a playable `ExternalStreamPayload`
     /// without going through the YouTube fallback chain.
     private func resolveProviderSDKExternalStream(
-        for track: Track,
+        for ref: ProviderMediaRef,
         fallbackSpotifyItem _: FederatedSearchItem?
     ) async throws -> ExternalStreamPayload? {
-        let title = track.title
-        let artist = track.artists.first?.name ?? "Unknown"
-        // Prefer album cover art; fall back to the first representation that has artwork.
-        let artworkURL = track.album.coverArtURL
-            ?? track.representations.compactMap(\.artworkURL).first
+        let title = ref.title
+        let artist = ref.artist
+        // Prefer the ref artwork; fall back to the first representation that has artwork.
+        let artworkURL = ref.artworkURL
+            ?? ref.representations.compactMap(\.artworkURL).first
 
         // Use ProviderSDKStreamResolver directly — it handles ISRC-first lookup,
         // federated search fallback, and AudioStream → PlaybackCandidate mapping.
         let resolver = await PlaybackURLResolver.sharedInstance()
-        let representations = track.representations.map { rep in
+        let representations = ref.representations.map { rep in
             TrackRepresentation(
                 providerID: rep.providerID,
                 providerTrackID: rep.providerTrackID,
                 title: rep.title,
                 artist: rep.artist,
-                duration: rep.duration,
+                duration: rep.durationSeconds,
                 isrc: rep.isrc,
-                artworkURL: rep.artworkURL,
-                audioQuality: rep.audioQuality
+                artworkURL: rep.artworkURL
             )
         }
 
         let candidates = try await resolver.resolve(
-            mediaID: track.id.value,
+            mediaID: ref.canonicalID,
             title: title,
             artist: artist,
             representations: representations,
             forceDecipher: false,
-            duration: track.duration
+            duration: ref.durationSeconds
         )
 
         guard let best = candidates.first, let url = Optional(best.url) else {
@@ -1467,7 +1477,7 @@ public class SearchViewModel: SearchViewModelInterface {
         }
 
         return ExternalStreamPayload(
-            mediaID: track.id.value,
+            mediaID: ref.canonicalID,
             streamURL: url,
             title: title,
             artist: artist,
@@ -1619,19 +1629,14 @@ public class SearchViewModel: SearchViewModelInterface {
             await coordinator.restoreSessionIfNeeded()
         }
 
-        if streamingProviderSettings.spotifyPreferAnonymousFallback {
-            if let fallbackSdk = coordinator.anonymousFallbackSdk {
-                return fallbackSdk
-            }
-            // This is a stateless fallback client for public search if the coordinator doesn't have one ready
-            return SpotifySDK(mode: .anonymous)
+        // Spotify is used here purely as a catalog/metadata source, so always use an anonymous
+        // token — search works whether or not the user is signed in, and it never burns the
+        // account token. The coordinator keeps a managed anonymous SDK ready; otherwise spin up a
+        // stateless one (its anonymous token refreshes headlessly with no account needed).
+        if let anonymousSdk = coordinator.anonymousFallbackSdk {
+            return anonymousSdk
         }
-
-        if let sdk = coordinator.sdk {
-            return sdk
-        }
-
-        throw FederatedSearchError.spotifyCredentialsMissing
+        return SpotifySDK(mode: .anonymous)
     }
 
     /// Fetches Spotify search suggestions; returns [] silently on any failure.

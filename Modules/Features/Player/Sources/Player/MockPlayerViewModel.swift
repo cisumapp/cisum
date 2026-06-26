@@ -2,7 +2,6 @@ import Foundation
 import Models
 import Observation
 import SwiftUI
-import YouTubeSDK
 
 #if DEBUG
 @MainActor
@@ -30,8 +29,7 @@ public final class MockPlayerViewModel: PlayerViewModelInterface {
     public func skipToNext() {}
     public func skipToPrevious() {}
     public func seek(to _: Double) {}
-    public func load(song _: YouTubeMusicSong, preserveQueue _: Bool) {}
-    public func load(video _: YouTubeVideo, preserveQueue _: Bool) {}
+    public func load(youtube _: YouTubeMediaRef, preserveQueue _: Bool) {}
     public func load(external _: ExternalQueueTrack, preserveQueue _: Bool) {}
     public func setQueue(_: [ExternalQueueTrack], startIndex _: Int) {}
 

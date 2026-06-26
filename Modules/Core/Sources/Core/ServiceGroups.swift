@@ -104,19 +104,25 @@ public final class LibraryServices {
     public let centralMediaStore: CentralMediaStore
     public let mediaCacheStore: MediaCacheStore
     public let metadataCache: any VideoMetadataCaching
+    public let importDownloadManager: ImportDownloadManager
+    public let importProgressFacade: ImportProgressFacade
 
     public init(
         playlistLibraryStore: PlaylistLibraryStore,
         playlistImportJobStore: PlaylistImportJobStore,
         centralMediaStore: CentralMediaStore,
         mediaCacheStore: MediaCacheStore,
-        metadataCache: any VideoMetadataCaching
+        metadataCache: any VideoMetadataCaching,
+        importDownloadManager: ImportDownloadManager,
+        importProgressFacade: ImportProgressFacade
     ) {
         self.playlistLibraryStore = playlistLibraryStore
         self.playlistImportJobStore = playlistImportJobStore
         self.centralMediaStore = centralMediaStore
         self.mediaCacheStore = mediaCacheStore
         self.metadataCache = metadataCache
+        self.importDownloadManager = importDownloadManager
+        self.importProgressFacade = importProgressFacade
     }
 }
 

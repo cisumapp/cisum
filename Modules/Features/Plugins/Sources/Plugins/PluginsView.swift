@@ -4,6 +4,10 @@ import SwiftUI
 import Utilities
 import YouTubeSDK
 
+#if canImport(SpotifySDK)
+import SpotifySDK
+#endif
+
 public struct PluginsView: View {
     public init() {}
 
@@ -46,9 +50,23 @@ public struct PluginsView: View {
                 }
 
                 Toggle(
-                    "Prefer Anonymous Spotify Fallback",
+                    "Anonymous Spotify Mode",
                     isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
                 )
+
+                Text(
+                    "Search always uses anonymous Spotify for the best metadata — signed in or not. When ON, the app quietly stays anonymous if your login expires; when OFF, it keeps you signed in and offers to reconnect."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                #if canImport(SpotifySDK)
+                if SpotifySessionCoordinator.shared.needsReconnect {
+                    Button("Reconnect Spotify") {
+                        SpotifySessionCoordinator.shared.beginSession(mode: .authenticated)
+                    }
+                }
+                #endif
 
                 LabeledContent("Spotify Mode", value: streamingProviderSettings.spotifyModeLabel)
                 LabeledContent(

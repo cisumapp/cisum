@@ -12,6 +12,10 @@ import SwiftUI
 import UIKit
 import Utilities
 
+/// Shared CIContext for blur-gradient generation. Creating a CIContext per call costs ~10–50 ms;
+/// reuse a single instance across all variable-blur views.
+private let blurGradientCIContext = CIContext()
+
 public enum VariableBlurDirection {
     case blurredTopClearBottom
     case blurredBottomClearTop
@@ -101,7 +105,7 @@ open class VariableBlurUIView: UIVisualEffectView {
             ciGradientFilter.point0.y = 0
             ciGradientFilter.point1.y = height - ciGradientFilter.point1.y
         }
-        return CIContext().createCGImage(ciGradientFilter.outputImage!, from: CGRect(x: 0, y: 0, width: width, height: height))!
+        return blurGradientCIContext.createCGImage(ciGradientFilter.outputImage!, from: CGRect(x: 0, y: 0, width: width, height: height))!
     }
 }
 #endif

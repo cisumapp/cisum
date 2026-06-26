@@ -23,13 +23,48 @@ import SwiftData
 import Utilities
 import YouTubeSDK
 
+#if os(iOS)
+import BackgroundTasks
+#endif
+
 private let lifecycleSP = CisumSignpost.lifecycle
 
 @MainActor
 enum AppBootstrap {
+    static let spotifyRefreshTaskID = "studio.cisum.spotify.refresh"
+
+    /// Register the Spotify background-refresh task. Must be called during app launch (before
+    /// launch completes). Best-effort: iOS schedules opportunistically — the real freshness
+    /// guarantees are the on-demand + foreground/hourly headless refreshes.
+    static func registerSpotifyBackgroundRefresh() {
+        #if os(iOS)
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: spotifyRefreshTaskID, using: nil) { task in
+            let work = Task { @MainActor in
+                await SpotifySessionCoordinator.shared.refreshActiveSessions()
+            }
+            task.expirationHandler = { work.cancel() }
+            Task {
+                _ = await work.value
+                scheduleSpotifyBackgroundRefresh()
+                task.setTaskCompleted(success: true)
+            }
+        }
+        scheduleSpotifyBackgroundRefresh()
+        #endif
+    }
+
+    static func scheduleSpotifyBackgroundRefresh() {
+        #if os(iOS)
+        let request = BGAppRefreshTaskRequest(identifier: spotifyRefreshTaskID)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60) // ~30 min
+        try? BGTaskScheduler.shared.submit(request)
+        #endif
+    }
+
     static func makeDependenciesOrFallback(youtube: YouTube, router: Router) -> ServicesContainer {
         let spid = lifecycleSP.begin("app-bootstrap")
         PerfLog.info("Bootstrap started")
+        registerSpotifyBackgroundRefresh()
         // FORCE IN-MEMORY FOR DIAGNOSTICS
         // return makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: NSError(domain: "ManualBypass", code: 0))
 
@@ -237,12 +272,28 @@ enum AppBootstrap {
             searchViewModel: searchViewModel
         )
 
+        let importProgressFacade = ImportProgressFacade()
+        let importServices = ImportServicesFactory.make(
+            youtube: youtube,
+            spotifyCoordinator: spotifySessionCoordinator
+        )
+        let importDownloadManager = ImportDownloadManager(
+            jobStore: playlistImportJobStore,
+            centralMediaStore: centralMediaStore,
+            playlistLibraryStore: playlistLibraryStore,
+            services: importServices,
+            progress: importProgressFacade
+        )
+        Task { await importDownloadManager.resumePendingJobs() }
+
         let libraryServices = LibraryServices(
             playlistLibraryStore: playlistLibraryStore,
             playlistImportJobStore: playlistImportJobStore,
             centralMediaStore: centralMediaStore,
             mediaCacheStore: mediaCacheStore,
-            metadataCache: metadataCache
+            metadataCache: metadataCache,
+            importDownloadManager: importDownloadManager,
+            importProgressFacade: importProgressFacade
         )
 
         let userServices = UserServices(

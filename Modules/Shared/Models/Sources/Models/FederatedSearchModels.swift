@@ -1,10 +1,4 @@
 import Foundation
-import ProviderSDK
-import YouTubeSDK
-
-#if canImport(SpotifySDK)
-import SpotifySDK
-#endif
 
 public enum FederatedService: String, Sendable, Codable {
     case spotify
@@ -97,13 +91,13 @@ public struct SpotifySearchPlaylist: Identifiable, Sendable {
 }
 
 public enum FederatedSearchPayload: Sendable {
-    case youtubeVideo(YouTubeVideo)
-    case youtubeMusic(YouTubeMusicSong)
+    /// A YouTube Music song or plain YouTube video (`ref.isMusic` distinguishes).
+    case youtube(YouTubeMediaRef)
     case spotify(SpotifySearchTrack)
     case spotifyArtist(SpotifySearchArtist)
     case spotifyPlaylist(SpotifySearchPlaylist)
     /// A track resolved from one of the ProviderSDK providers (SoundCloud, Tidal, Qobuz, Deezer, etc.).
-    case providerSDKTrack(Track)
+    case providerSDK(ProviderMediaRef)
 }
 
 public struct FederatedSearchItem: Identifiable, Sendable {
@@ -153,13 +147,11 @@ public struct FederatedSearchItem: Identifiable, Sendable {
 
     public var service: FederatedService {
         switch payload {
-        case .youtubeVideo:
-            .youtube
-        case .youtubeMusic:
-            .youtubeMusic
+        case let .youtube(ref):
+            ref.isMusic ? .youtubeMusic : .youtube
         case .spotify, .spotifyArtist, .spotifyPlaylist:
             .spotify
-        case .providerSDKTrack:
+        case .providerSDK:
             .providerSDK
         }
     }

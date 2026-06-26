@@ -35,6 +35,10 @@ public final class PlaylistImportTrackEntry {
     public var deezerID: String?
     public var appleMusicID: String?
 
+    /// Canonical Song.songID chosen for this track (mirror of the item's link, kept on the
+    /// job ledger so a relaunched job knows what it already reconciled). Nil = unresolved.
+    public var canonicalSongID: String?
+
     public var confidenceScore: Double?
     public var needsReview: Bool
 
@@ -62,6 +66,7 @@ public final class PlaylistImportTrackEntry {
         soundcloudID: String? = nil,
         deezerID: String? = nil,
         appleMusicID: String? = nil,
+        canonicalSongID: String? = nil,
         confidenceScore: Double? = nil,
         needsReview: Bool = false,
         errorCode: String? = nil,
@@ -87,6 +92,7 @@ public final class PlaylistImportTrackEntry {
         self.soundcloudID = soundcloudID
         self.deezerID = deezerID
         self.appleMusicID = appleMusicID
+        self.canonicalSongID = canonicalSongID
         self.confidenceScore = confidenceScore
         self.needsReview = needsReview
         self.errorCode = errorCode

@@ -517,8 +517,7 @@ struct NowPlayingQueueView: View {
         if let playerViewModel = interfaceViewModel as? PlayerViewModel {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 8) {
-                    ForEach(playerViewModel.queuePreviewItems, id: \.id) { item in
-                        let index = playerViewModel.queuePreviewItems.firstIndex(where: { $0.id == item.id }) ?? 0
+                    ForEach(Array(playerViewModel.queuePreviewItems.enumerated()), id: \.element.id) { index, item in
                         Button {
                             playerViewModel.playQueueEntry(at: index)
                         } label: {

@@ -253,7 +253,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                         ) {
                             return (best.videoId, best.title, best.artist, best.score, best.duration, "Music-Search")
                         }
-                    } catch {}
+                    } catch { PerfLog.warning("Stream resolve: Music-Search candidate failed: \(error.localizedDescription)") }
                     return nil
                 }
                 group.addTask {
@@ -270,7 +270,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                         ) {
                             return (best.videoId, best.title, best.artist, best.score, best.duration, "YT-Search")
                         }
-                    } catch {}
+                    } catch { PerfLog.warning("Stream resolve: YT-Search candidate failed: \(error.localizedDescription)") }
                     return nil
                 }
                 var collected: [(videoId: String, title: String, artist: String, score: Double, duration: TimeInterval?, source: String)?] = []
@@ -320,7 +320,7 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
                                 PerfLog.info(" Resolved '\(candidate.title)' from \(candidate.source) (\(candidate.videoId))")
                                 return candidates
                             }
-                        } catch {}
+                        } catch { PerfLog.warning("Stream resolve: candidate playback resolution failed for '\(candidate.title)': \(error.localizedDescription)") }
                         return nil
                     }
                 }
