@@ -15,20 +15,17 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Utilities"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
-        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
     ],
     targets: [
         .target(
             name: "Models",
             dependencies: [
                 .product(name: "Utilities", package: "Utilities"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-                .product(name: "ProviderSDK", package: "ProviderSDK"),
-                .product(name: "SpotifySDK", package: "SpotifySDK", condition: .when(platforms: [.iOS, .macOS])),
-                .product(name: "SpotifyOAuth", package: "SpotifySDK", condition: .when(platforms: [.iOS, .macOS]))
             ]
+        ),
+        .testTarget(
+            name: "ModelsTests",
+            dependencies: ["Models"]
         ),
     ],
     swiftLanguageModes: [.v6]

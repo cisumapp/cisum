@@ -10,6 +10,7 @@ import Utilities
 import Foundation
 import Models
 import Observation
+import Player
 import YouTubeSDK
 
 private final class HomeFeedCache: Codable, Sendable {
@@ -195,6 +196,7 @@ final class HomeViewModel {
         case let .success(musicSections):
             mergedItems.append(contentsOf: mapMusicSections(musicSections))
         case let .failure(error):
+            PerfLog.error("Home: music sections load failed: \(error.localizedDescription)")
             latestError = error
         }
 
@@ -203,16 +205,23 @@ final class HomeViewModel {
             continuationToken = homeContinuation.continuationToken
             mergedItems.append(contentsOf: mapMainItems(homeContinuation.items))
         case let .failure(error):
+            PerfLog.error("Home: main feed load failed: \(error.localizedDescription)")
             continuationToken = nil
             latestError = latestError ?? error
         }
 
-        if case let .success(songs) = await topSongsResult {
+        switch await topSongsResult {
+        case let .success(songs):
             topSongs = songs.map(\.asHomeFeedItem)
+        case let .failure(error):
+            PerfLog.warning("Home: top songs chart failed: \(error.localizedDescription)")
         }
 
-        if case let .success(trends) = await trendingResult {
+        switch await trendingResult {
+        case let .success(trends):
             trending = trends.map(\.asHomeFeedItem)
+        case let .failure(error):
+            PerfLog.warning("Home: trending chart failed: \(error.localizedDescription)")
         }
 
         let hasItems = mergeItems(mergedItems, replacing: true)
@@ -311,6 +320,7 @@ final class HomeViewModel {
                 timestamp: Date()
             ).save()
         } catch {
+            PerfLog.warning("Home: load more failed: \(error.localizedDescription)")
             continuationToken = nil
             if items.isEmpty {
                 errorMessage = error.localizedDescription

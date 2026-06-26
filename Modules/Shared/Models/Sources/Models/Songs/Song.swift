@@ -24,6 +24,14 @@ public final class Song {
 
     public var providerFingerprint: String
 
+    /// Canonical ISRC. Nil when no provider supplied one (YouTube videos, untagged local files).
+    /// NOT a unique attribute — ISRCs collide across masters/compilations; uniqueness is enforced
+    /// logically by the reconciler, not the store. `songID` remains the unique key.
+    public var isrc: String?
+
+    /// Raw value of the provider whose metadata is the authoritative base for this canonical Song.
+    public var metadataBaseProviderRawValue: String?
+
     public var spotifyTrackID: String?
     public var spotifyTrackURI: String?
     public var spotifyPreviewURLString: String?
@@ -62,6 +70,8 @@ public final class Song {
         artworkURLString: String? = nil,
         isExplicit: Bool = false,
         providerFingerprint: String,
+        isrc: String? = nil,
+        metadataBaseProviderRawValue: String? = nil,
         spotifyTrackID: String? = nil,
         spotifyTrackURI: String? = nil,
         spotifyPreviewURLString: String? = nil,
@@ -89,6 +99,8 @@ public final class Song {
         self.artworkURLString = artworkURLString
         self.isExplicit = isExplicit
         self.providerFingerprint = providerFingerprint
+        self.isrc = isrc
+        self.metadataBaseProviderRawValue = metadataBaseProviderRawValue
         self.spotifyTrackID = spotifyTrackID
         self.spotifyTrackURI = spotifyTrackURI
         self.spotifyPreviewURLString = spotifyPreviewURLString
@@ -113,6 +125,17 @@ public final class Song {
         }
         set {
             preferredFallbackProviderRawValue = newValue?.rawValue
+        }
+    }
+
+    /// Provider whose metadata is the authoritative base for this canonical Song.
+    public var metadataBaseProvider: MediaProvider? {
+        get {
+            guard let rawValue = metadataBaseProviderRawValue else { return nil }
+            return MediaProvider(rawValue: rawValue)
+        }
+        set {
+            metadataBaseProviderRawValue = newValue?.rawValue
         }
     }
 }

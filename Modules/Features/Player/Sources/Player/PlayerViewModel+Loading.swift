@@ -33,6 +33,38 @@ public extension PlayerViewModel {
         }
     }
 
+    /// Neutral entry point: reconstructs the YouTube object from a provider-agnostic ref and
+    /// routes to the existing music/video loaders so all radio/queue behavior is preserved.
+    func load(youtube ref: YouTubeMediaRef, preserveQueue: Bool = false) {
+        if ref.isMusic {
+            load(
+                song: YouTubeMusicSong(
+                    id: ref.videoID,
+                    title: ref.title,
+                    artists: [ref.artist],
+                    album: ref.album,
+                    duration: ref.durationSeconds,
+                    thumbnailURL: ref.artworkURL,
+                    videoId: ref.videoID,
+                    isExplicit: ref.isExplicit
+                ),
+                preserveQueue: preserveQueue
+            )
+        } else {
+            load(
+                video: YouTubeVideo(
+                    id: ref.videoID,
+                    title: ref.title,
+                    viewCount: ref.viewCount ?? "",
+                    author: ref.artist,
+                    lengthInSeconds: ref.durationSeconds.map { String(Int($0)) } ?? "",
+                    thumbnailURL: ref.artworkURL?.absoluteString
+                ),
+                preserveQueue: preserveQueue
+            )
+        }
+    }
+
     func load(song: YouTubeMusicSong, preserveQueue: Bool = false) {
         // Patch 3: Skip if we are already actively loading this exact track.
         if song.videoId == loadingMediaID, isLoading { return }

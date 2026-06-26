@@ -116,6 +116,7 @@ public struct DiscoverView: View {
                 )
             }
         } catch {
+            PerfLog.error("Discover: chart section load failed: \(error.localizedDescription)")
             lastError = error
         }
 
@@ -130,6 +131,7 @@ public struct DiscoverView: View {
                 )
             }
         } catch {
+            PerfLog.error("Discover: chart section load failed: \(error.localizedDescription)")
             lastError = error
         }
 
@@ -144,6 +146,7 @@ public struct DiscoverView: View {
                 )
             }
         } catch {
+            PerfLog.error("Discover: chart section load failed: \(error.localizedDescription)")
             lastError = error
         }
 
@@ -158,6 +161,7 @@ public struct DiscoverView: View {
                 )
             }
         } catch {
+            PerfLog.error("Discover: chart section load failed: \(error.localizedDescription)")
             lastError = error
         }
 
@@ -267,7 +271,7 @@ private struct DiscoverChartRow: View {
                 videoId: item.id,
                 isExplicit: false
             )
-            playerViewModel.load(song: song, preserveQueue: false)
+            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
             playerPresentationController.expand()
         } else if item.type == .artist {
             router.navigate(to: .artist(id: item.id))

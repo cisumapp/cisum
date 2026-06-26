@@ -20,6 +20,10 @@
 		<string>fetch</string>
 		<string>audio</string>
 	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>studio.cisum.spotify.refresh</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>This app requires camera access to capture media.</string>
 </dict>

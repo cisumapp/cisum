@@ -37,6 +37,9 @@ public final class PlaylistItem {
 
     public var resolutionConfidence: Double?
 
+    /// Canonical Song.songID this item reconciled into. Nil until the importer resolves it.
+    public var canonicalSongID: String?
+
     public var importStatusRawValue: String
     public var importErrorCode: String?
     public var importErrorMessage: String?
@@ -67,6 +70,7 @@ public final class PlaylistItem {
         deezerID: String? = nil,
         appleMusicID: String? = nil,
         resolutionConfidence: Double? = nil,
+        canonicalSongID: String? = nil,
         importStatus: PlaylistItemImportStatus = .pending,
         importErrorCode: String? = nil,
         importErrorMessage: String? = nil,
@@ -93,6 +97,7 @@ public final class PlaylistItem {
         self.deezerID = deezerID
         self.appleMusicID = appleMusicID
         self.resolutionConfidence = resolutionConfidence
+        self.canonicalSongID = canonicalSongID
         self.importStatusRawValue = importStatus.rawValue
         self.importErrorCode = importErrorCode
         self.importErrorMessage = importErrorMessage

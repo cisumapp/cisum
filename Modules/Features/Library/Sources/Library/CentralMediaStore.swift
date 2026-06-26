@@ -342,6 +342,150 @@ public actor CentralMediaStore {
 
         return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }
+
+    // MARK: - Canonical reconciliation (ISRC-first, library-wide dedup)
+
+    /// Find-or-create the canonical `Song` for a neutral incoming track and merge its metadata.
+    /// Returns the canonical `Song.songID`. ISRC is the strong key; provider IDs and fuzzy
+    /// title/artist/duration matching are the fallbacks. See `CanonicalSongReconciler` for scoring.
+    @discardableResult
+    public func reconcile(_ incoming: IncomingTrack) -> String {
+        let song = findCanonicalSong(for: incoming)
+        merge(incoming, into: song)
+        saveContext()
+        return song.songID
+    }
+
+    /// Batch reconcile — used by the Download Manager per playlist page.
+    @discardableResult
+    public func reconcile(_ incoming: [IncomingTrack]) -> [String] {
+        PerfLog.measure("reconcile-batch(\(incoming.count))") {
+            incoming.map { reconcile($0) }
+        }
+    }
+
+    private func findCanonicalSong(for t: IncomingTrack) -> Song {
+        // 1. ISRC fast path — the canonical key.
+        if let isrc = t.isrc, !isrc.isEmpty,
+           let match = fetchFirstSong(predicate: #Predicate { $0.isrc == isrc })
+        {
+            PerfLog.debug("reconcile matched-by-isrc songID=\(match.songID) isrc=\(isrc)")
+            return match
+        }
+
+        // 2. Provider-ID exact path.
+        if let match = existingSongByProviderID(t) {
+            PerfLog.debug("reconcile matched-by-providerID songID=\(match.songID) provider=\(t.provider.rawValue)")
+            return match
+        }
+
+        // 3. Fuzzy fallback (missing ISRC / new track).
+        if let match = fuzzyMatch(t) {
+            return match
+        }
+
+        // 4. Create.
+        let normalizedTitle = normalizedRankingText(t.title)
+        let normalizedArtist = normalizedRankingText(t.artistName ?? "")
+        let song = Song(
+            title: t.title,
+            normalizedTitle: normalizedTitle,
+            providerFingerprint: makeProviderFingerprint(title: normalizedTitle, artist: normalizedArtist)
+        )
+        modelContext.insert(song)
+        PerfLog.debug("reconcile created songID=\(song.songID) title=\(t.title)")
+        return song
+    }
+
+    private func existingSongByProviderID(_ t: IncomingTrack) -> Song? {
+        let id = t.providerTrackID
+        guard !id.isEmpty else { return nil }
+        switch t.provider {
+        case .spotify:      return fetchFirstSong(predicate: #Predicate { $0.spotifyTrackID == id })
+        case .youtube:      return fetchFirstSong(predicate: #Predicate { $0.youtubeVideoID == id })
+        case .youtubeMusic: return fetchFirstSong(predicate: #Predicate { $0.youtubeMusicVideoID == id })
+        case .appleMusic:   return fetchFirstSong(predicate: #Predicate { $0.appleMusicSongID == id })
+        case .tidal:        return fetchFirstSong(predicate: #Predicate { $0.tidalID == id })
+        case .qobuz:        return fetchFirstSong(predicate: #Predicate { $0.qobuzID == id })
+        case .soundcloud:   return fetchFirstSong(predicate: #Predicate { $0.soundcloudID == id })
+        case .deezer:       return fetchFirstSong(predicate: #Predicate { $0.deezerID == id })
+        default:            return nil
+        }
+    }
+
+    private func fuzzyMatch(_ t: IncomingTrack) -> Song? {
+        // Bound the candidate pool by exact artist; score each with the pure reconciler.
+        guard let artist = t.artistName, !artist.isEmpty else { return nil }
+        var descriptor = FetchDescriptor<Song>(predicate: #Predicate { $0.primaryArtistName == artist })
+        descriptor.fetchLimit = 50
+        let pool = (try? modelContext.fetch(descriptor)) ?? []
+
+        var best: (song: Song, score: Double)?
+        for candidate in pool {
+            let key = SongMatchKey(
+                songID: candidate.songID,
+                normalizedTitle: CanonicalSongReconciler.normalize(candidate.title),
+                artistName: candidate.primaryArtistName,
+                durationSeconds: candidate.durationSeconds,
+                albumName: candidate.albumTitle
+            )
+            let score = CanonicalSongReconciler.score(t, against: key)
+            if score >= CanonicalSongReconciler.confidentThreshold, score > (best?.score ?? 0) {
+                best = (candidate, score)
+            }
+        }
+
+        if let best {
+            PerfLog.debug("reconcile matched-fuzzy songID=\(best.song.songID) score=\(best.score)")
+            return best.song
+        }
+        return nil
+    }
+
+    private func merge(_ t: IncomingTrack, into song: Song) {
+        // Union provider IDs + URIs + ISRC (never overwrite a known value with nil).
+        unionProviderID(t, on: song)
+        if let uri = t.spotifyTrackURI, song.spotifyTrackURI == nil { song.spotifyTrackURI = uri }
+        if let preview = t.spotifyPreviewURLString, song.spotifyPreviewURLString == nil {
+            song.spotifyPreviewURLString = preview
+        }
+        if song.isrc == nil, let isrc = t.isrc, !isrc.isEmpty { song.isrc = isrc }
+
+        // Scalar metadata: overwrite when the incoming provider is the new base, else gap-fill.
+        let newBase = CanonicalSongReconciler.mergedBaseProvider(current: song.metadataBaseProvider, incoming: t.provider)
+        if newBase == t.provider {
+            song.title = t.title
+            song.normalizedTitle = normalizedRankingText(t.title)
+            if let a = t.artistName { song.primaryArtistName = a }
+            if let al = t.albumName { song.albumTitle = al }
+            if let d = t.durationSeconds { song.durationSeconds = d }
+            if let art = t.artworkURLString { song.artworkURLString = art }
+            song.isExplicit = t.isExplicit
+        } else {
+            if song.primaryArtistName == nil, let a = t.artistName { song.primaryArtistName = a }
+            if song.albumTitle == nil, let al = t.albumName { song.albumTitle = al }
+            if song.durationSeconds == nil, let d = t.durationSeconds { song.durationSeconds = d }
+            if song.artworkURLString == nil, let art = t.artworkURLString { song.artworkURLString = art }
+        }
+        song.metadataBaseProvider = newBase
+        song.updatedAt = .now
+    }
+
+    private func unionProviderID(_ t: IncomingTrack, on song: Song) {
+        let id = t.providerTrackID
+        guard !id.isEmpty else { return }
+        switch t.provider {
+        case .spotify:      if song.spotifyTrackID == nil { song.spotifyTrackID = id }
+        case .youtube:      if song.youtubeVideoID == nil { song.youtubeVideoID = id }
+        case .youtubeMusic: if song.youtubeMusicVideoID == nil { song.youtubeMusicVideoID = id }
+        case .appleMusic:   if song.appleMusicSongID == nil { song.appleMusicSongID = id }
+        case .tidal:        if song.tidalID == nil { song.tidalID = id }
+        case .qobuz:        if song.qobuzID == nil { song.qobuzID = id }
+        case .soundcloud:   if song.soundcloudID == nil { song.soundcloudID = id }
+        case .deezer:       if song.deezerID == nil { song.deezerID = id }
+        default:            break
+        }
+    }
 }
 
 #if canImport(SpotifySDK)

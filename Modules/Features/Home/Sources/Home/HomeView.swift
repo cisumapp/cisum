@@ -146,15 +146,15 @@ public struct HomeView: View {
         switch item {
         case let .musicSong(song):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(song: song, preserveQueue: false)
+            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
             playerPresentationController.expand()
         case let .main(.song(song)):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(song: song, preserveQueue: false)
+            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
             playerPresentationController.expand()
         case let .main(.video(video)):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(video: video, preserveQueue: false)
+            playerViewModel.load(youtube: YouTubeMediaRef(video: video), preserveQueue: false)
             playerPresentationController.expand()
         case let .musicPlaylist(playlist):
             router.navigate(to: .playlist(id: playlist.id))

@@ -97,6 +97,7 @@ public actor PlaylistImportJobStore {
         public let soundcloudID: String?
         public let deezerID: String?
         public let appleMusicID: String?
+        public let canonicalSongID: String?
         public let confidenceScore: Double?
         public let needsReview: Bool
         public let errorCode: String?
@@ -122,6 +123,7 @@ public actor PlaylistImportJobStore {
             soundcloudID: String? = nil,
             deezerID: String? = nil,
             appleMusicID: String? = nil,
+            canonicalSongID: String? = nil,
             confidenceScore: Double? = nil,
             needsReview: Bool = false,
             errorCode: String? = nil,
@@ -147,6 +149,7 @@ public actor PlaylistImportJobStore {
             self.soundcloudID = soundcloudID
             self.deezerID = deezerID
             self.appleMusicID = appleMusicID
+            self.canonicalSongID = canonicalSongID
             self.confidenceScore = confidenceScore
             self.needsReview = needsReview
             self.errorCode = errorCode
@@ -319,6 +322,7 @@ public actor PlaylistImportJobStore {
                     soundcloudID: snapshot.soundcloudID,
                     deezerID: snapshot.deezerID,
                     appleMusicID: snapshot.appleMusicID,
+                    canonicalSongID: snapshot.canonicalSongID,
                     confidenceScore: snapshot.confidenceScore,
                     needsReview: snapshot.needsReview,
                     errorCode: snapshot.errorCode,
@@ -439,5 +443,47 @@ public actor PlaylistImportJobStore {
 
     private func saveContext() {
         try? modelContext.save()
+    }
+
+    // MARK: - Sendable accessors
+    //
+    // `@Model` objects are not Sendable and must not cross an actor boundary. These return
+    // value-type `JobSnapshot`s so a separate actor (the Download Manager) can read job state.
+
+    /// Create-or-reuse a job and return its (Sendable) jobID.
+    public func ensureJob(_ snapshot: JobSnapshot) -> String {
+        createOrReuseJob(snapshot).jobID
+    }
+
+    /// Queued + running jobs as value snapshots, oldest first.
+    public func pendingJobSnapshots(limit: Int = 20) -> [JobSnapshot] {
+        pendingJobs(limit: limit).map { Self.snapshot(from: $0) }
+    }
+
+    private static func snapshot(from e: PlaylistImportJobEntry) -> JobSnapshot {
+        JobSnapshot(
+            jobID: e.jobID,
+            idempotencyKey: e.idempotencyKey,
+            sourceProvider: e.sourceProvider,
+            sourcePlaylistID: e.sourcePlaylistID,
+            sourcePlaylistName: e.sourcePlaylistName,
+            sourceURLString: e.sourceURLString,
+            state: e.state,
+            requiresReview: e.requiresReview,
+            totalTrackCount: e.totalTrackCount,
+            processedTrackCount: e.processedTrackCount,
+            matchedTrackCount: e.matchedTrackCount,
+            uncertainTrackCount: e.uncertainTrackCount,
+            failedTrackCount: e.failedTrackCount,
+            nextTrackOffset: e.nextTrackOffset,
+            resumeToken: e.resumeToken,
+            destinationPlaylistID: e.destinationPlaylistID,
+            enqueuedAt: e.enqueuedAt,
+            startedAt: e.startedAt,
+            finishedAt: e.finishedAt,
+            lastCheckpointAt: e.lastCheckpointAt,
+            lastErrorCode: e.lastErrorCode,
+            lastErrorMessage: e.lastErrorMessage
+        )
     }
 }

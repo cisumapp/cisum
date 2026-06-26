@@ -22,6 +22,9 @@ public actor SpotifyKeychainTokenStore: SpotifyTokenStore {
         let scope: [String]
         let clientID: String?
         let spotifyWebPlayerCookie: String?
+        // Optional so previously-stored blobs (without these keys) still decode.
+        let spDcCookie: String?
+        let spKeyCookie: String?
         let isAnonymous: Bool
 
         init(tokens: SpotifySessionTokens) {
@@ -34,6 +37,8 @@ public actor SpotifyKeychainTokenStore: SpotifyTokenStore {
             self.scope = Array(tokens.scope).sorted()
             self.clientID = tokens.clientID
             self.spotifyWebPlayerCookie = tokens.spotifyWebPlayerCookie
+            self.spDcCookie = tokens.spDcCookie
+            self.spKeyCookie = tokens.spKeyCookie
             self.isAnonymous = tokens.isAnonymous
         }
 
@@ -51,6 +56,8 @@ public actor SpotifyKeychainTokenStore: SpotifyTokenStore {
                 scope: Set(scope),
                 clientID: clientID,
                 spotifyWebPlayerCookie: spotifyWebPlayerCookie,
+                spDcCookie: spDcCookie,
+                spKeyCookie: spKeyCookie,
                 isAnonymous: isAnonymous
             )
         }
@@ -193,6 +200,17 @@ public final class SpotifySessionCoordinator {
     public private(set) var lastErrorMessage: String?
     public private(set) var sessionRevision = UUID()
 
+    /// True when an authenticated session can't be revalidated (sp_dc dead / silent recovery failed).
+    /// Drives the subtle "Reconnect Spotify" affordance — never a disruptive popup.
+    public private(set) var needsReconnect = false
+
+    /// Single "Anonymous Spotify Mode" switch (shared with search's catalog-tier routing).
+    /// ON  → search uses the anonymous token AND, when signed out, the app stays anonymous.
+    /// OFF → search uses the account token AND, when signed out, login is auto-retried.
+    private var anonymousModeEnabled: Bool {
+        StreamingProviderSettings.shared.spotifyPreferAnonymousFallback
+    }
+
     public init() {}
 
     public func setCacheDelegate(_ delegate: any SpotifyCacheDelegate) {
@@ -267,42 +285,23 @@ public final class SpotifySessionCoordinator {
         isRestoringSession = true
         defer { isRestoringSession = false }
 
-        // Try to load authenticated tokens first
-        if let cached = try? await authenticatedTokenStore.loadTokens() {
-            let restoredSession = SpotifyOAuthSession(
-                mode: .authenticated, tokenStore: authenticatedTokenStore
-            )
+        // Always keep an anonymous catalog SDK ready — search/metadata must work signed in or out.
+        let fallbackSession = SpotifyOAuthSession(mode: .anonymous, tokenStore: anonymousTokenStore)
+        anonymousFallbackSession = fallbackSession
+        anonymousFallbackSdk = SpotifySDK(
+            session: fallbackSession, tokenStore: anonymousTokenStore, cacheDelegate: cacheDelegate
+        )
+        await fallbackSession.restoreFromCache()
+
+        // Authenticated session for library / imports / profile, only if the user has logged in.
+        if (try? await authenticatedTokenStore.loadTokens()) != nil {
+            let restoredSession = SpotifyOAuthSession(mode: .authenticated, tokenStore: authenticatedTokenStore)
             session = restoredSession
             sdk = SpotifySDK(
-                session: restoredSession, tokenStore: authenticatedTokenStore,
-                cacheDelegate: cacheDelegate
+                session: restoredSession, tokenStore: authenticatedTokenStore, cacheDelegate: cacheDelegate
             )
-
-            // If we are authenticated, we also initialize the fallback session so it can refresh silently
-            let fallbackSession = SpotifyOAuthSession(
-                mode: .anonymous, tokenStore: anonymousTokenStore
-            )
-            anonymousFallbackSession = fallbackSession
-            anonymousFallbackSdk = SpotifySDK(
-                session: fallbackSession, tokenStore: anonymousTokenStore,
-                cacheDelegate: cacheDelegate
-            )
-            await fallbackSession.restoreFromCache()
-
             await restoredSession.restoreFromCache()
             await refreshAccountProfile()
-        }
-        // Fallback to anonymous tokens if they exist and user hasn't explicitly logged in
-        else if let cached = try? await anonymousTokenStore.loadTokens() {
-            let restoredSession = SpotifyOAuthSession(
-                mode: .anonymous, tokenStore: anonymousTokenStore
-            )
-            session = restoredSession
-            sdk = SpotifySDK(
-                session: restoredSession, tokenStore: anonymousTokenStore,
-                cacheDelegate: cacheDelegate
-            )
-            await restoredSession.restoreFromCache()
         }
     }
 
@@ -435,18 +434,36 @@ public final class SpotifySessionCoordinator {
                 " [SpotifySessionCoordinator] Bailing out of profile fetch because tokens are marked anonymous."
             )
             accountProfile = nil
+            // Authenticated session that resolved to anonymous = sp_dc dead. Only nag if the user
+            // hasn't opted to prefer anonymous mode.
+            needsReconnect = session?.mode == .authenticated && !anonymousModeEnabled
             return
         }
 
         do {
             accountProfile = try await sdk.account.profileAttributes()
+            needsReconnect = false
             PerfLog.debug(
                 " [SpotifySessionCoordinator] Successfully fetched profile: \(accountProfile?.displayName ?? "nil")"
             )
         } catch {
             PerfLog.debug(" [SpotifySessionCoordinator] Failed to fetch account profile: \(error)")
             accountProfile = nil
+            needsReconnect = session?.mode == .authenticated && !anonymousModeEnabled
         }
+    }
+
+    /// Refresh the active + anonymous sessions headlessly. Called hourly, on foreground, and from
+    /// the background refresh task. Best-effort — never throws.
+    public func refreshActiveSessions() async {
+        PerfLog.info(" [SpotifySessionCoordinator] refreshActiveSessions")
+        if let session {
+            _ = try? await session.validTokens()
+        }
+        if let anonymousFallbackSession {
+            _ = try? await anonymousFallbackSession.validTokens()
+        }
+        await refreshAccountProfile()
     }
 }
 #else

@@ -204,6 +204,14 @@ public final class cisumModule {
 
     public func applyEnvironment(to view: some View) -> some View {
         view
+            .overlay(alignment: .top) {
+                ImportProgressToastView(
+                    facade: container.libraryServices.importProgressFacade,
+                    manager: container.libraryServices.importDownloadManager
+                )
+            }
+            .environment(\.importDownloadManager, container.libraryServices.importDownloadManager)
+            .environment(\.importProgressFacade, container.libraryServices.importProgressFacade)
             .environment(container)
             .environment(container.coreServices)
             .environment(container.playbackServices)

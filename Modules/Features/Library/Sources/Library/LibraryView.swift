@@ -109,21 +109,9 @@ public struct LibraryView: View {
             .environment(spotifyCoordinator)
         }
         #endif
-        // Provider picker confirmation dialog
-        .confirmationDialog(
-            "Add Playlist", isPresented: $viewModel.isPresentingImportPicker, titleVisibility: .visible
-        ) {
-            Button("YouTube Playlist") {
-                viewModel.isPresentingYouTubeImport = true
-            }
-            #if canImport(SpotifySDK)
-            Button("Spotify Playlist") {
-                viewModel.isPresentingSpotifyImport = true
-            }
-            #endif
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Choose where to import a playlist from.")
+        // Unified import sheet (service picker → multi-select → background import).
+        .sheet(isPresented: $viewModel.isPresentingImportPicker) {
+            ImportServiceSheet()
         }
         .alert("Library Action Failed", isPresented: libraryActionErrorBinding) {
             Button("OK", role: .cancel) {

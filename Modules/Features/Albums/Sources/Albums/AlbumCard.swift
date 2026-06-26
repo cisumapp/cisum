@@ -115,7 +115,7 @@ public struct AlbumCard: View {
                     videoId: ytID,
                     isExplicit: track.isExplicit
                 )
-                payload = .youtubeMusic(ytSong)
+                payload = .youtube(YouTubeMediaRef(song: ytSong))
             } else {
                 return nil
             }

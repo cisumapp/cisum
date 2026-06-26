@@ -1,5 +1,4 @@
 import SwiftUI
-import YouTubeSDK
 
 // MARK: - Dummy Types for Default Values
 
@@ -28,8 +27,7 @@ final class DummyPlayerViewModel: PlayerViewModelInterface, @unchecked Sendable 
     func skipToNext() {}
     func skipToPrevious() {}
     func seek(to _: Double) {}
-    func load(song _: YouTubeMusicSong, preserveQueue _: Bool) {}
-    func load(video _: YouTubeVideo, preserveQueue _: Bool) {}
+    func load(youtube _: YouTubeMediaRef, preserveQueue _: Bool) {}
     func load(external _: ExternalQueueTrack, preserveQueue _: Bool) {}
     func setQueue(_: [ExternalQueueTrack], startIndex _: Int) {}
 
@@ -46,6 +44,4 @@ public extension EnvironmentValues {
     @Entry var playerViewModel: any PlayerViewModelInterface = DummyPlayerViewModel()
 
     @Entry var searchViewModel: (any SearchViewModelInterface)?
-
-    @Entry var youtube: YouTube?
 }

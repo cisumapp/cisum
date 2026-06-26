@@ -167,14 +167,9 @@ public struct SearchView: View {
         hideKeyboard()
 
         switch item.payload {
-        case let .youtubeMusic(song):
+        case let .youtube(ref):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(song: song, preserveQueue: false)
-            presentationController.expand()
-
-        case let .youtubeVideo(video):
-            searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(video: video, preserveQueue: false)
+            playerViewModel.load(youtube: ref, preserveQueue: false)
             presentationController.expand()
 
         case .spotify:
@@ -190,7 +185,7 @@ public struct SearchView: View {
                 await handleSpotifyPlaylistTap(playlist)
             }
 
-        case .providerSDKTrack:
+        case .providerSDK:
             // ProviderSDK tracks resolve via the same external stream path as Spotify.
             Task {
                 await playProviderSDKTrack(item)
@@ -390,7 +385,7 @@ public struct SearchView: View {
         preResolvedPayload: ExternalStreamPayload? = nil
     ) -> ExternalQueueTrack? {
         switch item.payload {
-        case .spotify, .youtubeMusic, .youtubeVideo, .providerSDKTrack:
+        case .spotify, .youtube, .providerSDK:
             break
         case .spotifyArtist, .spotifyPlaylist:
             return nil
