@@ -53,6 +53,39 @@ struct NowPlayingSongInfo: View, Equatable {
     let videoId: String?
 
     @State private var isStreamQualitySheetPresented = false
+    @State private var isAddToPlaylistPresented = false
+    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.savedLibrary) private var savedLibrary
+    @State private var isSaved = false
+
+    private var savableTrack: SavableTrack {
+        SavableTrack(
+            title: title,
+            artist: artist,
+            artworkURL: playerViewModel.currentImageURL,
+            isExplicit: isExplicit,
+            sourceTrackID: videoId,
+            youtubeMusicID: videoId
+        )
+    }
+
+    private var playbackModeTitle: String {
+        switch playerViewModel.playbackMode {
+        case .off: "Shuffle Off"
+        case .shuffle: "Shuffle On"
+        case .repeatAll: "Repeat Queue"
+        case .repeatOne: "Repeat Song"
+        }
+    }
+
+    private var playbackModeIcon: String {
+        switch playerViewModel.playbackMode {
+        case .off: "arrow.right"
+        case .shuffle: "shuffle"
+        case .repeatAll: "repeat"
+        case .repeatOne: "repeat.1"
+        }
+    }
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.title == rhs.title &&
@@ -88,19 +121,46 @@ struct NowPlayingSongInfo: View, Equatable {
 
             HStack(spacing: 12) {
                 Button {
-                    // Favorite action
+                    Task {
+                        guard let savedLibrary, videoId != nil else { return }
+                        isSaved = await savedLibrary.toggleSaved(savableTrack)
+                    }
                 } label: {
-                    Image(systemName: "star")
+                    Image(systemName: isSaved ? "star.fill" : "star")
                 }
                 .sensoryFeedback(.impact, trigger: videoId)
+                .disabled(videoId == nil)
 
-                Button {
-                    isStreamQualitySheetPresented = true
+                Menu {
+                    // Cycles off → shuffle → repeat queue → repeat one. Stays open so it can
+                    // be tapped repeatedly (Apple Music style) via menuActionDismissBehavior.
+                    Button {
+                        playerViewModel.cyclePlaybackMode()
+                    } label: {
+                        Label(playbackModeTitle, systemImage: playbackModeIcon)
+                    }
+                    .menuActionDismissBehavior(.disabled)
+
+                    Button {
+                        isAddToPlaylistPresented = true
+                    } label: {
+                        Label("Add to Playlist", systemImage: "text.badge.plus")
+                    }
+                    .disabled(videoId == nil)
+
+                    Button {
+                        isStreamQualitySheetPresented = true
+                    } label: {
+                        Label("Audio Quality & Source", systemImage: "slider.horizontal.3")
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
                 .sheet(isPresented: $isStreamQualitySheetPresented) {
                     StreamQualityAndSourceSheet()
+                }
+                .sheet(isPresented: $isAddToPlaylistPresented) {
+                    AddToPlaylistSheet(track: savableTrack)
                 }
             }
             .foregroundStyle(Color.white)
@@ -109,6 +169,13 @@ struct NowPlayingSongInfo: View, Equatable {
         }
         .frame(height: 60)
         .padding(.top, 80)
+        .task(id: videoId) {
+            guard let savedLibrary, videoId != nil else {
+                isSaved = false
+                return
+            }
+            isSaved = await savedLibrary.isSaved(fingerprint: savableTrack.fingerprint)
+        }
     }
 }
 
@@ -143,9 +210,7 @@ struct NowPlayingControls: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: size.width * 0.12) {
-                ShuffleButton()
-
+            HStack(spacing: size.width * 0.18) {
                 PreviousButton()
                     .sensoryFeedback(.impact, trigger: playerViewModel.currentVideoId)
 
