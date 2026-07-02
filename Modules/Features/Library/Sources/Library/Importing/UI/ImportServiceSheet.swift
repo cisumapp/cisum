@@ -195,6 +195,7 @@ public struct ImportServiceSheet: View {
                 if await svc.isAuthorized() {
                     await loadPlaylists(svc)
                     stage = .browse
+                    await fillMissingCounts(svc) // libraryV3 can't return per-playlist counts; fetch lazily
                 } else {
                     errorText = "Connect Spotify in Settings before importing."
                 }
@@ -221,6 +222,29 @@ public struct ImportServiceSheet: View {
             PerfLog.info("ImportServiceSheet: loaded \(refs.count) playlists")
         } catch {
             errorText = error.localizedDescription
+        }
+    }
+
+    /// Spotify's library query doesn't return per-playlist track counts, so fetch them
+    /// lazily via fetchMetadata and patch the rows in as they arrive (capped concurrency).
+    private func fillMissingCounts(_ svc: any ImportService) async {
+        let targets = refs.enumerated().filter { $0.element.trackCount == nil }
+        await withTaskGroup(of: (Int, Int?).self) { group in
+            var active = 0
+            for (i, ref) in targets {
+                if active >= 6 { _ = await group.next(); active -= 1 } // ponytail: 6-wide cap; raise if too slow
+                active += 1
+                group.addTask {
+                    let count = try? await svc.fetchMetadata(playlistID: ref.id).totalTrackCount
+                    return (i, count)
+                }
+            }
+            for await (i, count) in group {
+                guard let count, refs.indices.contains(i) else { continue }
+                let r = refs[i]
+                refs[i] = ImportablePlaylistRef(id: r.id, title: r.title, subtitle: r.subtitle,
+                                                ownerName: r.ownerName, artworkURL: r.artworkURL, trackCount: count)
+            }
         }
     }
 
