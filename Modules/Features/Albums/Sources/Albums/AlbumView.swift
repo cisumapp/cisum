@@ -30,7 +30,7 @@ public struct AlbumView: View {
                         .frame(width: geo.size.width, height: geo.size.width)
 
                     VStack(spacing: 0) {
-                        HStack {
+                        HStack(spacing: 12) {
                             Button {
                                 playTracks(startingAt: 0)
                             } label: {
@@ -44,6 +44,21 @@ public struct AlbumView: View {
                                 }
                             }
                             .frame(width: 160, height: 48)
+                            .buttonStyle(.plain)
+
+                            Button {
+                                playTracks(startingAt: tracks.isEmpty ? 0 : Int.random(in: 0 ..< tracks.count), shuffled: true)
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(viewModel.backgroundColor)
+
+                                    Image(systemName: "shuffle")
+                                        .foregroundStyle(viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor))
+                                        .fontWeight(.bold)
+                                }
+                            }
+                            .frame(width: 48, height: 48)
                             .buttonStyle(.plain)
                         }
                         .padding(.vertical, 24)
@@ -67,7 +82,7 @@ public struct AlbumView: View {
         }
     }
 
-    private func playTracks(startingAt index: Int) {
+    private func playTracks(startingAt index: Int, shuffled: Bool = false) {
         guard !tracks.isEmpty else { return }
 
         let externalTracks: [ExternalQueueTrack] = tracks.compactMap { track in
@@ -135,7 +150,7 @@ public struct AlbumView: View {
             )
         }
 
-        playerViewModel.setQueue(externalTracks, startIndex: index)
+        playerViewModel.setQueue(externalTracks, startIndex: index, shuffled: shuffled)
         playerPresentationController.expand()
     }
 }

@@ -36,7 +36,7 @@ public struct ArtistView: View {
                         size: size,
                         onShuffle: {
                             if !topTracks.isEmpty {
-                                playTracks(startingAt: Int.random(in: 0 ..< topTracks.count))
+                                playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
                             }
                         },
                         onPlay: { playTracks(startingAt: 0) }
@@ -68,7 +68,7 @@ public struct ArtistView: View {
         .ignoresSafeArea()
     }
 
-    private func playTracks(startingAt index: Int) {
+    private func playTracks(startingAt index: Int, shuffled: Bool = false) {
         guard !topTracks.isEmpty else { return }
 
         let externalTracks: [ExternalQueueTrack] = topTracks.compactMap { track in
@@ -136,7 +136,7 @@ public struct ArtistView: View {
             )
         }
 
-        playerViewModel.setQueue(externalTracks, startIndex: index)
+        playerViewModel.setQueue(externalTracks, startIndex: index, shuffled: shuffled)
         playerPresentationController.expand()
     }
 }
