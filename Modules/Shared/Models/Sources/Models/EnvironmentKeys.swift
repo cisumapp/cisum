@@ -30,6 +30,10 @@ final class DummyPlayerViewModel: PlayerViewModelInterface, @unchecked Sendable 
     func load(youtube _: YouTubeMediaRef, preserveQueue _: Bool) {}
     func load(external _: ExternalQueueTrack, preserveQueue _: Bool) {}
     func setQueue(_: [ExternalQueueTrack], startIndex _: Int) {}
+    func setQueue(_: [ExternalQueueTrack], startIndex _: Int, shuffled _: Bool) {}
+
+    var isShuffled: Bool = false
+    func toggleShuffle() {}
 
     var artworkVideoStatus: ArtworkVideoProcessingStatus = .idle
     var animatedArtworkVideoURL: URL?

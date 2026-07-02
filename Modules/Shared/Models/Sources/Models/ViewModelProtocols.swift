@@ -41,6 +41,11 @@ public protocol PlayerViewModelInterface: AnyObject, Observable {
     func load(youtube ref: YouTubeMediaRef, preserveQueue: Bool)
     func load(external track: ExternalQueueTrack, preserveQueue: Bool)
     func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int)
+    func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int, shuffled: Bool)
+
+    // Shuffle
+    var isShuffled: Bool { get }
+    func toggleShuffle()
 
     // Artwork Video
     var artworkVideoStatus: ArtworkVideoProcessingStatus { get }

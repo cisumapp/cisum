@@ -143,7 +143,9 @@ struct NowPlayingControls: View {
 
             Spacer(minLength: 0)
 
-            HStack(spacing: size.width * 0.18) {
+            HStack(spacing: size.width * 0.12) {
+                ShuffleButton()
+
                 PreviousButton()
                     .sensoryFeedback(.impact, trigger: playerViewModel.currentVideoId)
 
@@ -289,8 +291,7 @@ struct SyncedLyricsView: View {
                         LyricLineView(
                             line: line,
                             isActive: active,
-                            distance: distanceToActiveLine(index),
-                            currentTime: active ? playerViewModel.currentTime : nil
+                            distance: distanceToActiveLine(index)
                         )
                         .id(line.id)
                     }
@@ -334,13 +335,14 @@ struct LyricLineView: View {
     let line: TimedLyricLine
     let isActive: Bool
     let distance: Int
-    let currentTime: TimeInterval?
     @Environment(\.playerViewModel) private var playerViewModel
 
     var body: some View {
         Group {
-            if isActive, let syllables = line.syllables, !syllables.isEmpty, let currentTime {
-                syllablesText(currentTime: currentTime)
+            // ponytail: read currentTime only when active — keeps the per-tick
+            // re-render scoped to this one line instead of the whole ForEach.
+            if isActive, let syllables = line.syllables, !syllables.isEmpty {
+                syllablesText(currentTime: playerViewModel.currentTime)
             } else {
                 Text(line.text)
                     .foregroundStyle(.primary.opacity(isActive ? 1.0 : opacityForDistance))

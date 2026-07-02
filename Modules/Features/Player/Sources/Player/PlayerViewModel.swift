@@ -261,6 +261,10 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         }
     }
 
+    /// Shuffle state. `unshuffledQueue` retains the original order so toggling off restores it.
+    public internal(set) var isShuffled: Bool = false
+    @ObservationIgnored var unshuffledQueue: [PlaybackQueueEntry] = []
+
     // Patch 3: Duplicate-load guard. Prevents multiple concurrent loads for the
     // same mediaID (e.g. rapid taps). Mirrors SmartTubeIOS's isLoading check.
     var isLoading: Bool = false
@@ -558,6 +562,26 @@ public final class PlayerViewModel: PlayerViewModelInterface {
 
     public func skipToNext() {
         advanceToNextQueueEntry(triggeredByPlaybackEnd: false)
+    }
+
+    /// Reorders the live queue in place, keeping the current track playing (no reload).
+    /// On: current track moves to the front, the rest are shuffled. Off: original order restored.
+    public func toggleShuffle() {
+        guard let pos = queuePosition, playbackQueue.indices.contains(pos) else { return }
+        let current = playbackQueue[pos]
+        if isShuffled {
+            playbackQueue = unshuffledQueue.isEmpty ? playbackQueue : unshuffledQueue
+            queuePosition = playbackQueue.firstIndex(of: current) ?? 0
+        } else {
+            unshuffledQueue = playbackQueue
+            var rest = playbackQueue
+            rest.remove(at: pos)
+            playbackQueue = [current] + rest.shuffled()
+            queuePosition = 0
+        }
+        isShuffled.toggle()
+        updateRemoteCommandState()
+        preloadNextQueueEntryIfNeeded()
     }
 
     public func playQueueEntry(at index: Int) {
