@@ -6,6 +6,8 @@
 //  confirm → the Download Manager imports in the background and the sheet dismisses immediately.
 //
 
+import Aesthetics
+import Kingfisher
 import SwiftUI
 import Models
 import Utilities
@@ -42,6 +44,11 @@ public struct ImportServiceSheet: View {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Import \(selected.count)") { Task { await confirmSelected() } }
                                 .disabled(selected.isEmpty || isSubmitting)
+                        }
+                        if provider == .youtube {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button("Link") { stage = .link }
+                            }
                         }
                     }
                 }
@@ -106,6 +113,7 @@ public struct ImportServiceSheet: View {
             List(refs) { ref in
                 Button { toggle(ref.id) } label: {
                     HStack {
+                        rowThumbnail(ref)
                         VStack(alignment: .leading) {
                             Text(ref.title).foregroundStyle(.primary)
                             if let sub = ref.ownerName ?? ref.subtitle {
@@ -119,6 +127,24 @@ public struct ImportServiceSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func rowThumbnail(_ ref: ImportablePlaylistRef) -> some View {
+        if let url = ref.artworkURL {
+            KFImage(url)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 48, height: 48)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        } else {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.cisumChromeStrong)
+                .frame(width: 48, height: 48)
+                .overlay {
+                    Image(systemName: ref.id == "spotify:collection:tracks" ? "heart.fill" : "music.note")
+                        .foregroundStyle(.secondary)
+                }
         }
     }
 
@@ -158,7 +184,13 @@ public struct ImportServiceSheet: View {
             case .localFile:
                 showFileImporter = true
             case .youtube:
-                stage = .link
+                await loadPlaylists(svc)
+                if refs.isEmpty {
+                    errorText = nil   // logged-out / empty library → paste-link is the intended path, not an error
+                    stage = .link
+                } else {
+                    stage = .browse
+                }
             case .spotify:
                 if await svc.isAuthorized() {
                     await loadPlaylists(svc)

@@ -45,16 +45,29 @@ public final class SpotifyImportService: ImportService {
     public func listImportablePlaylists(limit: Int) async throws -> [ImportablePlaylistRef] {
         PerfLog.info("SpotifyImportService: listImportablePlaylists(limit: \(limit))")
         let sdk = try await currentSDK()
-        let summaries = try await sdk.account.playlists(limit: max(1, limit))
+        // Liked Songs count fetched concurrently so it doesn't add latency to the list.
+        async let summariesTask = sdk.account.playlists(limit: max(1, limit))
+        async let likedTask = sdk.account.likedSongs(limit: 1)
+        let summaries = try await summariesTask
+        let likedCount = (try? await likedTask).flatMap { $0.totalCount ?? $0.items.count }
         PerfLog.info("SpotifyImportService: SDK returned \(summaries.count) playlists")
-        return summaries.map { s in
+
+        // ponytail: heart fallback (nil artwork) rendered by the picker row; Liked Songs has no cover URL.
+        let liked = ImportablePlaylistRef(
+            id: spotifyLikedSongsPlaylistID,
+            title: "Liked Songs",
+            ownerName: nil,
+            artworkURL: nil,
+            trackCount: likedCount
+        )
+        return [liked] + summaries.map { s in
             ImportablePlaylistRef(
                 id: SpotifyPlaylistURLParser.extractPlaylistID(from: s.uri) ?? s.uri,
                 title: s.name,
                 subtitle: nil,
                 ownerName: s.ownerDisplayName ?? s.ownerUsername,
                 artworkURL: s.artworkURL,
-                trackCount: s.trackCount
+                trackCount: s.trackCount // ponytail: nil if Spotify GraphQL `count` unset; SDK follow-up if so
             )
         }
     }
