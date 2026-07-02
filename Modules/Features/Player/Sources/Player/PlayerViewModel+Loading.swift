@@ -22,14 +22,24 @@ public extension PlayerViewModel {
     }
 
     func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int = 0) {
+        setQueue(tracks, startIndex: startIndex, shuffled: false)
+    }
+
+    func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int, shuffled: Bool) {
         guard !tracks.isEmpty else { return }
-        let entries = tracks.map { PlaybackQueueEntry.external($0) }
+        var entries = tracks.map { PlaybackQueueEntry.external($0) }
+        unshuffledQueue = entries
+        if shuffled {
+            let start = entries.remove(at: min(startIndex, entries.count - 1))
+            entries = [start] + entries.shuffled() // chosen track first, remainder random
+        }
+        isShuffled = shuffled
         playbackQueue = entries
         queueCount = entries.count
         queueSource = .userQueue
-        queuePosition = startIndex
-        if entries.indices.contains(startIndex) {
-            load(entry: entries[startIndex])
+        queuePosition = shuffled ? 0 : startIndex
+        if let pos = queuePosition, entries.indices.contains(pos) {
+            load(entry: entries[pos])
         }
     }
 
