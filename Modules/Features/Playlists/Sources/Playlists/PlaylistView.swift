@@ -55,7 +55,7 @@ public struct PlaylistView: View {
                 ScrollView {
                     PlaylistArtworkHeader(playlist: playlist, width: size.width)
 
-                    HStack {
+                    HStack(spacing: 12) {
                         Button {
                             Task {
                                 await playPlaylist(startingAt: 0)
@@ -71,6 +71,23 @@ public struct PlaylistView: View {
                             }
                         }
                         .frame(width: 160, height: 48)
+                        .buttonStyle(.plain)
+
+                        Button {
+                            Task {
+                                await playPlaylist(startingAt: 0, shuffled: true)
+                            }
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(playerViewModel.currentAccentColor)
+
+                                Image(systemName: "shuffle")
+                                    .foregroundStyle(Color.cisumBg)
+                                    .fontWeight(.bold)
+                            }
+                        }
+                        .frame(width: 48, height: 48)
                         .buttonStyle(.plain)
                     }
                     .padding(.vertical)
@@ -98,7 +115,7 @@ public struct PlaylistView: View {
         }
     }
 
-    private func playPlaylist(startingAt index: Int) async {
+    private func playPlaylist(startingAt index: Int, shuffled: Bool = false) async {
         guard tracks.indices.contains(index) else { return }
 
         let queueTracks = tracks.compactMap { makePlayableQueueTrack(for: $0) }
@@ -108,16 +125,21 @@ public struct PlaylistView: View {
             return
         }
 
-        let selectedItem = tracks[index]
-        let selectedMediaID = playbackMediaID(for: selectedItem)
-        guard let startIndex = queueTracks.firstIndex(where: { $0.mediaID == selectedMediaID })
-        else {
-            playbackAlertMessage = "Unable to start playback for the selected track."
-            showPlaybackAlert = true
-            return
+        let startIndex: Int
+        if shuffled {
+            startIndex = Int.random(in: 0 ..< queueTracks.count)
+        } else {
+            let selectedMediaID = playbackMediaID(for: tracks[index])
+            guard let idx = queueTracks.firstIndex(where: { $0.mediaID == selectedMediaID })
+            else {
+                playbackAlertMessage = "Unable to start playback for the selected track."
+                showPlaybackAlert = true
+                return
+            }
+            startIndex = idx
         }
 
-        playerViewModel.setQueue(queueTracks, startIndex: startIndex)
+        playerViewModel.setQueue(queueTracks, startIndex: startIndex, shuffled: shuffled)
         playerPresentationController.expand()
     }
 
