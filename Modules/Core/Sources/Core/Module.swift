@@ -239,7 +239,7 @@ public final class cisumModule {
             } overlayWrapper: { overlay in
                 AnyView(self.applyEnvironment(to: overlay))
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
                 ImportProgressToastView(
                     facade: container.libraryServices.importProgressFacade,
                     manager: container.libraryServices.importDownloadManager
