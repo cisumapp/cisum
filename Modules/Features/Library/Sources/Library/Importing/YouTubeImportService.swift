@@ -14,7 +14,7 @@ import YouTubeSDK
 
 public final class YouTubeImportService: ImportService {
     public let provider: ImportProvider = .youtube
-    public let capabilities: ImportCapabilities = [.importByLink]
+    public let capabilities: ImportCapabilities = [.listsUserPlaylists, .importByLink]
 
     private let youtube: YouTube
 
@@ -24,6 +24,28 @@ public final class YouTubeImportService: ImportService {
 
     /// Public playlists resolve without auth, so import is always available.
     public func isAuthorized() async -> Bool { true }
+
+    /// Lists the signed-in account's own YouTube Music library playlists.
+    /// Throws `.notAuthorized` when logged out so the sheet falls back to link entry.
+    public func listImportablePlaylists(limit: Int) async throws -> [ImportablePlaylistRef] {
+        PerfLog.info("YouTubeImportService: listImportablePlaylists(limit: \(limit))")
+        guard await MainActor.run(body: { youtube.isAuthenticated }) else { throw ImportError.notAuthorized }
+        let sections = try await youtube.music.getLibraryPlaylists()
+        let playlists = sections.flatMap(\.items).compactMap { item -> YouTubeMusicPlaylist? in
+            if case let .playlist(p) = item { return p }
+            return nil
+        }
+        return playlists.prefix(max(1, limit)).map { p in
+            ImportablePlaylistRef(
+                id: p.id, // ponytail: browseId (often VL…) — same id fetchAllTracks resolves; strip VL if main API rejects it
+                title: p.title,
+                subtitle: nil,
+                ownerName: p.author,
+                artworkURL: p.thumbnailURL,
+                trackCount: p.count.flatMap { Int($0.prefix(while: \.isNumber)) }
+            )
+        }
+    }
 
     public func resolve(link: String) async throws -> ImportablePlaylistRef {
         PerfLog.info("YouTubeImportService: resolve(link:)")
