@@ -32,8 +32,8 @@ final class DummyPlayerViewModel: PlayerViewModelInterface, @unchecked Sendable 
     func setQueue(_: [ExternalQueueTrack], startIndex _: Int) {}
     func setQueue(_: [ExternalQueueTrack], startIndex _: Int, shuffled _: Bool) {}
 
-    var isShuffled: Bool = false
-    func toggleShuffle() {}
+    var playbackMode: PlaybackMode = .off
+    func cyclePlaybackMode() {}
 
     var artworkVideoStatus: ArtworkVideoProcessingStatus = .idle
     var animatedArtworkVideoURL: URL?
@@ -48,4 +48,6 @@ public extension EnvironmentValues {
     @Entry var playerViewModel: any PlayerViewModelInterface = DummyPlayerViewModel()
 
     @Entry var searchViewModel: (any SearchViewModelInterface)?
+
+    @Entry var savedLibrary: (any SavedLibraryInterface)?
 }

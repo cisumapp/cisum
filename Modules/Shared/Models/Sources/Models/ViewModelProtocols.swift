@@ -9,6 +9,15 @@ public enum ArtworkVideoProcessingStatus: Equatable, Sendable {
     case failed
 }
 
+/// Single cycling playback mode surfaced in the now-playing menu (Apple Music style).
+/// Shuffle and repeat are mutually exclusive here; cycling order is off → shuffle → repeatAll → repeatOne.
+public enum PlaybackMode: String, Sendable, CaseIterable {
+    case off
+    case shuffle
+    case repeatAll
+    case repeatOne
+}
+
 @MainActor
 public protocol PlayerViewModelInterface: AnyObject, Observable {
     // Basic Track Info
@@ -43,9 +52,9 @@ public protocol PlayerViewModelInterface: AnyObject, Observable {
     func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int)
     func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int, shuffled: Bool)
 
-    // Shuffle
-    var isShuffled: Bool { get }
-    func toggleShuffle()
+    // Shuffle / Repeat
+    var playbackMode: PlaybackMode { get }
+    func cyclePlaybackMode()
 
     // Artwork Video
     var artworkVideoStatus: ArtworkVideoProcessingStatus { get }

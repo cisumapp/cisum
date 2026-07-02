@@ -32,8 +32,10 @@ public extension PlayerViewModel {
         if shuffled {
             let start = entries.remove(at: min(startIndex, entries.count - 1))
             entries = [start] + entries.shuffled() // chosen track first, remainder random
+            playbackMode = .shuffle
+        } else if playbackMode == .shuffle {
+            playbackMode = .off // starting a fresh ordered queue clears shuffle; repeat modes persist
         }
-        isShuffled = shuffled
         playbackQueue = entries
         queueCount = entries.count
         queueSource = .userQueue

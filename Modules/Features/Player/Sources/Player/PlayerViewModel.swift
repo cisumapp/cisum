@@ -219,7 +219,7 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     public var queuePosition: Int?
     public var queueCount: Int = 0
     public var canSkipForward: Bool {
-        hasNextTrackInQueue
+        hasNextTrackInQueue || (playbackMode == .repeatAll && !playbackQueue.isEmpty)
     }
 
     public var canSkipBackward: Bool {
@@ -262,7 +262,9 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     }
 
     /// Shuffle state. `unshuffledQueue` retains the original order so toggling off restores it.
-    public internal(set) var isShuffled: Bool = false
+    /// Cycling playback mode (off / shuffle / repeat-all / repeat-one).
+    /// `unshuffledQueue` retains the original order so leaving shuffle restores it.
+    public internal(set) var playbackMode: PlaybackMode = .off
     @ObservationIgnored var unshuffledQueue: [PlaybackQueueEntry] = []
 
     // Patch 3: Duplicate-load guard. Prevents multiple concurrent loads for the
@@ -564,24 +566,47 @@ public final class PlayerViewModel: PlayerViewModelInterface {
         advanceToNextQueueEntry(triggeredByPlaybackEnd: false)
     }
 
-    /// Reorders the live queue in place, keeping the current track playing (no reload).
-    /// On: current track moves to the front, the rest are shuffled. Off: original order restored.
-    public func toggleShuffle() {
-        guard let pos = queuePosition, playbackQueue.indices.contains(pos) else { return }
-        let current = playbackQueue[pos]
-        if isShuffled {
-            playbackQueue = unshuffledQueue.isEmpty ? playbackQueue : unshuffledQueue
-            queuePosition = playbackQueue.firstIndex(of: current) ?? 0
-        } else {
-            unshuffledQueue = playbackQueue
-            var rest = playbackQueue
-            rest.remove(at: pos)
-            playbackQueue = [current] + rest.shuffled()
-            queuePosition = 0
+    /// Advances the playback mode: off → shuffle → repeatAll → repeatOne → off.
+    public func cyclePlaybackMode() {
+        let next: PlaybackMode = switch playbackMode {
+        case .off: .shuffle
+        case .shuffle: .repeatAll
+        case .repeatAll: .repeatOne
+        case .repeatOne: .off
         }
-        isShuffled.toggle()
+        setPlaybackMode(next)
+    }
+
+    /// Applies a mode, reordering the live queue when entering/leaving shuffle
+    /// (current track keeps playing — no reload). Repeat modes only change advance behavior.
+    func setPlaybackMode(_ mode: PlaybackMode) {
+        let wasShuffled = playbackMode == .shuffle
+        let willShuffle = mode == .shuffle
+        if willShuffle, !wasShuffled {
+            applyShuffle()
+        } else if !willShuffle, wasShuffled {
+            restoreOriginalOrder()
+        }
+        playbackMode = mode
         updateRemoteCommandState()
         preloadNextQueueEntryIfNeeded()
+    }
+
+    private func applyShuffle() {
+        guard let pos = queuePosition, playbackQueue.indices.contains(pos) else { return }
+        let current = playbackQueue[pos]
+        unshuffledQueue = playbackQueue
+        var rest = playbackQueue
+        rest.remove(at: pos)
+        playbackQueue = [current] + rest.shuffled()
+        queuePosition = 0
+    }
+
+    private func restoreOriginalOrder() {
+        guard !unshuffledQueue.isEmpty, let pos = queuePosition, playbackQueue.indices.contains(pos) else { return }
+        let current = playbackQueue[pos]
+        playbackQueue = unshuffledQueue
+        queuePosition = playbackQueue.firstIndex(of: current) ?? 0
     }
 
     public func playQueueEntry(at index: Int) {
@@ -616,6 +641,23 @@ public final class PlayerViewModel: PlayerViewModelInterface {
     }
 
     func advanceToNextQueueEntry(triggeredByPlaybackEnd: Bool) {
+        // repeatOne: on natural track end, replay the current entry instead of advancing.
+        // (Manual next still advances — repeatOne only affects auto-advance, like Apple Music.)
+        if triggeredByPlaybackEnd, playbackMode == .repeatOne, let pos = queuePosition, playbackQueue.indices.contains(pos) {
+            stopCurrentPlaybackForImmediateTransition()
+            load(entry: playbackQueue[pos])
+            return
+        }
+
+        // repeatAll: at the end of the queue, wrap back to the first entry.
+        if !hasNextTrackInQueue, playbackMode == .repeatAll, !playbackQueue.isEmpty {
+            queuePosition = 0
+            stopCurrentPlaybackForImmediateTransition()
+            load(entry: playbackQueue[0])
+            preloadNextQueueEntryIfNeeded()
+            return
+        }
+
         guard hasNextTrackInQueue, let queuePosition else {
             playbackEngine.setIsPlaying(false)
             updateNowPlayingPlaybackInfo(force: true)

@@ -33,8 +33,8 @@ public final class MockPlayerViewModel: PlayerViewModelInterface {
     public func load(external _: ExternalQueueTrack, preserveQueue _: Bool) {}
     public func setQueue(_: [ExternalQueueTrack], startIndex _: Int) {}
     public func setQueue(_: [ExternalQueueTrack], startIndex _: Int, shuffled _: Bool) {}
-    public var isShuffled: Bool = false
-    public func toggleShuffle() {}
+    public var playbackMode: PlaybackMode = .off
+    public func cyclePlaybackMode() {}
 
     public var isCheckingHiResAvailability: Bool = false
     public var canSwitchToHiResVersion: Bool = false
