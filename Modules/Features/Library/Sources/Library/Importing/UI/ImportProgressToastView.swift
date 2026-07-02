@@ -2,11 +2,12 @@
 //  ImportProgressToastView.swift
 //  Library
 //
-//  Top-anchored overlay: ONE aggregate "Importing N playlists — X/N" chip while a batch
+//  Bottom-anchored overlay: ONE aggregate "Importing N playlists — X/N" chip while a batch
 //  runs, plus a single summary toast when the batch finishes. Mounted once near the app
-//  root by the composition root.
+//  root by the composition root, sitting just above the mini-player accessory.
 //
 
+import Aesthetics
 import SwiftUI
 import Models
 import Utilities
@@ -35,8 +36,9 @@ public struct ImportProgressToastView: View {
                 chip(text: toast, systemImage: "checkmark.circle.fill")
             }
         }
-        .padding(.top, 8)
-        .frame(maxWidth: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(.bottom, bottomInset)
+        .ignoresSafeArea(.container, edges: .bottom) // bottomOffset is measured from the physical screen edge
         .allowsHitTesting(false)
         .animation(.snappy, value: facade.active)
         .animation(.snappy, value: toast)
@@ -50,6 +52,13 @@ public struct ImportProgressToastView: View {
                 if facade.active.isEmpty { showSummary() } // last job left the set
             }
         }
+    }
+
+    // Sit just above the mini-player accessory. Reading the @Observable store in-body keeps
+    // the chip reactive to the tab bar hiding/showing on scroll.
+    private var bottomInset: CGFloat {
+        let o = TabBarStateStore.shared.accessoryOffsets
+        return (o?.bottomOffset ?? 91) + (o?.accessoryHeight ?? 48) + 8
     }
 
     private var aggregateText: String {
