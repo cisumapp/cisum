@@ -204,12 +204,6 @@ public final class cisumModule {
 
     public func applyEnvironment(to view: some View) -> some View {
         view
-            .overlay(alignment: .top) {
-                ImportProgressToastView(
-                    facade: container.libraryServices.importProgressFacade,
-                    manager: container.libraryServices.importDownloadManager
-                )
-            }
             .environment(\.importDownloadManager, container.libraryServices.importDownloadManager)
             .environment(\.importProgressFacade, container.libraryServices.importProgressFacade)
             .environment(container)
@@ -244,6 +238,12 @@ public final class cisumModule {
                 self.applyEnvironment(to: RootView(module: self))
             } overlayWrapper: { overlay in
                 AnyView(self.applyEnvironment(to: overlay))
+            }
+            .overlay(alignment: .top) {
+                ImportProgressToastView(
+                    facade: container.libraryServices.importProgressFacade,
+                    manager: container.libraryServices.importDownloadManager
+                )
             }
         } else {
             loginView
