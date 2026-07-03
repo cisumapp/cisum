@@ -44,11 +44,12 @@ public protocol ImportService: Sendable {
 }
 
 public extension ImportService {
-    // Services only implement what their capabilities advertise.
-    func listImportablePlaylists(limit: Int) async throws -> [ImportablePlaylistRef] {
+    /// Services only implement what their capabilities advertise.
+    func listImportablePlaylists(limit _: Int) async throws -> [ImportablePlaylistRef] {
         throw ImportError.unsupported
     }
-    func resolve(link: String) async throws -> ImportablePlaylistRef {
+
+    func resolve(link _: String) async throws -> ImportablePlaylistRef {
         throw ImportError.unsupported
     }
 }
@@ -57,10 +58,10 @@ extension ImportProvider {
     /// The canonical `MediaProvider` an imported track is attributed to.
     var mediaProvider: MediaProvider {
         switch self {
-        case .spotify:    return .spotify
-        case .youtube:    return .youtube
-        case .appleMusic: return .appleMusic
-        case .localFile:  return .local
+        case .spotify: .spotify
+        case .youtube: .youtube
+        case .appleMusic: .appleMusic
+        case .localFile: .local
         }
     }
 }

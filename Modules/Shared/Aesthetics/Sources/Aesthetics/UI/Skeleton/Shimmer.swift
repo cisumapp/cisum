@@ -39,5 +39,7 @@ public struct ShimmerModifier: ViewModifier {
 
 public extension View {
     /// Adds an animated shimmer sweep. Put it on the composed skeleton once.
-    func shimmering() -> some View { modifier(ShimmerModifier()) }
+    func shimmering() -> some View {
+        modifier(ShimmerModifier())
+    }
 }

@@ -23,7 +23,9 @@ public final class YouTubeImportService: ImportService {
     }
 
     /// Public playlists resolve without auth, so import is always available.
-    public func isAuthorized() async -> Bool { true }
+    public func isAuthorized() async -> Bool {
+        true
+    }
 
     /// Lists the signed-in account's own YouTube Music library playlists.
     /// Throws `.notAuthorized` when logged out so the sheet falls back to link entry.
@@ -71,7 +73,7 @@ public final class YouTubeImportService: ImportService {
         )
     }
 
-    public func fetchTrackPage(playlistID: String, cursor: String?, offset: Int) async throws -> ImportTrackPage {
+    public func fetchTrackPage(playlistID: String, cursor _: String?, offset: Int) async throws -> ImportTrackPage {
         PerfLog.info("YouTubeImportService: fetchTrackPage(\(playlistID))")
         let tracks = try await PerfLog.measure("YouTubeImportService.fetchAll") {
             try await fetchAllTracks(playlistID: playlistID)
@@ -169,9 +171,7 @@ public final class YouTubeImportService: ImportService {
         guard !trimmed.isEmpty else { throw ImportError.badLink(raw) }
 
         // Raw playlist ID.
-        if trimmed.range(of: "^[A-Za-z0-9_-]{10,}$", options: .regularExpression) != nil,
-           !trimmed.contains("/")
-        {
+        if trimmed.range(of: "^[A-Za-z0-9_-]{10,}$", options: .regularExpression) != nil, !trimmed.contains("/") {
             return trimmed
         }
 

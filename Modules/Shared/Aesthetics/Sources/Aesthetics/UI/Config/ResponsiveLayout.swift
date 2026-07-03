@@ -7,13 +7,12 @@ import SwiftUI
 
 /// Universally available device sizing and responsive layout configuration.
 public enum ResponsiveLayout {
-    
     /// Size classes based on device screen width.
     public enum DeviceSizeClass {
         case compact
         case standard
         case large
-        
+
         public init(width: CGFloat) {
             if width < 390 {
                 self = .compact
@@ -23,23 +22,24 @@ public enum ResponsiveLayout {
                 self = .large
             }
         }
-        
+
         /// A continuous scaling multiplier normalized to an iPhone 14 / 16 (390pt width).
         /// Useful when you need a smooth mathematical scaling instead of stepped classes.
         public func scaleFactor(for width: CGFloat) -> CGFloat {
-            return width / 390.0
+            width / 390.0
         }
     }
-    
+
     /// Accessory phases for tab bars and player overlays.
     public enum AccessoryPhase {
-        case inline              // tab bar visible, accessory docked above it
-        case expanded            // tab bar hidden (scroll), accessory dropped to bottom
-        case inlineWithSearch    // inline, a .search role tab is present
-        case expandedWithSearch  // expanded, a .search role tab is present
+        case inline // tab bar visible, accessory docked above it
+        case expanded // tab bar hidden (scroll), accessory dropped to bottom
+        case inlineWithSearch // inline, a .search role tab is present
+        case expandedWithSearch // expanded, a .search role tab is present
     }
 
     // MARK: - Accessory Offsets
+
     //
     // All constants are empirically measured on real iOS 26.5 builds using a
     // UIKit geometry probe that walks the view hierarchy to the actual accessory
@@ -70,6 +70,7 @@ public enum ResponsiveLayout {
     /// pixel-perfect placement on every device.
     public struct AccessoryOffsets: Equatable {
         // MARK: Stored
+
         /// Height of the accessory pill (48 pt portrait — measured constant).
         public let accessoryHeight: CGFloat
         /// Width of the accessory pill (screenWidth − 42 pt — measured constant).
@@ -83,11 +84,13 @@ public enum ResponsiveLayout {
         public let safeAreaBottom: CGFloat
 
         // MARK: Derived
-        
+
         /// Use this as `.padding(.bottom, X)` on views that call `.ignoresSafeArea()`.
         /// The content's frame extends to the physical screen edge, so `bottomOffset`
         /// directly positions the accessory the correct distance from the bottom.
-        public var bottomInsetFromScreenEdge: CGFloat { bottomOffset }
+        public var bottomInsetFromScreenEdge: CGFloat {
+            bottomOffset
+        }
 
         /// Use this as `.padding(.bottom, X)` inside a `safeAreaInset(edge: .bottom)`
         /// ZStack. The inset's origin is the safe-area boundary (safeAreaBottom above
@@ -98,7 +101,7 @@ public enum ResponsiveLayout {
         }
 
         // MARK: Init
-        
+
         /// - Parameters:
         ///   - phase: The current tab bar / search phase.
         ///   - screenWidth: `UIScreen.main.bounds.width` — do NOT use a GeometryProxy
@@ -116,8 +119,8 @@ public enum ResponsiveLayout {
             tabBarHeight: CGFloat = 0,
             isSearchExpanded: Bool = false
         ) {
-            self.accessoryHeight = 48   // measured — do not scale
-            self.sideInset = 21         // measured — do not scale
+            self.accessoryHeight = 48 // measured — do not scale
+            self.sideInset = 21 // measured — do not scale
             self.width = screenWidth - 42
             self.safeAreaBottom = safeAreaBottom
 
@@ -141,7 +144,7 @@ public enum ResponsiveLayout {
             }
         }
     }
-    
+
     /// Sizing constants for the Vinyl player UI, dynamically proportional to the screen width.
     public struct VinylSizes {
         public let heroDiskSize: CGFloat

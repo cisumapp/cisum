@@ -15,7 +15,7 @@ import Observation
 @Observable
 public final class ImportProgressFacade {
     public struct JobProgress: Identifiable, Sendable, Equatable {
-        public let id: String          // jobID
+        public let id: String // jobID
         public let title: String
         public let provider: ImportProvider
         public let processed: Int

@@ -300,7 +300,7 @@ public actor PlaylistImportJobStore {
 
         let sorted = snapshots.sorted(by: { $0.sourceIndex < $1.sourceIndex })
         let batchSize = 200
-        
+
         for batch in sorted.chunked(into: batchSize) {
             for snapshot in batch {
                 let created = PlaylistImportTrackEntry(
@@ -446,6 +446,7 @@ public actor PlaylistImportJobStore {
     }
 
     // MARK: - Sendable accessors
+
     //
     // `@Model` objects are not Sendable and must not cross an actor boundary. These return
     // value-type `JobSnapshot`s so a separate actor (the Download Manager) can read job state.

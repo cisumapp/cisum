@@ -68,7 +68,7 @@ public final class AppleMusicImportService: ImportService {
         )
     }
 
-    public func fetchTrackPage(playlistID: String, cursor: String?, offset: Int) async throws -> ImportTrackPage {
+    public func fetchTrackPage(playlistID: String, cursor _: String?, offset: Int) async throws -> ImportTrackPage {
         PerfLog.info("AppleMusicImportService: fetchTrackPage(\(playlistID))")
         let playlist = try await libraryPlaylist(id: playlistID)
         let detailed = try await playlist.with([.tracks])

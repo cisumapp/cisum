@@ -1,5 +1,4 @@
 import Aesthetics
-import Kingfisher
 import SwiftUI
 
 public struct TrackCard: View {
@@ -26,14 +25,11 @@ public struct TrackCard: View {
     public var body: some View {
         let screenWidth = UIScreen.main.bounds.width
         let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
-        
+
         ZStack {
             VStack(alignment: .leading) {
                 if let artworkURL {
-                    KFImage(artworkURL)
-                        .downsampling(size: CGSize(width: 280, height: 280))
-                        .resizable()
-                        .scaledToFill()
+                    ArtworkImage(url: artworkURL, size: 140 * scale)
                         .frame(width: 140 * scale, height: 140 * scale)
                         .clipped()
                         .shadow(radius: 5, x: 3, y: 3)

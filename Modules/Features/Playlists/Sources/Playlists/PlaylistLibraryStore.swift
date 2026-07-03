@@ -2,6 +2,7 @@ import Foundation
 import Models
 import SwiftData
 import SwiftUI
+import Utilities
 
 @ModelActor
 public actor PlaylistLibraryStore {
@@ -244,7 +245,7 @@ public actor PlaylistLibraryStore {
 
         let sorted = snapshots.sorted(by: { $0.sortIndex < $1.sortIndex })
         let batchSize = 200
-        
+
         for batch in sorted.chunked(into: batchSize) {
             for snapshot in batch {
                 let created = PlaylistItem(
@@ -340,17 +341,196 @@ public actor PlaylistLibraryStore {
     private func saveContext() {
         try? modelContext.save()
     }
-}
 
-// MARK: - Environment Key
+    // MARK: - Local playlists & "Saved"
 
-public struct PlaylistLibraryStoreKey: EnvironmentKey {
-    public static let defaultValue: PlaylistLibraryStore? = nil
+    /// Reserved ID for the cisum-local "Saved" collection (kept separate from imported liked playlists).
+    public static let savedPlaylistID = "cisum.saved"
+
+    /// Creates the "Saved" playlist if it doesn't exist yet.
+    public func ensureSavedPlaylist() {
+        guard playlist(playlistID: Self.savedPlaylistID) == nil else { return }
+        let saved = Playlist(
+            playlistID: Self.savedPlaylistID,
+            title: "Saved",
+            normalizedTitle: "saved",
+            sourceProvider: .local
+        )
+        modelContext.insert(saved)
+        saveContext()
+    }
+
+    /// Creates an empty local playlist and returns its ID. `source` marks user-made (`.local`) vs
+    /// link-imported (`.shared`) collections.
+    @discardableResult
+    public func createLocalPlaylist(title: String, source: PlaylistSource = .local) -> String {
+        let prefix = source == .shared ? "shared" : "local"
+        let id = "\(prefix).\(UUID().uuidString)"
+        let playlist = Playlist(
+            playlistID: id,
+            title: title,
+            normalizedTitle: title.lowercased(),
+            sourceProvider: source
+        )
+        modelContext.insert(playlist)
+        saveContext()
+        return id
+    }
+
+    /// Imports a playlist whose tracklist travelled inside a cisum share link, under the "Shared"
+    /// category. Deduped per track by fingerprint.
+    @discardableResult
+    public func importEmbeddedPlaylist(name: String, tracks: [SharedSong]) -> String {
+        let id = createLocalPlaylist(title: name, source: .shared)
+        for song in tracks {
+            appendItem(embeddedSnapshot(for: song), to: id)
+        }
+        return id
+    }
+
+    private func embeddedSnapshot(for song: SharedSong) -> PlaylistItemSnapshot {
+        PlaylistItemSnapshot(
+            sortIndex: 0,
+            sourceTrackFingerprint: normalizedRankingText("\(song.title) \(song.artist)"),
+            title: song.title,
+            artistName: song.artist,
+            albumName: song.album,
+            durationSeconds: song.durationSeconds,
+            artworkURLString: song.artworkURL?.absoluteString,
+            youtubeID: song.provider == .youtube ? song.id : nil,
+            youtubeMusicID: song.provider == .youtubeMusic ? song.id : nil,
+            spotifyID: song.provider == .spotify ? song.id : nil,
+            importStatus: .matched
+        )
+    }
+
+    /// Appends a single item to the end of a playlist, deduped by fingerprint. No reindex needed.
+    public func appendItem(_ snapshot: PlaylistItemSnapshot, to playlistID: String) {
+        let existing = items(for: playlistID)
+        guard !existing.contains(where: { $0.sourceTrackFingerprint == snapshot.sourceTrackFingerprint }) else {
+            return
+        }
+
+        let nextIndex = (existing.map(\.sortIndex).max() ?? -1) + 1
+        let item = PlaylistItem(
+            playlistID: playlistID,
+            sortIndex: nextIndex,
+            sourceTrackID: snapshot.sourceTrackID,
+            sourceTrackFingerprint: snapshot.sourceTrackFingerprint,
+            title: snapshot.title,
+            artistName: snapshot.artistName,
+            albumName: snapshot.albumName,
+            isrc: snapshot.isrc,
+            durationSeconds: snapshot.durationSeconds,
+            artworkURLString: snapshot.artworkURLString,
+            youtubeID: snapshot.youtubeID,
+            youtubeMusicID: snapshot.youtubeMusicID,
+            spotifyID: snapshot.spotifyID,
+            tidalID: snapshot.tidalID,
+            qobuzID: snapshot.qobuzID,
+            soundcloudID: snapshot.soundcloudID,
+            deezerID: snapshot.deezerID,
+            appleMusicID: snapshot.appleMusicID,
+            resolutionConfidence: snapshot.resolutionConfidence,
+            canonicalSongID: snapshot.canonicalSongID,
+            importStatus: snapshot.importStatus,
+            importErrorCode: snapshot.importErrorCode,
+            importErrorMessage: snapshot.importErrorMessage
+        )
+        modelContext.insert(item)
+
+        if let playlist = playlist(playlistID: playlistID) {
+            playlist.itemCount = existing.count + 1
+            playlist.updatedAt = .now
+        }
+        saveContext()
+    }
+
+    public func isSaved(fingerprint: String) -> Bool {
+        items(for: Self.savedPlaylistID).contains { $0.sourceTrackFingerprint == fingerprint }
+    }
+
+    /// All cisum-made local playlists (includes "Saved"), most-recently-updated first.
+    public func localPlaylists() -> [Playlist] {
+        let localRawValue = PlaylistSource.local.rawValue
+        let descriptor = FetchDescriptor<Playlist>(
+            predicate: #Predicate { $0.sourceProviderRawValue == localRawValue },
+            sortBy: [SortDescriptor(\Playlist.updatedAt, order: .reverse)]
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
+
+    /// Sendable projection of the local playlists, for callers across the actor boundary.
+    public func localPlaylistRefs() -> [LocalPlaylistRef] {
+        localPlaylists().map { LocalPlaylistRef(id: $0.playlistID, title: $0.title) }
+    }
+
+    /// Removes the item(s) matching a fingerprint, then re-densifies sortIndex 0..<n via `replaceItems`
+    /// (which keeps itemKey uniqueness intact — itemKey is derived from sortIndex).
+    public func removeItem(fingerprint: String, from playlistID: String) {
+        let remaining = items(for: playlistID)
+            .filter { $0.sourceTrackFingerprint != fingerprint }
+            .sorted { $0.sortIndex < $1.sortIndex }
+        let snapshots = remaining.enumerated().map { makeItemSnapshot(from: $1, sortIndex: $0) }
+        replaceItems(for: playlistID, with: snapshots)
+    }
+
+    public func renamePlaylist(playlistID: String, title: String) {
+        guard let playlist = playlist(playlistID: playlistID) else { return }
+        playlist.title = title
+        playlist.normalizedTitle = title.lowercased()
+        playlist.updatedAt = .now
+        saveContext()
+    }
+
+    /// Reorders items in a playlist (drag-to-reorder). Rebuilds contiguous sortIndex via `replaceItems`.
+    public func moveItem(in playlistID: String, fromOffsets: IndexSet, toOffset: Int) {
+        var ordered = items(for: playlistID).sorted { $0.sortIndex < $1.sortIndex }
+        ordered.move(fromOffsets: fromOffsets, toOffset: toOffset)
+        let snapshots = ordered.enumerated().map { makeItemSnapshot(from: $1, sortIndex: $0) }
+        replaceItems(for: playlistID, with: snapshots)
+    }
+
+    /// Prepends the "Saved" tracks on top of a target imported playlist (opt-in merge), deduped.
+    public func mergeSaved(into targetPlaylistID: String) {
+        let saved = items(for: Self.savedPlaylistID).sorted { $0.sortIndex < $1.sortIndex }
+        let target = items(for: targetPlaylistID).sorted { $0.sortIndex < $1.sortIndex }
+        let targetFingerprints = Set(target.map(\.sourceTrackFingerprint))
+        let savedToAdd = saved.filter { !targetFingerprints.contains($0.sourceTrackFingerprint) }
+
+        let combined = savedToAdd + target
+        let snapshots = combined.enumerated().map { makeItemSnapshot(from: $1, sortIndex: $0) }
+        replaceItems(for: targetPlaylistID, with: snapshots)
+    }
+
+    private func makeItemSnapshot(from item: PlaylistItem, sortIndex: Int) -> PlaylistItemSnapshot {
+        PlaylistItemSnapshot(
+            sortIndex: sortIndex,
+            sourceTrackID: item.sourceTrackID,
+            sourceTrackFingerprint: item.sourceTrackFingerprint,
+            title: item.title,
+            artistName: item.artistName,
+            albumName: item.albumName,
+            isrc: item.isrc,
+            durationSeconds: item.durationSeconds,
+            artworkURLString: item.artworkURLString,
+            youtubeID: item.youtubeID,
+            youtubeMusicID: item.youtubeMusicID,
+            spotifyID: item.spotifyID,
+            tidalID: item.tidalID,
+            qobuzID: item.qobuzID,
+            soundcloudID: item.soundcloudID,
+            deezerID: item.deezerID,
+            appleMusicID: item.appleMusicID,
+            resolutionConfidence: item.resolutionConfidence,
+            canonicalSongID: item.canonicalSongID,
+            importStatus: item.importStatus,
+            importErrorCode: item.importErrorCode,
+            importErrorMessage: item.importErrorMessage
+        )
+    }
 }
 
 public extension EnvironmentValues {
-    var playlistLibraryStore: PlaylistLibraryStore? {
-        get { self[PlaylistLibraryStoreKey.self] }
-        set { self[PlaylistLibraryStoreKey.self] = newValue }
-    }
+    @Entry var playlistLibraryStore: PlaylistLibraryStore?
 }

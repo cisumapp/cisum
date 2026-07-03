@@ -14,7 +14,7 @@ let package = Package(
         .package(path: "../../Shared/Utilities"),
         .package(path: "../../Shared/Aesthetics"),
         .package(path: "../../Shared/Networking"),
-        .package(path: "../../Shared/Caching"),    
+        .package(path: "../../Shared/Caching"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
@@ -40,7 +40,7 @@ let package = Package(
                 .product(name: "iTunesKit", package: "iTunesKit"),
                 .product(name: "LyricsKit", package: "LyricsKit"),
                 .product(name: "Tracks", package: "Tracks"),
-                .product(name: "FFmpeg-Kit", package: "ffmpeg-kit-spm")
+                .product(name: "FFmpeg-Kit", package: "ffmpeg-kit-spm"),
             ]
         ),
     ]

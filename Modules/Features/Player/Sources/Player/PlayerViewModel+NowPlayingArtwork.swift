@@ -1,3 +1,4 @@
+import Aesthetics
 import Foundation
 import MediaPlayer
 import Networking
@@ -129,10 +130,10 @@ extension PlayerViewModel {
         for provider in providers {
             if let highResURL = await resolveArtwork(using: provider, title: title, artist: artist) {
                 await mediaCacheStore.saveHighQualityArtworkURL(highResURL, for: mediaID)
-                
+
                 // Immediately refresh queue items to inherit the newly cached high-res artwork
                 updateQueuePreviewItems()
-                
+
                 return highResURL
             }
         }
@@ -336,11 +337,11 @@ extension PlayerViewModel {
         do {
             let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
             let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
-            
+
             // We use anonymous mode for public search
             let spotify = SpotifySDK(mode: .anonymous)
             let response = try await spotify.search.search("\(searchTitle) \(searchArtist)", limit: 5)
-            
+
             // Strict Artist Match Check
             let lowerSearchArtist = searchArtist.lowercased()
             guard let bestMatch = response.tracks?.items.first(where: { item in
@@ -351,7 +352,7 @@ extension PlayerViewModel {
             }) else {
                 return nil
             }
-            
+
             // Return largest artwork URL (Spotify sorts images by size descending)
             if let largestImageURL = bestMatch.album?.images.first?.url {
                 return largestImageURL
@@ -369,7 +370,7 @@ extension PlayerViewModel {
             let searchTitle = normalizedMusicDisplayTitle(title, artist: artist)
             let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
             let response = try await itunes.search(term: "\(searchTitle) \(searchArtist)", country: "us", media: "music", limit: 5)
-            
+
             // Strict Artist Match Check
             let lowerSearchArtist = searchArtist.lowercased()
             guard let bestMatch = response.results.first(where: { result in
@@ -379,7 +380,7 @@ extension PlayerViewModel {
             }) else {
                 return nil
             }
-            
+
             return normalizedITunesArtworkURL(from: bestMatch.artworkUrl100)
         } catch {
             return nil
@@ -393,7 +394,7 @@ extension PlayerViewModel {
             let searchArtist = normalizedMusicDisplayArtist(artist, title: title)
             let query = "\(searchTitle) \(searchArtist)"
             let response = try await youtube.music.search(query)
-            
+
             // Strict Artist Match Check
             let lowerSearchArtist = searchArtist.lowercased()
             guard let bestMatch = response.first(where: { song in
@@ -402,7 +403,7 @@ extension PlayerViewModel {
             }) else {
                 return nil
             }
-            
+
             // YouTube thumbnailURL is already normalized using normalizedArtworkURL inside music search,
             // or we can fallback to replacing sizes. `thumbnailURL` usually is highest available.
             return bestMatch.thumbnailURL
@@ -520,7 +521,9 @@ extension PlayerViewModel {
     #endif
 
     private nonisolated static func fetchArtworkResource(from url: URL?) async -> CachedNowPlayingArtworkResource? {
-        guard let url else { return nil }
+        // Upgrade to max resolution (iTunes→1000², Spotify→640², YT-Music→1000²) before download so the
+        // lock-screen / control-center artwork is crisp even if the resolver handed back a small URL.
+        guard let url = ArtworkURL.best(from: url) else { return nil }
 
         do {
             let data = try await NetworkingClient.shared.downloadData(url: url)

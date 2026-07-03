@@ -111,6 +111,7 @@ enum AppBootstrap {
         let mediaCacheStore = MediaCacheStore(modelContainer: modelContainer)
         let searchCacheHintStore = SearchCacheHintStore(modelContainer: modelContainer)
         let playlistLibraryStore = PlaylistLibraryStore(modelContainer: modelContainer)
+        let savedLibrary = SavedLibraryService(store: playlistLibraryStore)
         let playlistImportJobStore = PlaylistImportJobStore(modelContainer: modelContainer)
         let centralMediaStore = CentralMediaStore(modelContainer: modelContainer)
         let artworkVideoProcessor = ArtworkVideoProcessor.shared
@@ -141,6 +142,7 @@ enum AppBootstrap {
         spotifySessionCoordinator.setCacheDelegate(spotifyCacheStore)
         #if os(iOS)
         let artworkColorExtractor = ImageColorExtractor.shared
+        ArtworkPipeline.configure()
         #endif
         let playerPresentationController = PlayerPresentationController()
         let searchOverlayController = SearchOverlayController()
@@ -288,6 +290,7 @@ enum AppBootstrap {
 
         let libraryServices = LibraryServices(
             playlistLibraryStore: playlistLibraryStore,
+            savedLibrary: savedLibrary,
             playlistImportJobStore: playlistImportJobStore,
             centralMediaStore: centralMediaStore,
             mediaCacheStore: mediaCacheStore,

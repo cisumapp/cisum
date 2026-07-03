@@ -14,7 +14,8 @@ public struct PlaylistDetailWrapper: View {
 
     public var body: some View {
         if let playlist = playlists.first {
-            PlaylistCard(playlist: playlist)
+            // Full-screen detail (cover + track list), not the collapsed grid card.
+            PlaylistTrackListView(playlist: playlist, isDetail: true)
         } else {
             ProgressView()
         }

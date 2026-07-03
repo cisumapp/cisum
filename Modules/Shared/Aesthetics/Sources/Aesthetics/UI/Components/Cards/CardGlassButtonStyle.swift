@@ -1,6 +1,6 @@
 import SwiftUI
 
-extension View {
+public extension View {
     @ViewBuilder
     func cardGlassButtonStyle() -> some View {
         #if os(iOS)

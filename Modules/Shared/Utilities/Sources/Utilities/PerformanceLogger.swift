@@ -237,7 +237,7 @@ public enum PerfLog {
         let fileName = (file as NSString).lastPathComponent
         let cpuTime = String(format: "%.2f", currentCPUTimeMs())
         let msg = message()
-        
+
         let formatted = """
         [\(cpuTime)] [\(fileName):\(line) | \(function)]
          ↳ \(msg)

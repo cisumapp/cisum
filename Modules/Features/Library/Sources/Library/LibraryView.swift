@@ -31,17 +31,24 @@ public struct LibraryView: View {
 
     @State private var viewModel = LibraryViewModel()
     @State private var scrollOffset: CGFloat = 0
+    @State private var isPresentingNewPlaylist = false
+    @State private var newPlaylistName = ""
 
     // Precomputed sorted arrays to avoid O(n log n) on every render
     @State private var sortedShelfPlaylists: [Playlist] = []
     @State private var sortedRecentPlaylists: [Playlist] = []
+    @State private var sortedSharedPlaylists: [Playlist] = []
     @State private var cachedPinnedPlaylist: Playlist?
+    @State private var isSharedExpanded = true
 
     public var body: some View {
         NavigationBarView(
             title: "Library",
             scrollOffset: $scrollOffset,
             customActions: [
+                ProfileMenuCustomAction(title: "New Playlist") {
+                    isPresentingNewPlaylist = true
+                },
                 ProfileMenuCustomAction(title: "Import Playlist") {
                     viewModel.isPresentingImportPicker = true
                 },
@@ -92,6 +99,22 @@ public struct LibraryView: View {
                 fallbackGradientProvider: fallbackGradient,
                 songsLabelProvider: songsLabel
             )
+
+            if !sortedSharedPlaylists.isEmpty {
+                sectionDivider
+
+                LibraryRecentlyAddedSectionView(
+                    isExpanded: $isSharedExpanded,
+                    title: "Shared",
+                    recentlyAddedPlaylists: sortedSharedPlaylists,
+                    isCompactShelfMode: viewModel.isCompactShelfMode,
+                    onNavigate: { envRouter.navigate(to: .playlist(id: $0.playlistID)) },
+                    onDelete: deleteImportedPlaylist,
+                    fallbackSymbolProvider: fallbackSymbol,
+                    fallbackGradientProvider: fallbackGradient,
+                    songsLabelProvider: songsLabel
+                )
+            }
         }
         .safeAreaPadding(.bottom, 140)
         // YouTube import sheet
@@ -112,6 +135,11 @@ public struct LibraryView: View {
         // Unified import sheet (service picker → multi-select → background import).
         .sheet(isPresented: $viewModel.isPresentingImportPicker) {
             ImportServiceSheet()
+        }
+        .alert("New Playlist", isPresented: $isPresentingNewPlaylist) {
+            TextField("Name", text: $newPlaylistName)
+            Button("Cancel", role: .cancel) { newPlaylistName = "" }
+            Button("Create") { createLocalPlaylist() }
         }
         .alert("Library Action Failed", isPresented: libraryActionErrorBinding) {
             Button("OK", role: .cancel) {
@@ -192,18 +220,26 @@ public struct LibraryView: View {
     }
 
     private func updateSortedPlaylists() {
+        // Link-imported "Shared" playlists get their own section, out of the generic shelves.
+        let nonShared = playlists.filter { $0.sourceProvider != .shared }
+
         // Shelf playlists - mode-dependent sort
         sortedShelfPlaylists = switch viewModel.shelfSortMode {
         case .alphabetical:
-            playlists.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            nonShared.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .recent:
-            playlists.sorted { ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt) }
+            nonShared.sorted { ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt) }
         }
 
         // Recently added - always by date
-        sortedRecentPlaylists = playlists.sorted {
+        sortedRecentPlaylists = nonShared.sorted {
             ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt)
         }
+
+        // Shared (received via cisum links) - by date
+        sortedSharedPlaylists = playlists
+            .filter { $0.sourceProvider == .shared }
+            .sorted { ($0.importedAt ?? $0.createdAt) > ($1.importedAt ?? $1.createdAt) }
 
         // Pinned - most recently played/imported
         cachedPinnedPlaylist = playlists.max {
@@ -339,6 +375,16 @@ public struct LibraryView: View {
         )
     }
 
+    private func createLocalPlaylist() {
+        let name = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        newPlaylistName = ""
+        guard !name.isEmpty, let playlistLibraryStore else { return }
+        Task {
+            let id = await playlistLibraryStore.createLocalPlaylist(title: name)
+            envRouter.navigate(to: .playlist(id: id))
+        }
+    }
+
     private func fallbackSymbol(for sourceProvider: PlaylistSource) -> String {
         switch sourceProvider {
         case .spotify:
@@ -349,6 +395,10 @@ public struct LibraryView: View {
             "music.note"
         case .tidal, .qobuz:
             "music.quarternote.3"
+        case .local:
+            "music.note.list"
+        case .shared:
+            "square.and.arrow.down"
         case .unknown:
             "tray.full"
         }
@@ -868,6 +918,7 @@ private struct LibraryPlaylistsShelfSectionView: View {
 
 private struct LibraryRecentlyAddedSectionView: View {
     @Binding var isExpanded: Bool
+    var title: String = "Recently Added"
     let recentlyAddedPlaylists: [Playlist]
     let isCompactShelfMode: Bool
     let onNavigate: (Playlist) -> Void
@@ -882,7 +933,7 @@ private struct LibraryRecentlyAddedSectionView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             LibrarySectionHeaderView(
-                title: "Recently Added",
+                title: title,
                 showsChevronAfterTitle: true,
                 isExpanded: $isExpanded
             )

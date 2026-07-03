@@ -8,10 +8,10 @@
 
 import Aesthetics
 import Kingfisher
-import SwiftUI
 import Models
-import Utilities
+import SwiftUI
 import UniformTypeIdentifiers
+import Utilities
 
 public struct ImportServiceSheet: View {
     private enum Stage: Equatable { case pick, browse, link }
@@ -67,8 +67,8 @@ public struct ImportServiceSheet: View {
 
     private var navTitle: String {
         switch stage {
-        case .pick: return "Import"
-        case .browse, .link: return provider.map(Self.displayName) ?? "Import"
+        case .pick: "Import"
+        case .browse, .link: provider.map(Self.displayName) ?? "Import"
         }
     }
 
@@ -186,7 +186,7 @@ public struct ImportServiceSheet: View {
             case .youtube:
                 await loadPlaylists(svc)
                 if refs.isEmpty {
-                    errorText = nil   // logged-out / empty library → paste-link is the intended path, not an error
+                    errorText = nil // logged-out / empty library → paste-link is the intended path, not an error
                     stage = .link
                 } else {
                     stage = .browse
@@ -242,8 +242,14 @@ public struct ImportServiceSheet: View {
             for await (i, count) in group {
                 guard let count, refs.indices.contains(i) else { continue }
                 let r = refs[i]
-                refs[i] = ImportablePlaylistRef(id: r.id, title: r.title, subtitle: r.subtitle,
-                                                ownerName: r.ownerName, artworkURL: r.artworkURL, trackCount: count)
+                refs[i] = ImportablePlaylistRef(
+                    id: r.id,
+                    title: r.title,
+                    subtitle: r.subtitle,
+                    ownerName: r.ownerName,
+                    artworkURL: r.artworkURL,
+                    trackCount: count
+                )
             }
         }
     }
@@ -307,10 +313,10 @@ public struct ImportServiceSheet: View {
 
     private static func displayName(_ p: ImportProvider) -> String {
         switch p {
-        case .spotify: return "Spotify"
-        case .youtube: return "YouTube"
-        case .appleMusic: return "Apple Music"
-        case .localFile: return "Local Files"
+        case .spotify: "Spotify"
+        case .youtube: "YouTube"
+        case .appleMusic: "Apple Music"
+        case .localFile: "Local Files"
         }
     }
 }

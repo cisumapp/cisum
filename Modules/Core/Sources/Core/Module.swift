@@ -18,6 +18,10 @@ import SwiftUI
 import Utilities
 import YouTubeSDK
 
+#if canImport(SpotifySDK)
+import SpotifySDK
+#endif
+
 @MainActor
 public final class cisumModule {
     // MARK: - Feature Modules
@@ -34,6 +38,7 @@ public final class cisumModule {
     public let navigationState: NavigationState
     private let appRouter: AppRouter
     public let container: ServicesContainer
+    public let deepLinkCoordinator = DeepLinkCoordinator()
 
     public var router: Router {
         appRouter
@@ -53,12 +58,173 @@ public final class cisumModule {
     }
 
     public func handleIncomingURL(_ url: URL) {
+        // Share links: cisum://<entity> (custom scheme) or https://cisum.studio/<entity> (Universal
+        // Link). Falls through to the plugin-manifest path for `cisum://manifest?url=…` and any
+        // non-deep-link URL (both parse to nil here).
+        if let link = CisumLink.parse(url) {
+            handleCisumDeepLink(link)
+            return
+        }
+
         Task {
             do {
                 _ = try await ProviderManifestStore.shared.importManifest(from: url)
             } catch {
                 PerfLog.debug("Failed to import provider manifest: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func handleCisumDeepLink(_ link: CisumLink) {
+        switch link {
+        case let .song(song):
+            playSharedSong(song)
+        case let .playlist(playlist):
+            deepLinkCoordinator.present(playlist)
+        case .artist, .album:
+            // Phase B: needs remote hydration.
+            PerfLog.info("Received shared artist/album link (Phase B)")
+        }
+    }
+
+    private func playSharedSong(_ song: SharedSong) {
+        let player = container.playbackServices.playerViewModel
+        let presentation = container.appServices.playerPresentationController
+
+        switch song.provider {
+        case .youtube, .youtubeMusic:
+            let ref = YouTubeMediaRef(
+                videoID: song.id,
+                title: song.title,
+                artist: song.artist,
+                album: song.album,
+                artworkURL: song.artworkURL,
+                durationSeconds: song.durationSeconds,
+                isExplicit: song.isExplicit,
+                isMusic: song.isMusic
+            )
+            player.load(youtube: ref, preserveQueue: false)
+            presentation.expand()
+        case .spotify:
+            playSharedSpotifySong(song)
+        default:
+            PerfLog.warning("Shared song provider \(song.provider.rawValue) is not playable")
+        }
+    }
+
+    private func playSharedSpotifySong(_ song: SharedSong) {
+        let searchViewModel = container.searchServices.searchViewModel
+        let track = SpotifySearchTrack(
+            id: song.id,
+            title: song.title,
+            artistName: song.artist,
+            albumName: song.album,
+            artworkURL: song.artworkURL,
+            durationSeconds: song.durationSeconds ?? 0,
+            previewURL: nil,
+            isrc: nil
+        )
+        let item = FederatedSearchItem(
+            id: song.id,
+            title: song.title,
+            subtitle: song.artist,
+            artworkURL: song.artworkURL,
+            durationSeconds: song.durationSeconds,
+            isPlayable: true,
+            isExplicit: song.isExplicit,
+            audioQualityLabel: nil,
+            audioCodecLabel: nil,
+            payload: .spotify(track)
+        )
+        let queueTrack = ExternalQueueTrack(
+            mediaID: song.id,
+            title: song.title,
+            artist: song.artist,
+            artworkURL: song.artworkURL,
+            service: .spotify,
+            isExplicit: song.isExplicit,
+            qualityLabelHint: nil,
+            codecLabelHint: nil,
+            resolvePayload: {
+                guard let resolved = try await searchViewModel.resolveExternalStream(for: item) else {
+                    throw FederatedSearchError.noPlayableStream("Unable to resolve a stream for \"\(song.title)\".")
+                }
+                return resolved
+            }
+        )
+        container.playbackServices.playerViewModel.load(external: queueTrack, preserveQueue: false)
+        container.appServices.playerPresentationController.expand()
+    }
+
+    /// Imports a shared playlist (from a `cisum://playlist` link) and returns its local id, or nil on
+    /// failure. Embedded playlists import their carried tracklist; provider playlists re-import via the
+    /// existing import services.
+    public func importSharedPlaylist(_ shared: SharedPlaylist) async -> String? {
+        let store = container.libraryServices.playlistLibraryStore
+        do {
+            switch shared {
+            case let .shortened(id, _, _):
+                guard let resolved = await resolveShortenedPlaylist(id: id) else { return nil }
+                return await importSharedPlaylist(resolved)
+            case let .embedded(name, _, _, tracks):
+                return await store.importEmbeddedPlaylist(name: name, tracks: tracks)
+            case let .imported(provider, sourceID, _):
+                guard let link = providerShareURL(provider: provider, id: sourceID) else { return nil }
+                switch provider {
+                case .youtube, .youtubeMusic:
+                    let service = YouTubePlaylistImportService(youtube: YouTube.shared, playlistStore: store)
+                    return try await service.importPlaylist(fromLink: link)
+                case .spotify:
+                    return try await importSharedSpotifyPlaylist(link: link, store: store)
+                default:
+                    return nil
+                }
+            }
+        } catch {
+            PerfLog.warning("Shared playlist import failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func importSharedSpotifyPlaylist(link: String, store: PlaylistLibraryStore) async throws -> String {
+        #if canImport(SpotifySDK)
+        let coordinator = container.userServices.spotifySessionCoordinator
+        await coordinator.restoreSessionIfNeeded()
+        guard let sdk = coordinator.sdk ?? coordinator.session.map({ SpotifySDK(session: $0) }) else {
+            throw FederatedSearchError.spotifyCredentialsMissing
+        }
+        let centralMediaStore = container.libraryServices.centralMediaStore
+        let service = SpotifyPlaylistImportService(
+            sdk: sdk,
+            playlistStore: store,
+            onSpotifyPlaylistImported: { playlist in
+                Task { _ = await centralMediaStore.upsertSpotifyPlaylist(playlist) }
+            }
+        )
+        return try await service.importPlaylist(fromLink: link)
+        #else
+        throw FederatedSearchError.providerUnavailable("Spotify is unavailable on this platform.")
+        #endif
+    }
+
+    /// Resolves a shortened playlist link by fetching its payload from the shortener.
+    private func resolveShortenedPlaylist(id: String) async -> SharedPlaylist? {
+        guard let url = URL(string: "https://\(CisumLink.webHost)/api/share/\(id)") else { return nil }
+        do {
+            let payload = try await NetworkingClient.shared.get(url: url, responseType: SharedPlaylistPayload.self)
+            return payload.toSharedPlaylist()
+        } catch {
+            PerfLog.warning("Failed to resolve shortened playlist \(id): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func providerShareURL(provider: MediaProvider, id: String) -> String? {
+        switch provider {
+        case .spotify: "https://open.spotify.com/playlist/\(id)"
+        case .youtube: "https://www.youtube.com/playlist?list=\(id)"
+        case .youtubeMusic: "https://music.youtube.com/playlist?list=\(id)"
+        default: nil
         }
     }
 
@@ -212,6 +378,7 @@ public final class cisumModule {
             .environment(container.searchServices)
             .environment(container.libraryServices)
             .environment(\.playlistLibraryStore, container.libraryServices.playlistLibraryStore)
+            .environment(\.savedLibrary, container.libraryServices.savedLibrary)
             .environment(\.centralMediaStore, container.libraryServices.centralMediaStore)
             .environment(container.userServices)
             .environment(container.providerServices)

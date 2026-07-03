@@ -31,16 +31,16 @@ public final class PlaybackEngine {
     private func setupAudioSession() {
         #if os(iOS)
 //        Task.detached {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio)
-                // try AVAudioSession.sharedInstance().setActive(true)
-                
-                // setActive(true) is intentionally deferred to the first actual load
-                // via reactivateSession(), preventing cisum from stealing the audio
-                // session from other apps before the user triggers playback.
-            } catch {
-                PerfLog.debug("Failed to set up audio session category: \(error)")
-            }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio)
+            // try AVAudioSession.sharedInstance().setActive(true)
+
+            // setActive(true) is intentionally deferred to the first actual load
+            // via reactivateSession(), preventing cisum from stealing the audio
+            // session from other apps before the user triggers playback.
+        } catch {
+            PerfLog.debug("Failed to set up audio session category: \(error)")
+        }
 //        }
         #endif
     }
@@ -143,7 +143,7 @@ public final class PlaybackEngine {
     public func reactivateSession() {
         #if os(iOS)
 //        Task.detached {
-            try? AVAudioSession.sharedInstance().setActive(true)
+        try? AVAudioSession.sharedInstance().setActive(true)
 //        }
         #endif
     }

@@ -117,7 +117,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                 let w = UIScreen.main.bounds.width
                 let sa = (UIApplication.shared.connectedScenes.first as? UIWindowScene)
                     .flatMap { $0.windows.first(where: \.isKeyWindow) }
-                    .map { $0.safeAreaInsets.bottom } ?? 0
+                    .map(\.safeAreaInsets.bottom) ?? 0
                 let hasSearch = tabs.contains { $0.role == .search }
                 let phase: ResponsiveLayout.AccessoryPhase = hasSearch ? .inlineWithSearch : .inline
                 // tabBarHeight = 0 → uses measured iOS 26 constant (91 pt)
@@ -169,8 +169,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         GeometryReader { proxy in
             let safeBottom = proxy.safeAreaInsets.bottom
             ZStack {
-                if let searchTab = tabs.first(where: { $0.role == .search }),
-                   selection == searchTab.value {
+                if let searchTab = tabs.first(where: { $0.role == .search }), selection == searchTab.value {
                     searchTab.content
                 } else {
                     ForEach(visibleTabs) { tab in
@@ -208,7 +207,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
             phase: phase,
             screenWidth: screenW,
             safeAreaBottom: safeBottom,
-            tabBarHeight: customTabBarHeight,  // triggers iOS 17/18 formula
+            tabBarHeight: customTabBarHeight, // triggers iOS 17/18 formula
             isSearchExpanded: isSearchExpanded
         )
 

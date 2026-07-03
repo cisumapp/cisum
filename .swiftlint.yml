@@ -10,6 +10,20 @@ disabled_rules:
   - cyclomatic_complexity
   - file_length
   - shorthand_operator
+  # Opinionated / non-autofixable rules relaxed to match the project's style.
+  - trailing_comma
+  - inclusive_language
+  - function_parameter_count
+  - nesting
+  - todo
+  - implicit_optional_initialization
+  - non_optional_string_data_conversion
+  - for_where
+  - closure_parameter_position
+  - multiple_closures_with_trailing_closure
+  - unused_optional_binding
+  # SwiftFormat owns brace placement (wrapMultilineStatementBraces); disable to avoid the conflict.
+  - opening_brace
 
 excluded:
   - .build
@@ -18,26 +32,11 @@ excluded:
   - iOS/build
   - macOS/build
   - Modules/**/.build
-  - Packages/**/.build
+  # Vendored streaming SDKs (maintained as separate submodules).
+  - Packages
 
 opt_in_rules:
   - empty_count
   - explicit_init
   - first_where
   - fatal_error_message
-
-line_length:
-  warning: 140
-  error: 180
-
-file_length:
-  warning: 800
-  error: 1200
-
-type_body_length:
-  warning: 300
-  error: 500
-
-function_body_length:
-  warning: 80
-  error: 120

@@ -401,15 +401,15 @@ public actor CentralMediaStore {
         let id = t.providerTrackID
         guard !id.isEmpty else { return nil }
         switch t.provider {
-        case .spotify:      return fetchFirstSong(predicate: #Predicate { $0.spotifyTrackID == id })
-        case .youtube:      return fetchFirstSong(predicate: #Predicate { $0.youtubeVideoID == id })
+        case .spotify: return fetchFirstSong(predicate: #Predicate { $0.spotifyTrackID == id })
+        case .youtube: return fetchFirstSong(predicate: #Predicate { $0.youtubeVideoID == id })
         case .youtubeMusic: return fetchFirstSong(predicate: #Predicate { $0.youtubeMusicVideoID == id })
-        case .appleMusic:   return fetchFirstSong(predicate: #Predicate { $0.appleMusicSongID == id })
-        case .tidal:        return fetchFirstSong(predicate: #Predicate { $0.tidalID == id })
-        case .qobuz:        return fetchFirstSong(predicate: #Predicate { $0.qobuzID == id })
-        case .soundcloud:   return fetchFirstSong(predicate: #Predicate { $0.soundcloudID == id })
-        case .deezer:       return fetchFirstSong(predicate: #Predicate { $0.deezerID == id })
-        default:            return nil
+        case .appleMusic: return fetchFirstSong(predicate: #Predicate { $0.appleMusicSongID == id })
+        case .tidal: return fetchFirstSong(predicate: #Predicate { $0.tidalID == id })
+        case .qobuz: return fetchFirstSong(predicate: #Predicate { $0.qobuzID == id })
+        case .soundcloud: return fetchFirstSong(predicate: #Predicate { $0.soundcloudID == id })
+        case .deezer: return fetchFirstSong(predicate: #Predicate { $0.deezerID == id })
+        default: return nil
         }
     }
 
@@ -475,15 +475,15 @@ public actor CentralMediaStore {
         let id = t.providerTrackID
         guard !id.isEmpty else { return }
         switch t.provider {
-        case .spotify:      if song.spotifyTrackID == nil { song.spotifyTrackID = id }
-        case .youtube:      if song.youtubeVideoID == nil { song.youtubeVideoID = id }
+        case .spotify: if song.spotifyTrackID == nil { song.spotifyTrackID = id }
+        case .youtube: if song.youtubeVideoID == nil { song.youtubeVideoID = id }
         case .youtubeMusic: if song.youtubeMusicVideoID == nil { song.youtubeMusicVideoID = id }
-        case .appleMusic:   if song.appleMusicSongID == nil { song.appleMusicSongID = id }
-        case .tidal:        if song.tidalID == nil { song.tidalID = id }
-        case .qobuz:        if song.qobuzID == nil { song.qobuzID = id }
-        case .soundcloud:   if song.soundcloudID == nil { song.soundcloudID = id }
-        case .deezer:       if song.deezerID == nil { song.deezerID = id }
-        default:            break
+        case .appleMusic: if song.appleMusicSongID == nil { song.appleMusicSongID = id }
+        case .tidal: if song.tidalID == nil { song.tidalID = id }
+        case .qobuz: if song.qobuzID == nil { song.qobuzID = id }
+        case .soundcloud: if song.soundcloudID == nil { song.soundcloudID = id }
+        case .deezer: if song.deezerID == nil { song.deezerID = id }
+        default: break
         }
     }
 }
@@ -751,15 +751,6 @@ private extension CentralMediaStore {
     }
 }
 
-// MARK: - Environment Key
-
-public struct CentralMediaStoreKey: EnvironmentKey {
-    public static let defaultValue: CentralMediaStore? = nil
-}
-
 public extension EnvironmentValues {
-    var centralMediaStore: CentralMediaStore? {
-        get { self[CentralMediaStoreKey.self] }
-        set { self[CentralMediaStoreKey.self] = newValue }
-    }
+    @Entry var centralMediaStore: CentralMediaStore?
 }

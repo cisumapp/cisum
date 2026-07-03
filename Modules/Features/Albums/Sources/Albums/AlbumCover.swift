@@ -32,8 +32,7 @@ public struct AlbumCover: View {
                 .clipShape(ExtrusionShape(offset: 5))
 
             if let artwork = album.artworkURLString, let displayURL = URL(string: artwork) {
-                KFImage(displayURL)
-                    .resizable()
+                ArtworkImage(url: displayURL, size: 400)
                     .padding(.top, isCardExpanded ? 50 : 0)
                     .padding(.trailing, isCardExpanded ? 0 : 5)
                     .padding(.bottom, isCardExpanded ? 0 : 5)

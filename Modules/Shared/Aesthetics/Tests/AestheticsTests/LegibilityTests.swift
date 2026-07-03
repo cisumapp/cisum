@@ -1,20 +1,20 @@
 #if os(iOS)
+@testable import Aesthetics
 import SwiftUI
 import Testing
 import UIKit
-@testable import Aesthetics
 
 // The modifier decides ink purely from background luminance (threshold 125), independent
 // of system appearance. These assert the two halves of that decision.
 
 @Test func lightBackgroundIsAboveThresholdAndDarkInkIsDark() {
-    #expect(UIColor(Color.white).perceivedBrightness > 125)            // white bg ⇒ "light"
-    #expect(UIColor(Color(hex: "#151515")).perceivedBrightness < 125)  // ⇒ dark ink, readable on light
+    #expect(UIColor(Color.white).perceivedBrightness > 125) // white bg ⇒ "light"
+    #expect(UIColor(Color(hex: "#151515")).perceivedBrightness < 125) // ⇒ dark ink, readable on light
 }
 
 @Test func darkBackgroundIsBelowThresholdAndLightInkIsLight() {
-    #expect(UIColor(Color.black).perceivedBrightness < 125)            // black bg ⇒ "dark"
-    #expect(UIColor(Color(hex: "#F7F4EC")).perceivedBrightness > 125)  // ⇒ light ink, readable on dark
+    #expect(UIColor(Color.black).perceivedBrightness < 125) // black bg ⇒ "dark"
+    #expect(UIColor(Color(hex: "#F7F4EC")).perceivedBrightness > 125) // ⇒ light ink, readable on dark
 }
 
 @Test func accentFallsBackWhenIllegibleOverBackground() {

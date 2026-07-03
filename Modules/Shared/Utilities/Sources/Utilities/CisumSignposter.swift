@@ -32,7 +32,6 @@ import os.signpost
 
 private let kSubsystem = "aaravgupta.cisum"
 
-
 // MARK: - OSSignposter namespace
 
 /// Per-category `OSSignposter` instances.

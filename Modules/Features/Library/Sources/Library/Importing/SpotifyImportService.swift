@@ -11,8 +11,8 @@ import Models
 import Utilities
 
 #if canImport(SpotifySDK)
+import Playlists // SpotifyPlaylistURLParser
 import SpotifySDK
-import Playlists  // SpotifyPlaylistURLParser
 
 /// Stable synthetic id for the user's Liked Songs collection.
 private let spotifyLikedSongsPlaylistID = "spotify:collection:tracks"
@@ -49,7 +49,7 @@ public final class SpotifyImportService: ImportService {
         async let summariesTask = sdk.account.playlists(limit: max(1, limit))
         async let likedTask = sdk.account.likedSongs(limit: 1)
         let summaries = try await summariesTask
-        let likedCount = (try? await likedTask).flatMap { $0.totalCount ?? $0.items.count }
+        let likedCount = await (try? likedTask).flatMap { $0.totalCount ?? $0.items.count }
         PerfLog.info("SpotifyImportService: SDK returned \(summaries.count) playlists")
 
         // ponytail: heart fallback (nil artwork) rendered by the picker row; Liked Songs has no cover URL.
@@ -107,7 +107,7 @@ public final class SpotifyImportService: ImportService {
         )
     }
 
-    public func fetchTrackPage(playlistID: String, cursor: String?, offset: Int) async throws -> ImportTrackPage {
+    public func fetchTrackPage(playlistID: String, cursor _: String?, offset: Int) async throws -> ImportTrackPage {
         PerfLog.info("SpotifyImportService: fetchTrackPage(\(playlistID), offset: \(offset))")
         let sdk = try await currentSDK()
 

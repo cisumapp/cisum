@@ -12,24 +12,24 @@ public final class QueuePersistenceStore: @unchecked Sendable {
 
         // Correct precedence: evaluate the base URL first
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
-        
+
         let directory = base
             .appendingPathComponent("cisum", isDirectory: true)
             .appendingPathComponent("Queue", isDirectory: true)
 
         try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         self.fileURL = directory.appendingPathComponent("last_queue.json")
-        
+
         // Migration: move legacy queue files to the new correct location if it doesn't already exist
-        if !fileManager.fileExists(atPath: self.fileURL.path) {
+        if !fileManager.fileExists(atPath: fileURL.path) {
             let legacyPaths = [
                 base.appendingPathComponent("last_queue.json"), // from precedence bug
-                base.appendingPathComponent("Cisum").appendingPathComponent("Queue").appendingPathComponent("last_queue.json") // from old capitalization
+                base.appendingPathComponent("Cisum").appendingPathComponent("Queue").appendingPathComponent("last_queue.json"), // from old capitalization
             ]
-            
+
             for oldPath in legacyPaths {
                 if fileManager.fileExists(atPath: oldPath.path) {
-                    try? fileManager.moveItem(at: oldPath, to: self.fileURL)
+                    try? fileManager.moveItem(at: oldPath, to: fileURL)
                     break // Migrated successfully
                 }
             }

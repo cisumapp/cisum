@@ -136,9 +136,7 @@ final class HomeViewModel {
         guard !isLoadingMore else { return }
 
         if let token = continuationToken,
-           let lastTime = lastPaginationTriggerAt,
-           lastPaginationTriggerToken == token,
-           Date().timeIntervalSince(lastTime) < Pagination.cooldown
+           let lastTime = lastPaginationTriggerAt, lastPaginationTriggerToken == token, Date().timeIntervalSince(lastTime) < Pagination.cooldown
         {
             return
         }
@@ -442,15 +440,15 @@ enum HomeFeedItem: Identifiable, Codable {
         let type = try container.decode(ItemType.self, forKey: .type)
         switch type {
         case .musicSong:
-            self = .musicSong(try container.decode(YouTubeMusicSong.self, forKey: .payload))
+            self = try .musicSong(container.decode(YouTubeMusicSong.self, forKey: .payload))
         case .musicAlbum:
-            self = .musicAlbum(try container.decode(YouTubeMusicAlbum.self, forKey: .payload))
+            self = try .musicAlbum(container.decode(YouTubeMusicAlbum.self, forKey: .payload))
         case .musicArtist:
-            self = .musicArtist(try container.decode(YouTubeMusicArtist.self, forKey: .payload))
+            self = try .musicArtist(container.decode(YouTubeMusicArtist.self, forKey: .payload))
         case .musicPlaylist:
-            self = .musicPlaylist(try container.decode(YouTubeMusicPlaylist.self, forKey: .payload))
+            self = try .musicPlaylist(container.decode(YouTubeMusicPlaylist.self, forKey: .payload))
         case .main:
-            self = .main(try container.decode(YouTubeItem.self, forKey: .payload))
+            self = try .main(container.decode(YouTubeItem.self, forKey: .payload))
         }
     }
 }

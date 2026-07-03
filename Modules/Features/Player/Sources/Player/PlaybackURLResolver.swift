@@ -5,7 +5,7 @@ import ProviderSDK
 import Utilities
 import YouTubeSDK
 
-// Aliased for clarity at call sites inside this file.
+/// Aliased for clarity at call sites inside this file.
 private let resolverSP = CisumSignpost.resolver
 
 /// Lightweight actor to pre-resolve and cache playable stream URLs (HLS preferred)
@@ -43,7 +43,7 @@ public actor PlaybackURLResolver {
     public func cachedURL(for videoID: String) async -> URL? {
         for provider in providers {
             if let url = await provider.cachedURL(for: videoID) {
-                PerfLog.debug("Cached URL hit via \(self.resolverLabel(for: provider)) for \(videoID)")
+                PerfLog.debug("Cached URL hit via \(resolverLabel(for: provider)) for \(videoID)")
                 return url
             }
         }
@@ -82,6 +82,10 @@ public actor PlaybackURLResolver {
     /// If only one provider succeeds the result is returned immediately without
     /// waiting for the others. If multiple providers succeed their candidates are
     /// merged and ranked so the caller always receives the best stream at index 0.
+    private var inFlightResolves: [String: Task<[PlaybackCandidate], Error>] = [:]
+
+    // ponytail: coalesce concurrent identical resolves (tap + preload + scene-phase reload) so the
+    // same id doesn't hit the network 2-3x. forceDecipher bypasses (that's a deliberate re-resolve).
     public func resolve(
         mediaID: String,
         title: String,
@@ -89,6 +93,28 @@ public actor PlaybackURLResolver {
         representations: [TrackRepresentation]? = nil,
         forceDecipher: Bool = false,
         duration: TimeInterval? = nil
+    ) async throws -> [PlaybackCandidate] {
+        if !forceDecipher, let existing = inFlightResolves[mediaID] {
+            return try await existing.value
+        }
+        let task = Task<[PlaybackCandidate], Error> {
+            try await self.performResolve(
+                mediaID: mediaID, title: title, artist: artist,
+                representations: representations, forceDecipher: forceDecipher, duration: duration
+            )
+        }
+        if !forceDecipher { inFlightResolves[mediaID] = task }
+        defer { if !forceDecipher { inFlightResolves[mediaID] = nil } }
+        return try await task.value
+    }
+
+    private func performResolve(
+        mediaID: String,
+        title: String,
+        artist: String,
+        representations: [TrackRepresentation]?,
+        forceDecipher: Bool,
+        duration: TimeInterval?
     ) async throws -> [PlaybackCandidate] {
         let resolveSpid = resolverSP.begin("resolve", "id=\(mediaID) forceDecipher=\(forceDecipher)")
         let startTime = Date()
@@ -130,7 +156,10 @@ public actor PlaybackURLResolver {
         var lastError: Error?
 
         let raceSpid = resolverSP.begin("provider-race", "id=\(mediaID) providers=\(activeProviders.count)")
-        await withTaskGroup(of: (String, Result<[PlaybackCandidate], Error>).self) { group in
+        // ponytail: 8s ceiling + first-good-candidate. Return as soon as a provider yields a
+        // compatible stream instead of draining every provider — a hung provider (e.g. the 40s
+        // WebView last-resort) can no longer stall the whole resolve. Element `nil` = deadline hit.
+        await withTaskGroup(of: (String, Result<[PlaybackCandidate], Error>)?.self) { group in
             for provider in activeProviders {
                 let label = resolverLabel(for: provider)
                 group.addTask {
@@ -152,8 +181,16 @@ public actor PlaybackURLResolver {
                     }
                 }
             }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                return nil
+            }
 
-            for await (label, result) in group {
+            for await item in group {
+                guard let (label, result) = item else {
+                    PerfLog.warning("Resolve deadline (8s) hit for \(mediaID); using \(allCandidates.count) candidate(s)")
+                    break
+                }
                 switch result {
                 case let .success(candidates) where !candidates.isEmpty:
                     PerfLog.info("\(label) resolved \(candidates.count) candidate(s) for \(mediaID) — top MIME: \(candidates.first?.mimeType ?? "unknown")")
@@ -166,7 +203,9 @@ public actor PlaybackURLResolver {
                 default:
                     break
                 }
+                if allCandidates.contains(where: \.isCompatible) { break }
             }
+            group.cancelAll()
         }
         resolverSP.end("provider-race", state: raceSpid, "id=\(mediaID) candidates=\(allCandidates.count)")
 

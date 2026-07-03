@@ -27,7 +27,7 @@ public struct AlbumCard: View {
     public var body: some View {
         let screenWidth = UIScreen.main.bounds.width
         let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
-        
+
         VStack {
             CardOpenTransition(backgroundColor: viewModel.backgroundColor) { isCardExpanded, _ in
                 VStack {
@@ -58,7 +58,7 @@ public struct AlbumCard: View {
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                
+
                                 Divider()
                                     .padding(.horizontal)
                             }
