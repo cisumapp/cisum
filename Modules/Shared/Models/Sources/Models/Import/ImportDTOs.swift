@@ -19,17 +19,19 @@ public enum ImportProvider: String, Sendable, CaseIterable, Hashable {
 /// What a given `ImportService` is able to do. UI reads these to decide which affordances to show.
 public struct ImportCapabilities: OptionSet, Sendable {
     public let rawValue: Int
-    public init(rawValue: Int) { self.rawValue = rawValue }
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
 
     public static let listsUserPlaylists = ImportCapabilities(rawValue: 1 << 0)
-    public static let importByLink       = ImportCapabilities(rawValue: 1 << 1)
-    public static let likedSongs         = ImportCapabilities(rawValue: 1 << 2)
-    public static let carriesISRC        = ImportCapabilities(rawValue: 1 << 3)
+    public static let importByLink = ImportCapabilities(rawValue: 1 << 1)
+    public static let likedSongs = ImportCapabilities(rawValue: 1 << 2)
+    public static let carriesISRC = ImportCapabilities(rawValue: 1 << 3)
 }
 
 /// A playlist (or synthetic collection, e.g. a local-file selection) the user can choose to import.
 public struct ImportablePlaylistRef: Identifiable, Sendable, Hashable {
-    public let id: String                 // provider playlist id / encoded file bookmark
+    public let id: String // provider playlist id / encoded file bookmark
     public let title: String
     public let subtitle: String?
     public let ownerName: String?
@@ -85,8 +87,8 @@ public struct ImportPlaylistMetadata: Sendable {
 /// One page of neutral tracks. Cursor-based so the Download Manager can checkpoint/resume.
 public struct ImportTrackPage: Sendable {
     public let tracks: [IncomingTrack]
-    public let nextCursor: String?        // persisted as job.resumeToken; nil = last page
-    public let startOffset: Int           // persisted as job.nextTrackOffset
+    public let nextCursor: String? // persisted as job.resumeToken; nil = last page
+    public let startOffset: Int // persisted as job.nextTrackOffset
 
     public init(tracks: [IncomingTrack], nextCursor: String?, startOffset: Int) {
         self.tracks = tracks

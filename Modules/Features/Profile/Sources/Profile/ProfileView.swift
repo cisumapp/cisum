@@ -49,7 +49,7 @@ public struct ProfileView: View {
                 linkedAccountsSection
                 profileStatusCard
                 supportSection
-                
+
                 Text("This profile screen is intentionally lightweight for now and will be expanded in a later pass.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -68,7 +68,7 @@ public struct ProfileView: View {
             if newPhase == .active {
                 Task {
                     await refreshLastFMStatus()
-                    
+
                     if let flowId = pendingFlowId {
                         do {
                             if let scrobbler = lastFMScrobbler {

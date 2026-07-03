@@ -152,9 +152,7 @@ private struct ArtistArtworkHeader: View {
 
     var body: some View {
         if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
-            KFImage(artworkURL)
-                .resizable()
-                .scaledToFill()
+            ArtworkImage(url: artworkURL, size: size.width)
                 .frame(width: size.width, height: size.width)
                 .clipped()
                 .overlay {

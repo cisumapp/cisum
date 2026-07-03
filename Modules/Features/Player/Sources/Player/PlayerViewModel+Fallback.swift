@@ -7,8 +7,8 @@ import AVFoundation
 import Foundation
 import Models
 import ProviderSDK
-import YouTubeSDK
 import Utilities
+import YouTubeSDK
 
 extension PlayerViewModel {
     // MARK: - Playback Resolution & Fallback

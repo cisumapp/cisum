@@ -8,8 +8,8 @@
 //
 
 import Aesthetics
-import SwiftUI
 import Models
+import SwiftUI
 import Utilities
 
 public struct ImportProgressToastView: View {
@@ -54,8 +54,8 @@ public struct ImportProgressToastView: View {
         }
     }
 
-    // Sit just above the mini-player accessory. Reading the @Observable store in-body keeps
-    // the chip reactive to the tab bar hiding/showing on scroll.
+    /// Sit just above the mini-player accessory. Reading the @Observable store in-body keeps
+    /// the chip reactive to the tab bar hiding/showing on scroll.
     private var bottomInset: CGFloat {
         let o = TabBarStateStore.shared.accessoryOffsets
         return (o?.bottomOffset ?? 91) + (o?.accessoryHeight ?? 48) + 8

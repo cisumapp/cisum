@@ -96,9 +96,7 @@ public struct SpotifyPlaylistImportSheet: View {
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 14) {
-                if let profile = coordinator.accountProfile,
-                   let avatarURL = profile.avatarImages.first?.url
-                {
+                if let profile = coordinator.accountProfile, let avatarURL = profile.avatarImages.first?.url {
                     KFImage(avatarURL)
                         .downsampling(size: CGSize(width: 112, height: 112))
                         .placeholder {

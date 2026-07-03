@@ -9,9 +9,7 @@ extension PlayerViewModel {
         guard !syncedLyricsLines.isEmpty else { return nil }
 
         let playbackTime = max(currentTime, 0)
-        if let firstTimestamp = syncedLyricsLines.first?.timestamp,
-           playbackTime < firstTimestamp
-        {
+        if let firstTimestamp = syncedLyricsLines.first?.timestamp, playbackTime < firstTimestamp {
             return 0
         }
 

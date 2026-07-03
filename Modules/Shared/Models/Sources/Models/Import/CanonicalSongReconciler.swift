@@ -26,7 +26,6 @@ enum ProviderMetadataRank {
 }
 
 public enum CanonicalSongReconciler {
-
     /// Metadata-match score at/above which an incoming track is the same canonical song.
     public static let confidentThreshold = 0.85
 
@@ -39,17 +38,20 @@ public enum CanonicalSongReconciler {
         // Strip parenthetical / bracketed version tags anywhere: "(2009 remaster)", "[live]", etc.
         result = result.replacingOccurrences(
             of: #"[\(\[][^\)\]]*\b(remaster|remastered|remix|live|acoustic|instrumental|explicit|clean|feat\.?|ft\.?|featuring)\b[^\)\]]*[\)\]]"#,
-            with: "", options: .regularExpression)
+            with: "", options: .regularExpression
+        )
 
         // Strip trailing " - remaster" / " - live" style suffixes.
         result = result.replacingOccurrences(
             of: #"\s*-\s*(remaster(ed)?|remix|live|acoustic|instrumental)\b.*$"#,
-            with: "", options: .regularExpression)
+            with: "", options: .regularExpression
+        )
 
         // Strip dangling "feat. ..." / "ft. ..." with no brackets.
         result = result.replacingOccurrences(
             of: #"\s+(feat\.?|ft\.?|featuring)\b.*$"#,
-            with: "", options: .regularExpression)
+            with: "", options: .regularExpression
+        )
 
         // Drop punctuation, collapse whitespace.
         result = result.replacingOccurrences(of: #"[^\w\s]"#, with: "", options: .regularExpression)
@@ -65,11 +67,11 @@ public enum CanonicalSongReconciler {
         if aLen == 0 { return bLen == 0 ? 1.0 : 0.0 }
         if bLen == 0 { return 0.0 }
 
-        var prev = Array(0...bLen)
+        var prev = Array(0 ... bLen)
         var curr = Array(repeating: 0, count: bLen + 1)
-        for i in 1...aLen {
+        for i in 1 ... aLen {
             curr[0] = i
-            for j in 1...bLen {
+            for j in 1 ... bLen {
                 let cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1
                 curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
             }

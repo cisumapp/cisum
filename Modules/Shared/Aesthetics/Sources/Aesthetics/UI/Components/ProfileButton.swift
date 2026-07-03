@@ -298,7 +298,7 @@ public struct ProfileButton: View {
                             }
                     }
                     .buttonStyle(.plain)
-                    
+
                     Button {
                         openURL(URL(string: "https://discord.com/invite/Mb4F9Gmuex")!)
                     } label: {
@@ -349,7 +349,7 @@ public struct ProfileButton: View {
                             }
                     }
                     .buttonStyle(.plain)
-                    
+
                     Button {
                         openURL(URL(string: "https://discord.com/invite/Mb4F9Gmuex")!)
                     } label: {

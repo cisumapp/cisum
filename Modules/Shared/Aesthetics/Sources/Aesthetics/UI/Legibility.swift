@@ -16,15 +16,8 @@ import UIKit
 
 public enum LegibilityRole: Sendable { case primary, secondary, accent }
 
-private struct LegibilityBackgroundKey: EnvironmentKey {
-    static let defaultValue: Color = .cisumBg
-}
-
 public extension EnvironmentValues {
-    var legibilityBackground: Color {
-        get { self[LegibilityBackgroundKey.self] }
-        set { self[LegibilityBackgroundKey.self] = newValue }
-    }
+    @Entry var legibilityBackground: Color = .cisumBg
 }
 
 // Non-adaptive brand inks. Chosen by background luminance, NOT by system appearance.

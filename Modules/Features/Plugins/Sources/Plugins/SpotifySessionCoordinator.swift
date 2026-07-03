@@ -1,8 +1,8 @@
 import Foundation
 import Observation
 import Security
-import WebKit
 import Utilities
+import WebKit
 
 #if canImport(SpotifySDK)
 import SpotifySDK
@@ -294,7 +294,7 @@ public final class SpotifySessionCoordinator {
         await fallbackSession.restoreFromCache()
 
         // Authenticated session for library / imports / profile, only if the user has logged in.
-        if (try? await authenticatedTokenStore.loadTokens()) != nil {
+        if await (try? authenticatedTokenStore.loadTokens()) != nil {
             let restoredSession = SpotifyOAuthSession(mode: .authenticated, tokenStore: authenticatedTokenStore)
             session = restoredSession
             sdk = SpotifySDK(

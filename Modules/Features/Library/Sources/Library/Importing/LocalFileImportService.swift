@@ -10,8 +10,8 @@
 //  metadata is imported; add a disk-playback path when local playback is actually requested.
 //
 
-import Foundation
 import AVFoundation
+import Foundation
 import Models
 import Utilities
 
@@ -22,7 +22,9 @@ public final class LocalFileImportService: ImportService {
     public init() {}
 
     /// Always available — the document picker is user-initiated.
-    public func isAuthorized() async -> Bool { true }
+    public func isAuthorized() async -> Bool {
+        true
+    }
 
     /// Register a user's picked audio files as a synthetic playlist. Persists security-scoped
     /// bookmarks (keyed by the returned id) so the import survives app relaunch.
@@ -48,7 +50,7 @@ public final class LocalFileImportService: ImportService {
         )
     }
 
-    public func fetchTrackPage(playlistID: String, cursor: String?, offset: Int) async throws -> ImportTrackPage {
+    public func fetchTrackPage(playlistID: String, cursor _: String?, offset: Int) async throws -> ImportTrackPage {
         PerfLog.info("LocalFileImportService: fetchTrackPage(\(playlistID))")
         guard let entry = try Self.store.load(id: playlistID) else { throw ImportError.notFound }
 
@@ -65,7 +67,7 @@ public final class LocalFileImportService: ImportService {
 
     // MARK: - Metadata extraction
 
-    private static func readTrack(bookmark: Data, index: Int) async -> IncomingTrack? {
+    private static func readTrack(bookmark: Data, index _: Int) async -> IncomingTrack? {
         var stale = false
         guard let url = try? URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &stale) else {
             return nil
@@ -74,7 +76,7 @@ public final class LocalFileImportService: ImportService {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         let asset = AVURLAsset(url: url)
-        let metadata = (try? await asset.load(.metadata)) ?? []
+        let metadata = await (try? asset.load(.metadata)) ?? []
 
         let title = await string(for: .commonIdentifierTitle, in: metadata) ?? url.deletingPathExtension().lastPathComponent
         let artist = await string(for: .commonIdentifierArtist, in: metadata)
@@ -89,13 +91,13 @@ public final class LocalFileImportService: ImportService {
 
         return IncomingTrack(
             provider: .local,
-            providerTrackID: url.absoluteString,  // stable per-file id
+            providerTrackID: url.absoluteString, // stable per-file id
             title: title,
             artistName: artist,
             albumName: album,
             isrc: isrc.flatMap { $0.isEmpty ? nil : $0 },
             durationSeconds: duration,
-            artworkURLString: nil  // embedded artwork has no URL; resolved at display time if needed
+            artworkURLString: nil // embedded artwork has no URL; resolved at display time if needed
         )
     }
 
@@ -108,14 +110,14 @@ public final class LocalFileImportService: ImportService {
 
     // MARK: - Bookmark persistence
 
-    struct Entry: Codable, Sendable {
+    struct Entry: Codable {
         let title: String
         let bookmarks: [Data]
     }
 
     private static let store = BookmarkStore()
 
-    struct BookmarkStore: Sendable {
+    struct BookmarkStore {
         private var directory: URL {
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             return base.appendingPathComponent("cisum/local-imports", isDirectory: true)

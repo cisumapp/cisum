@@ -229,7 +229,7 @@ public actor VideoMetadataCache {
 
     private func evictIfNeeded() async {
         while lru.count > maxEntries, let last = lru.last {
-            PerfLog.info("LRU eviction id=\(last) storeSize=\(self.lru.count)")
+            PerfLog.info("LRU eviction id=\(last) storeSize=\(lru.count)")
             cacheSP.event("lru-evict", "id=\(last) storeSize=\(lru.count)")
             store[last] = nil
             let staleID = last

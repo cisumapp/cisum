@@ -1,5 +1,5 @@
-import Foundation
 import Caching
+import Foundation
 import Models
 import Utilities
 import YouTubeSDK
@@ -46,7 +46,7 @@ extension PlayerViewModel {
 
     func updateQueuePreviewItems() {
         let entries = playbackQueue
-        let store = self.mediaCacheStore
+        let store = mediaCacheStore
         Task { [weak self] in
             guard let self else { return }
             let items = await mapQueueEntriesToPreview(entries, mediaCacheStore: store)
@@ -59,11 +59,11 @@ extension PlayerViewModel {
     nonisolated func mapQueueEntriesToPreview(_ entries: [PlaybackQueueEntry], mediaCacheStore: MediaCacheStore) async -> [QueuePreviewItem] {
         var items = [QueuePreviewItem]()
         items.reserveCapacity(entries.count)
-        
+
         for (index, entry) in entries.enumerated() {
             let mediaID = entry.mediaID
             var resolvedArtworkURL: URL? = entry.artworkURL
-            
+
             // Sync with cached high-quality artwork if available
             if let cachedURL = await mediaCacheStore.cachedHighQualityArtworkURL(
                 for: mediaID,
@@ -71,32 +71,31 @@ extension PlayerViewModel {
             ) {
                 resolvedArtworkURL = cachedURL
             }
-            
-            let item: QueuePreviewItem
-            switch entry {
+
+            let item = switch entry {
             case let .song(song):
-                item = QueuePreviewItem(
+                QueuePreviewItem(
                     id: "\(index)-\(song.videoId)",
                     title: normalizedMusicDisplayTitle(song.title, artist: song.artistsDisplay),
                     subtitle: normalizedMusicDisplayArtist(song.artistsDisplay, title: song.title),
                     artworkURL: resolvedArtworkURL ?? song.thumbnailURL
                 )
             case let .video(video):
-                item = QueuePreviewItem(
+                QueuePreviewItem(
                     id: "\(index)-\(video.id)",
                     title: normalizedMusicDisplayTitle(video.title, artist: video.author),
                     subtitle: normalizedMusicDisplayArtist(video.author, title: video.title),
                     artworkURL: resolvedArtworkURL ?? normalizedArtworkURL(from: video.thumbnailURL)
                 )
             case let .cachedRadio(track):
-                item = QueuePreviewItem(
+                QueuePreviewItem(
                     id: "\(index)-\(track.videoID)",
                     title: normalizedMusicDisplayTitle(track.title, artist: track.artist),
                     subtitle: normalizedMusicDisplayArtist(track.artist, title: track.title),
                     artworkURL: resolvedArtworkURL ?? track.thumbnailURL
                 )
             case let .external(track):
-                item = QueuePreviewItem(
+                QueuePreviewItem(
                     id: "\(index)-\(track.mediaID)",
                     title: normalizedMusicDisplayTitle(track.title, artist: track.artist),
                     subtitle: normalizedMusicDisplayArtist(track.artist, title: track.title),
@@ -105,7 +104,7 @@ extension PlayerViewModel {
             }
             items.append(item)
         }
-        
+
         return items
     }
 }

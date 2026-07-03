@@ -15,8 +15,8 @@ public final class AnalyticsService {
     }
 
     private func setupPostHog() {
-        let currentProjectToken = self.projectToken
-        let currentHost = self.host
+        let currentProjectToken = projectToken
+        let currentHost = host
         Task.detached {
             let config = PostHogConfig(projectToken: currentProjectToken, host: currentHost)
             config.preloadFeatureFlags = false

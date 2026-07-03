@@ -17,14 +17,14 @@ struct RefreshOffsetPreferenceKey: PreferenceKey {
 struct PullToRefresh: ViewModifier {
     var scrollOffset: CGFloat
     let action: () async -> Void
-    
+
     // 1. Keep track of what's happening
     @State private var startingOffset: CGFloat? = nil
     @State private var isRefreshing: Bool = false
     @State private var hasReachedThreshold: Bool = false
-    
+
     let threshold: CGFloat = 100
-    
+
     func body(content: Content) -> some View {
         ZStack(alignment: .top) {
             if isRefreshing {
@@ -32,7 +32,7 @@ struct PullToRefresh: ViewModifier {
                     .padding(.top)
                     .transition(.opacity)
             }
-            
+
             content
                 .offset(y: isRefreshing ? 40 : 0)
                 .animation(.spring, value: isRefreshing)
@@ -51,31 +51,31 @@ struct PullToRefresh: ViewModifier {
 //            handleOffsetChange(offset: offset)
 //        }
     }
-    
+
     private func handleOffsetChange(offset: CGFloat) {
         // Capture the baseline resting offset the first time this fires
         if startingOffset == nil {
             startingOffset = offset
         }
-        
-        guard let startingOffset = startingOffset, !isRefreshing else { return }
-        
+
+        guard let startingOffset, !isRefreshing else { return }
+
         // Calculate exactly how far they pulled DOWN from the resting position
         let pullDistance = offset - startingOffset
-        
+
         // Now it works perfectly: it only triggers when they physically stretch it down!
-        if pullDistance > threshold && !hasReachedThreshold {
+        if pullDistance > threshold, !hasReachedThreshold {
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
             hasReachedThreshold = true
         }
-        
-        if pullDistance < threshold && hasReachedThreshold {
+
+        if pullDistance < threshold, hasReachedThreshold {
             hasReachedThreshold = false
             isRefreshing = true
-            
+
             Task {
                 await action()
-                
+
                 withAnimation {
                     isRefreshing = false
                 }
@@ -86,6 +86,6 @@ struct PullToRefresh: ViewModifier {
 
 public extension View {
     func pullToRefresh(scrollOffset: CGFloat, action: @escaping () async -> Void) -> some View {
-        self.modifier(PullToRefresh(scrollOffset: scrollOffset, action: action))
+        modifier(PullToRefresh(scrollOffset: scrollOffset, action: action))
     }
 }

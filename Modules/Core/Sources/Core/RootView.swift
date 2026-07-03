@@ -1,9 +1,11 @@
 import Aesthetics
 import Combine
+import Models
+import Networking
 import Player
 import Search
-import SwiftUI
 import SwiftData
+import SwiftUI
 import Utilities
 #if os(iOS)
 import UIKit
@@ -29,6 +31,8 @@ public struct RootView: View {
     @State private var showProfile = false
     @State private var showSettings = false
     @State private var appOrientation = AppOrientation(UIDevice.current.orientation)
+    @State private var updateChecker = AppUpdateChecker()
+    @Environment(\.openURL) private var openURL
     #else
     private var searchOverlay: SearchOverlayController {
         container.appServices.searchOverlayController
@@ -46,6 +50,7 @@ public struct RootView: View {
         #if os(iOS)
         @Bindable var presentation = container.appServices.playerPresentationController
         @Bindable var nav = navigationState
+        @Bindable var deepLink = cisum.deepLinkCoordinator
 
         iOSTabView(
             selection: selectedTabBinding,
@@ -112,6 +117,40 @@ public struct RootView: View {
         .background {
             spotifyBackgroundRefresh
         }
+        .alert(
+            deepLink.pendingPlaylist.map { "Add “\($0.playlist.displayName)” to your library?" } ?? "",
+            isPresented: Binding(
+                get: { deepLink.pendingPlaylist != nil },
+                set: { if !$0 { deepLink.pendingPlaylist = nil } }
+            ),
+            presenting: deepLink.pendingPlaylist
+        ) { pending in
+            Button("nvm", role: .cancel) {}
+            Button("okayy") {
+                Task {
+                    if await cisum.importSharedPlaylist(pending.playlist) != nil {
+                        // Land in the Library (under "Shared"), not a pushed detail.
+                        cisum.router.navigate(to: .library)
+                    }
+                }
+            }
+        } message: { pending in
+            Text(sharedPlaylistMessage(pending.playlist))
+        }
+        .task {
+            await updateChecker.check()
+        }
+        .alert("Update Available", isPresented: $updateChecker.updateAvailable) {
+            Button("Download") {
+                if let url = updateChecker.downloadURL { openURL(url) }
+            }
+            // ponytail: forced = drop "Later" (only escape is Download → TestFlight); re-prompts next launch.
+            if !updateChecker.forced {
+                Button("Later", role: .cancel) {}
+            }
+        } message: {
+            Text(updateChecker.message)
+        }
         #else
         tabSurface
             .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
@@ -144,6 +183,23 @@ public struct RootView: View {
         #endif
     }
 
+    private func sharedPlaylistMessage(_ playlist: SharedPlaylist) -> String {
+        switch playlist {
+        case let .embedded(_, author, sharedBy, tracks):
+            var parts = ["\(tracks.count) \(tracks.count == 1 ? "song" : "songs")"]
+            if let sharedBy, !sharedBy.isEmpty {
+                parts.append("shared by \(sharedBy)")
+            } else if let author, !author.isEmpty {
+                parts.append("by \(author)")
+            }
+            return parts.joined(separator: " · ")
+        case .imported:
+            return "Imported playlist"
+        case .shortened:
+            return "Shared playlist"
+        }
+    }
+
     @ViewBuilder
     private var spotifyBackgroundRefresh: some View {
         #if canImport(SpotifySDK)
@@ -157,8 +213,7 @@ public struct RootView: View {
     }
 
     private var profileImageURL: URL? {
-        if let clerkUser = container.userServices.authService.user,
-           let url = URL(string: clerkUser.imageUrl) {
+        if let clerkUser = container.userServices.authService.user, let url = URL(string: clerkUser.imageUrl) {
             return url
         }
         if let avatar = container.userServices.spotifySessionCoordinator.accountProfile?.avatarImages.first {

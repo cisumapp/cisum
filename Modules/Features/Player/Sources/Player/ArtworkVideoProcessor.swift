@@ -535,9 +535,7 @@ public actor ArtworkVideoProcessor {
 
     private func ensureCurrentCacheProfile(in cacheDirectory: URL) throws {
         let profileURL = cacheProfileURL(in: cacheDirectory)
-        if let storedProfile = try? String(contentsOf: profileURL, encoding: .utf8),
-           storedProfile.trimmingCharacters(in: .whitespacesAndNewlines) == CacheProfile.version
-        {
+        if let storedProfile = try? String(contentsOf: profileURL, encoding: .utf8), storedProfile.trimmingCharacters(in: .whitespacesAndNewlines) == CacheProfile.version {
             return
         }
 
@@ -601,12 +599,12 @@ public actor ArtworkVideoProcessor {
                 "-t 5",
                 "-map \(streamMap)",
                 "-vf \(quotedFFmpegArgument(videoFilter))",
-                "-an"
+                "-an",
             ]
                 + codecArguments
                 + [
                     "-movflags +faststart",
-                    quotedFFmpegArgument(outputURL.path(percentEncoded: false))
+                    quotedFFmpegArgument(outputURL.path(percentEncoded: false)),
                 ]
         ).joined(separator: " ")
     }

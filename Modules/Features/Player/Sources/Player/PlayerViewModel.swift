@@ -889,59 +889,36 @@ public final class PlayerViewModel: PlayerViewModelInterface {
                 return
             }
 
-            let result: Result<ExternalStreamPayload, Error>? = await withTaskGroup(of: Result<ExternalStreamPayload, Error>?.self, returning: Result<ExternalStreamPayload, Error>?.self) { group in
-                // Path A: Primary resolvePayload (no MainActor access needed)
-                group.addTask {
-                    do {
-                        let payload = try await track.resolvePayload()
-                        return .success(payload)
-                    } catch {
-                        return .failure(error)
+            // ponytail: Path A first; only fall back to the YouTube-mediaID resolve if it fails.
+            // (Racing them wasted a full resolve + emitted a -999 cancellation on every load, and
+            // Path B can't help a Spotify id anyway — it's the same work or a guaranteed miss.)
+            let result: Result<ExternalStreamPayload, Error>?
+            do {
+                let payload = try await track.resolvePayload()
+                result = .success(payload)
+            } catch let pathAError {
+                do {
+                    let candidates = try await resolvePlaybackCandidates(
+                        forID: normalizedMediaID,
+                        title: track.title,
+                        artist: track.artist
+                    )
+                    guard let bestCandidate = candidates.first else {
+                        throw pathAError
                     }
+                    result = .success(ExternalStreamPayload(
+                        mediaID: normalizedMediaID,
+                        streamURL: bestCandidate.url,
+                        title: track.title,
+                        artist: track.artist,
+                        artworkURL: track.artworkURL,
+                        service: track.service,
+                        qualityLabel: track.qualityLabelHint ?? "YouTube",
+                        codecLabel: track.codecLabelHint ?? "HLS"
+                    ))
+                } catch {
+                    result = .failure(error)
                 }
-
-                // Path B: YouTube fallback via PlaybackURLResolver (InnerTube WebSafari path)
-                group.addTask { [weak self] in
-                    guard let self else { return nil }
-                    do {
-                        let candidates = try await resolvePlaybackCandidates(
-                            forID: normalizedMediaID,
-                            title: track.title,
-                            artist: track.artist
-                        )
-                        // Wrap candidates in ExternalStreamPayload-compatible form
-                        guard let bestCandidate = candidates.first else {
-                            throw PlaybackURLResolver.ResolverError.resolutionFailed(mediaID: normalizedMediaID)
-                        }
-                        return .success(ExternalStreamPayload(
-                            mediaID: normalizedMediaID,
-                            streamURL: bestCandidate.url,
-                            title: track.title,
-                            artist: track.artist,
-                            artworkURL: track.artworkURL,
-                            service: track.service,
-                            qualityLabel: track.qualityLabelHint ?? "YouTube",
-                            codecLabel: track.codecLabelHint ?? "HLS"
-                        ))
-                    } catch {
-                        return .failure(error)
-                    }
-                }
-
-                // Collect first success, cancel remaining
-                var lastError: Error?
-                for await result in group {
-                    if let result {
-                        switch result {
-                        case let .success(payload):
-                            group.cancelAll()
-                            return .success(payload)
-                        case let .failure(error):
-                            lastError = error
-                        }
-                    }
-                }
-                return lastError.map { .failure($0) }
             }
 
             guard let result else {

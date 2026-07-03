@@ -100,6 +100,7 @@ public final class SearchServices {
 @MainActor
 public final class LibraryServices {
     public let playlistLibraryStore: PlaylistLibraryStore
+    public let savedLibrary: SavedLibraryService
     public let playlistImportJobStore: PlaylistImportJobStore
     public let centralMediaStore: CentralMediaStore
     public let mediaCacheStore: MediaCacheStore
@@ -109,6 +110,7 @@ public final class LibraryServices {
 
     public init(
         playlistLibraryStore: PlaylistLibraryStore,
+        savedLibrary: SavedLibraryService,
         playlistImportJobStore: PlaylistImportJobStore,
         centralMediaStore: CentralMediaStore,
         mediaCacheStore: MediaCacheStore,
@@ -117,6 +119,7 @@ public final class LibraryServices {
         importProgressFacade: ImportProgressFacade
     ) {
         self.playlistLibraryStore = playlistLibraryStore
+        self.savedLibrary = savedLibrary
         self.playlistImportJobStore = playlistImportJobStore
         self.centralMediaStore = centralMediaStore
         self.mediaCacheStore = mediaCacheStore

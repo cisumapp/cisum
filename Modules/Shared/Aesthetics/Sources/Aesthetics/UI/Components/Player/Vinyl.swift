@@ -35,7 +35,7 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     public var body: some View {
         GeometryReader { geo in
             let sizes = ResponsiveLayout.VinylSizes(screenWidth: geo.size.width)
-            
+
             TimelineView(.animation) { timeline in
                 ZStack {
                     VStack {
@@ -138,8 +138,7 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
                 .font(.system(size: 17))
                 .lineLimit(1)
 
-            if let subtitle = label.subtitle,
-               !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let subtitle = label.subtitle, !subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(subtitle)
                     .font(.caption)
                     .lineLimit(1)

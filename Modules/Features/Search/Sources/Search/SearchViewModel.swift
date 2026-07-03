@@ -334,14 +334,20 @@ public class SearchViewModel: SearchViewModelInterface {
 
             let bestMatch = hiddenItems
                 .filter(\.isPlayable)
-                .map { hiddenItem -> (item: FederatedSearchItem, score: Double) in
+                .compactMap { hiddenItem -> (item: FederatedSearchItem, score: Double)? in
                     let hiddenTitle = normalizedRankingText(hiddenItem.title)
                     let hiddenArtist = normalizedRankingText(primaryArtistName(from: hiddenItem.subtitle))
+                    let hiddenText = normalizedRankingText("\(hiddenItem.title) \(hiddenItem.subtitle)")
                     let titleSim = tokenOverlapScore(spotifyTitle, hiddenTitle)
-                    let artistSim = tokenOverlapScore(spotifyArtist, hiddenArtist)
+                    let artistSim = max(
+                        tokenOverlapScore(spotifyArtist, hiddenArtist),
+                        tokenOverlapScore(spotifyArtist, hiddenText)
+                    )
+                    // Artist gate: reject a same-title candidate that shares no artist token at all.
+                    if !spotifyArtist.isEmpty, artistSim == 0 { return nil }
                     let priority = providerPriority(for: hiddenItem.service)
                     let serviceBonus = Double(3 - priority) * 0.02
-                    return (hiddenItem, (0.6 * titleSim) + (0.4 * artistSim) + serviceBonus)
+                    return (hiddenItem, (0.5 * titleSim) + (0.5 * artistSim) + serviceBonus)
                 }
                 .filter { $0.score > 0.4 }
                 .max(by: { $0.score < $1.score })
@@ -471,9 +477,17 @@ public class SearchViewModel: SearchViewModelInterface {
             // Add other providers (tidal, qobuz) later if ProviderSDK resolution supports it directly here.
         }
 
-        // 1. Ensure we have the ISRC for accurate matching
+        // 1. Ensure we have the ISRC for accurate matching — best-effort, 1.5s cap.
+        // ponytail: ISRC only sharpens matching; never block playback on Spotify's 429 (5s backoff).
         if case let .spotify(track) = activeSpotifyItem.payload, track.isrc == nil {
-            if let fullTrack = await fetchFullSpotifyTrack(id: track.id) {
+            let fullTrack: SpotifyTrack? = await withTaskGroup(of: SpotifyTrack?.self) { [weak self] group in
+                group.addTask { await self?.fetchFullSpotifyTrack(id: track.id) }
+                group.addTask { try? await Task.sleep(nanoseconds: 1_500_000_000); return nil }
+                let first = await group.next() ?? nil
+                group.cancelAll()
+                return first
+            }
+            if let fullTrack {
                 let updatedTrack = SpotifySearchTrack(
                     id: track.id,
                     title: fullTrack.name,

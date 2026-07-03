@@ -81,9 +81,21 @@ extension SearchViewModel {
         let normalizedSourceArtist = normalizedRankingText(sourceArtist)
         let normalizedCandidateTitle = normalizedRankingText(candidate.title)
         let normalizedCandidateArtist = normalizedRankingText(primaryArtistName(from: candidate.subtitle))
+        // Full candidate text — YouTube results often embed the artist in the title/channel
+        // ("Michael Jackson - Rock With You") rather than a clean artist field.
+        let normalizedCandidateText = normalizedRankingText("\(candidate.title) \(candidate.subtitle)")
 
         let titleOverlap = tokenOverlapScore(normalizedSourceTitle, normalizedCandidateTitle)
-        let artistOverlap = tokenOverlapScore(normalizedSourceArtist, normalizedCandidateArtist)
+        let parsedArtistOverlap = tokenOverlapScore(normalizedSourceArtist, normalizedCandidateArtist)
+        let artistPresence = tokenOverlapScore(normalizedSourceArtist, normalizedCandidateText)
+        let artistOverlap = max(parsedArtistOverlap, artistPresence)
+
+        // Artist gate: a known source artist that shares NO token anywhere in the candidate is
+        // almost certainly a different song that happens to have the same title (e.g. "Rock With
+        // You" by Michael Jackson vs by SEVENTEEN). Reject it (score below the 0.55 threshold).
+        if !normalizedSourceArtist.isEmpty, artistOverlap == 0 {
+            return 0
+        }
         let titleContainsBonus = normalizedCandidateTitle.contains(normalizedSourceTitle) ? 0.16 : 0
         let sourceContainsBonus = normalizedSourceTitle.contains(normalizedCandidateTitle) ? 0.08 : 0
         let exactTitleBonus = normalizedSourceTitle == normalizedCandidateTitle ? 0.36 : 0
@@ -110,7 +122,7 @@ extension SearchViewModel {
         }
 
         return (0.42 * titleOverlap)
-            + (0.26 * artistOverlap)
+            + (0.30 * artistOverlap)
             + titleContainsBonus
             + sourceContainsBonus
             + exactTitleBonus

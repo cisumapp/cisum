@@ -418,5 +418,3 @@ public struct SearchView: View {
         )
     }
 }
-
-

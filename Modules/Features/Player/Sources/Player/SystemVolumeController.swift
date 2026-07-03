@@ -96,7 +96,7 @@ public final class SystemVolumeController {
 
     private func attachVolumeViewIfNeeded() {
         guard isActivated, let window else { return }
-        
+
         if volumeView == nil {
             let view = MPVolumeView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
             view.showsVolumeSlider = true
@@ -104,7 +104,7 @@ public final class SystemVolumeController {
             view.alpha = showsSystemVolumeHUD ? 1.0 : 0.0001
             volumeView = view
         }
-        
+
         if let volumeView, volumeView.superview !== window {
             volumeView.removeFromSuperview()
             window.addSubview(volumeView)
@@ -222,15 +222,11 @@ public final class SystemVolumeController {
             return value
         }
 
-        if let value = userInfo["AVSystemController_AudioVolumeNotificationParameter"]
-            as? Double
-        {
+        if let value = userInfo["AVSystemController_AudioVolumeNotificationParameter"] as? Double {
             return Float(value)
         }
 
-        if let value = userInfo["AVSystemController_AudioVolumeNotificationParameter"]
-            as? NSNumber
-        {
+        if let value = userInfo["AVSystemController_AudioVolumeNotificationParameter"] as? NSNumber {
             return value.floatValue
         }
 

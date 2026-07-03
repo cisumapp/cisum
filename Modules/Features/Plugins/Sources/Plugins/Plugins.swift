@@ -2,8 +2,8 @@ import Caching
 import Foundation
 import Player
 import ProviderSDK
-import YouTubeSDK
 import Utilities
+import YouTubeSDK
 
 public enum Plugins {
     @MainActor private static var cachedProviderSDK: ProviderSDK?

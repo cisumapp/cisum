@@ -1,6 +1,5 @@
-import Kingfisher
-import SwiftUI
 import Aesthetics
+import SwiftUI
 
 public struct TrackListItem: View {
     let trackName: String
@@ -26,14 +25,11 @@ public struct TrackListItem: View {
     public var body: some View {
         let screenWidth = UIScreen.main.bounds.width
         let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
-        
+
         VStack(alignment: .leading) {
             HStack {
                 if let artworkURL {
-                    KFImage(artworkURL)
-                        .resizable()
-                        .downsampling(size: CGSize(width: 120, height: 120))
-                        .scaledToFill()
+                    ArtworkImage(url: artworkURL, size: 60 * scale)
                         .frame(width: 60 * scale, height: 60 * scale)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                 } else {

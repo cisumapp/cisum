@@ -7,8 +7,8 @@
 //
 
 import Foundation
-import Models         // ImportProvider
-import Plugins        // SpotifySessionCoordinator
+import Models // ImportProvider
+import Plugins // SpotifySessionCoordinator
 import YouTubeSDK
 
 #if canImport(SpotifySDK)

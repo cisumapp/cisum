@@ -10,6 +10,7 @@ import Aesthetics
 import Kingfisher
 import Models
 import SwiftUI
+import Utilities
 
 // MARK: - Album Cover
 
@@ -29,8 +30,10 @@ public struct PlaylistCover: View {
     public var body: some View {
         ZStack {
             if showAllImages {
+                // Stacked-card fan-out, tinted to the artwork palette so it reads as one object
+                // instead of primary red/blue/green.
                 Rectangle()
-                    .foregroundStyle(.red)
+                    .foregroundStyle(viewModel.backgroundColor.opacity(0.9))
                     .offset(x: 30, y: -25)
                     .rotationEffect(.degrees(5))
                     .scaleEffect(0.8)
@@ -39,7 +42,7 @@ public struct PlaylistCover: View {
                     .shadow(radius: 5)
 
                 Rectangle()
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(viewModel.backgroundColor.opacity(0.7))
                     .offset(x: -30, y: 0)
                     .rotationEffect(.degrees(-15))
                     .scaleEffect(0.8)
@@ -48,7 +51,7 @@ public struct PlaylistCover: View {
                     .shadow(radius: 5)
 
                 Rectangle()
-                    .foregroundStyle(.green)
+                    .foregroundStyle(viewModel.backgroundColor.opacity(0.5))
                     .offset(x: 30, y: 25)
                     .rotationEffect(.degrees(15))
                     .scaleEffect(0.8)
@@ -68,8 +71,7 @@ public struct PlaylistCover: View {
                         .resizable()
                         .padding(.top, isCardExpanded ? 50 : 0)
                 } else if let displayURL = URL(string: artwork) {
-                    KFImage(displayURL)
-                        .resizable()
+                    ArtworkImage(url: displayURL, size: 400)
                         .padding(.top, isCardExpanded ? 50 : 0)
                 }
             }
@@ -114,15 +116,17 @@ public struct PlaylistCover: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
-        .animation(.smooth(duration: 0.3, extraBounce: 0), value: isCardExpanded)
-        .animation(.smooth(duration: 0.3, extraBounce: 0), value: showAllImages)
+        .animation(.playerExpandAnimation, value: isCardExpanded)
+        .animation(.playerExpandAnimation, value: showAllImages)
         .task {
             guard let artwork = playlist.artworkURLString,
                   !artwork.hasPrefix("bundle://"),
                   let displayURL = URL(string: artwork)
             else { return }
-            let paletteURL = ImageColorExtractor.paletteURL(from: displayURL)
-            await viewModel.fetchPaletteIfNeeded(from: paletteURL)
+            // Reuse the same best-quality URL the display renders, so palette extraction hits the
+            // cached original instead of triggering a second download.
+            let paletteSourceURL = ArtworkURL.best(from: displayURL) ?? displayURL
+            await viewModel.fetchPaletteIfNeeded(from: paletteSourceURL)
         }
     }
 }

@@ -143,9 +143,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
             }
         }
         .frame(height: 56 * screenScale)
-        .padding(.horizontal, isSearchExpanded
-            ? (isKeyboardActive ? 10 * screenScale : 25 * screenScale)
-            : 21 * screenScale)
+        .padding(
+            .horizontal,
+            isSearchExpanded
+                ? (isKeyboardActive ? 10 * screenScale : 25 * screenScale)
+                : 21 * screenScale
+        )
         .padding(.bottom, isKeyboardActive ? 10 * screenScale : 0)
         .animation(bouncyAnimation, value: animationState)
     }
@@ -180,9 +183,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
         if let index = visible.firstIndex(where: { $0.value == activeTab }) {
             dragOffset = CGFloat(index) * width
             lastVisibleSelection = activeTab
-        } else if let last = lastVisibleSelection,
-                  let idx = visible.firstIndex(where: { $0.value == last })
-        {
+        } else if let last = lastVisibleSelection, let idx = visible.firstIndex(where: { $0.value == last }) {
             // Restore to previously remembered visible selection if still present
             dragOffset = CGFloat(idx) * width
         } else if let first = visible.first {

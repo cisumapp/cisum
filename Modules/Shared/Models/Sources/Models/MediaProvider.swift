@@ -12,7 +12,7 @@ public enum MediaProvider: String, Codable, CaseIterable, Sendable {
     case soundcloud
     case deezer
 
-    // local files (document picker import)
+    /// local files (document picker import)
     case local
 
     // others
@@ -30,5 +30,9 @@ public enum PlaylistSource: String, Codable, CaseIterable, Sendable {
     case appleMusic = "apple_music"
     case tidal
     case qobuz
+    /// A playlist created locally in cisum (user-made or the "Saved" collection).
+    case local
+    /// A playlist imported from a cisum share link (embedded tracklist).
+    case shared
     case unknown
 }

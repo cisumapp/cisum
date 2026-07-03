@@ -13,11 +13,11 @@
 
 import Foundation
 import Models
-import Utilities
 import Playlists
+import Utilities
 
 public actor ImportDownloadManager {
-    private struct QueuedJob: Sendable {
+    private struct QueuedJob {
         let jobID: String
         let provider: ImportProvider
         let ref: ImportablePlaylistRef
@@ -82,7 +82,7 @@ public actor ImportDownloadManager {
     public func enqueue(provider: ImportProvider, playlistRefs refs: [ImportablePlaylistRef]) async -> [String] {
         var ids: [String] = []
         for ref in refs {
-            ids.append(await enqueue(provider: provider, playlistRef: ref))
+            await ids.append(enqueue(provider: provider, playlistRef: ref))
         }
         return ids
     }
@@ -99,7 +99,9 @@ public actor ImportDownloadManager {
     }
 
     public func cancelAll() {
-        for id in tasks.keys { cancel(jobID: id) }
+        for id in tasks.keys {
+            cancel(jobID: id)
+        }
         queue.removeAll()
     }
 
@@ -147,8 +149,13 @@ public actor ImportDownloadManager {
         let ref = job.ref
         guard let service = services[job.provider] else {
             PerfLog.error("ImportDownloadManager: no service for \(job.provider.rawValue)")
-            await jobStore.finish(jobID: jobID, state: .failed, destinationPlaylistID: nil,
-                                  lastErrorCode: "no_service", lastErrorMessage: "No import service registered.")
+            await jobStore.finish(
+                jobID: jobID,
+                state: .failed,
+                destinationPlaylistID: nil,
+                lastErrorCode: "no_service",
+                lastErrorMessage: "No import service registered."
+            )
             await complete(jobID: jobID, title: ref.title, destinationPlaylistID: nil, state: .failed, matched: 0, failed: 0)
             return
         }
@@ -200,9 +207,15 @@ public actor ImportDownloadManager {
                     if incoming.providerTrackID.isEmpty, incoming.title.isEmpty {
                         failed += 1
                         items.append(Self.failedItem(at: idx))
-                        trackEntries.append(.init(jobID: jobID, sourceTrackFingerprint: "empty-\(idx)", sourceIndex: idx,
-                                                  title: "Unknown", state: .failed, errorCode: "empty",
-                                                  errorMessage: "Track had no identity."))
+                        trackEntries.append(.init(
+                            jobID: jobID,
+                            sourceTrackFingerprint: "empty-\(idx)",
+                            sourceIndex: idx,
+                            title: "Unknown",
+                            state: .failed,
+                            errorCode: "empty",
+                            errorMessage: "Track had no identity."
+                        ))
                         PerfLog.warning("ImportDownloadManager: job \(jobID) skipped empty track at \(idx)")
                     } else {
                         let songID = await centralMediaStore.reconcile(incoming)
@@ -215,9 +228,16 @@ public actor ImportDownloadManager {
 
                 offset += page.tracks.count
                 cursor = page.nextCursor
-                await jobStore.checkpoint(jobID: jobID, nextTrackOffset: offset, resumeToken: cursor,
-                                          processedTrackCount: processed, matchedTrackCount: matched,
-                                          uncertainTrackCount: 0, failedTrackCount: failed, requiresReview: false)
+                await jobStore.checkpoint(
+                    jobID: jobID,
+                    nextTrackOffset: offset,
+                    resumeToken: cursor,
+                    processedTrackCount: processed,
+                    matchedTrackCount: matched,
+                    uncertainTrackCount: 0,
+                    failedTrackCount: failed,
+                    requiresReview: false
+                )
                 await progress.upsert(.init(id: jobID, title: title, provider: job.provider, processed: processed, total: max(total, processed), state: .running))
                 PerfLog.debug("ImportDownloadManager: job \(jobID) page committed processed=\(processed)")
                 if cursor == nil { break }
@@ -235,13 +255,23 @@ public actor ImportDownloadManager {
             if processed > 0 {
                 await playlistLibraryStore.replaceItems(for: destID, with: items)
                 await jobStore.replaceTracks(for: jobID, with: trackEntries)
-                await jobStore.finish(jobID: jobID, state: .partialFailure, destinationPlaylistID: destID,
-                                      lastErrorCode: "page_fetch", lastErrorMessage: error.localizedDescription)
+                await jobStore.finish(
+                    jobID: jobID,
+                    state: .partialFailure,
+                    destinationPlaylistID: destID,
+                    lastErrorCode: "page_fetch",
+                    lastErrorMessage: error.localizedDescription
+                )
                 await complete(jobID: jobID, title: title, destinationPlaylistID: destID, state: .partialFailure, matched: matched, failed: failed)
                 PerfLog.warning("ImportDownloadManager: job \(jobID) partial-failure: \(error.localizedDescription)")
             } else {
-                await jobStore.finish(jobID: jobID, state: .failed, destinationPlaylistID: nil,
-                                      lastErrorCode: "fetch", lastErrorMessage: error.localizedDescription)
+                await jobStore.finish(
+                    jobID: jobID,
+                    state: .failed,
+                    destinationPlaylistID: nil,
+                    lastErrorCode: "fetch",
+                    lastErrorMessage: error.localizedDescription
+                )
                 await complete(jobID: jobID, title: title, destinationPlaylistID: nil, state: .failed, matched: 0, failed: 0)
                 PerfLog.error("ImportDownloadManager: job \(jobID) failed: \(error.localizedDescription)")
             }
@@ -309,10 +339,10 @@ public actor ImportDownloadManager {
 
     private static func playlistSource(_ p: ImportProvider) -> PlaylistSource {
         switch p {
-        case .spotify:    return .spotify
-        case .youtube:    return .youtube
-        case .appleMusic: return .appleMusic
-        case .localFile:  return .unknown
+        case .spotify: .spotify
+        case .youtube: .youtube
+        case .appleMusic: .appleMusic
+        case .localFile: .unknown
         }
     }
 

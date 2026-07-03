@@ -31,9 +31,7 @@ extension PlayerViewModel {
             return
         }
 
-        if preloadingNextMediaID == nextEntry.mediaID,
-           nextPlaybackPreloadTask != nil
-        {
+        if preloadingNextMediaID == nextEntry.mediaID, nextPlaybackPreloadTask != nil {
             return
         }
 
@@ -189,34 +187,22 @@ extension PlayerViewModel {
                     return prepared
                 }
 
-                // Race both resolution paths in parallel
-                let payload: ExternalStreamPayload? = await withTaskGroup(of: ExternalStreamPayload?.self, returning: ExternalStreamPayload?.self) { group in
-                    // Path A: Primary resolvePayload
-                    group.addTask {
-                        do { return try await track.resolvePayload() }
-                        catch { return nil }
+                // ponytail: Path A first, Path B (YouTube-mediaID) only as fallback — same reasoning
+                // as loadExternalTrack; the parallel race just wasted a resolve + emitted a -999.
+                var payload: ExternalStreamPayload? = try? await track.resolvePayload()
+                if payload == nil {
+                    let candidates = try? await resolvePlaybackCandidates(
+                        forID: normalizedMediaID, title: track.title, artist: track.artist
+                    )
+                    if let best = candidates?.first {
+                        payload = ExternalStreamPayload(
+                            mediaID: normalizedMediaID, streamURL: best.url,
+                            title: track.title, artist: track.artist,
+                            artworkURL: track.artworkURL, service: track.service,
+                            qualityLabel: track.qualityLabelHint ?? "YouTube",
+                            codecLabel: track.codecLabelHint ?? "HLS"
+                        )
                     }
-                    // Path B: YouTube fallback
-                    group.addTask { [weak self] in
-                        guard let self else { return nil }
-                        do {
-                            let candidates = try await resolvePlaybackCandidates(
-                                forID: normalizedMediaID, title: track.title, artist: track.artist
-                            )
-                            guard let best = candidates.first else { return nil }
-                            return ExternalStreamPayload(
-                                mediaID: normalizedMediaID, streamURL: best.url,
-                                title: track.title, artist: track.artist,
-                                artworkURL: track.artworkURL, service: track.service,
-                                qualityLabel: track.qualityLabelHint ?? "YouTube",
-                                codecLabel: track.codecLabelHint ?? "HLS"
-                            )
-                        } catch { return nil }
-                    }
-                    for await result in group {
-                        if let result { group.cancelAll(); return result }
-                    }
-                    return nil
                 }
                 guard let payload else { return nil }
 
@@ -293,7 +279,7 @@ extension PlayerViewModel {
     }
 
     private func debugQueuePreloadSelection(_ prepared: PreparedQueuePlayback, source: String) {
-                PerfLog.debug("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
+        PerfLog.debug("[QUEUE]: {source: \(source), mediaID: \(prepared.mediaID), title: \(prepared.title), artist: \(prepared.artist), service: \(prepared.streamingService.rawValue), quality: \(prepared.qualityLabel), codec: \(prepared.codecLabel), queueSource: \(queueSource.rawValue), queuePosition: \(queuePosition ?? -1), queueCount: \(queueCount)}")
     }
 
     /// Pre-resolves the next 2-5 queue entries in parallel background tasks.
@@ -304,7 +290,7 @@ extension PlayerViewModel {
         distantPreloadTasks.forEach { $0.cancel() }
         distantPreloadTasks.removeAll()
 
-        let maxLookahead = min(5, playbackQueue.count - queuePosition - 1)
+        let maxLookahead = min(3, playbackQueue.count - queuePosition - 1) // ponytail: 2 distant preloads (was 4)
         guard maxLookahead >= 2 else { return }
 
         for offset in 2 ... maxLookahead {
