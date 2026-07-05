@@ -37,7 +37,7 @@ public struct CardOpenTransition<Hero: View, Content: View>: View {
                 .onGeometryChange(for: CGRect.self, of: { geo in
                     geo.frame(in: .global)
                 }, action: { newValue in
-                    buttonScale = newValue.width / sourceRect.width
+                    buttonScale = sourceRect.width > 0 ? newValue.width / sourceRect.width : 1
                 })
         }
         .buttonStyle(CardStyle())
