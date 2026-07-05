@@ -29,29 +29,8 @@ struct NavigationBarVariableBlurView: UIViewRepresentable {
     let maskHeight: CGFloat
     let fromTop: Bool
 
-    // Use a static cache for the mask image with proper access control
-    private static var maskCache: [String: UIImage] = [:]
-    private static let cacheQueue = DispatchQueue(label: "com.cisum.variableBlurCache", qos: .userInitiated)
-
-    // MARK: - Initialization
-
-    init(radius: Double, maskHeight: CGFloat, fromTop: Bool) {
-        self.radius = radius
-        self.maskHeight = maskHeight
-        self.fromTop = fromTop
-
-        let cacheKey = "\(maskHeight)-\(fromTop)"
-        Self.cacheQueue.async {
-            if NavigationBarVariableBlurView.maskCache[cacheKey] == nil {
-                Task.detached(priority: .userInitiated) {
-                    let maskImage = await createGradientImage(maskHeight: maskHeight, fromTop: fromTop)
-                    await MainActor.run {
-                        NavigationBarVariableBlurView.maskCache[cacheKey] = maskImage
-                    }
-                }
-            }
-        }
-    }
+    // NSCache is thread-safe; replaces the hand-rolled Dictionary + queue that raced.
+    private static let maskCache = NSCache<NSString, UIImage>()
 
     // MARK: - UIViewRepresentable Methods
 
@@ -63,28 +42,20 @@ struct NavigationBarVariableBlurView: UIViewRepresentable {
     }
 
     func updateUIView(_ view: UIVisualEffectView, context _: Context) {
-        let cacheKey = "\(maskHeight)-\(fromTop)"
+        let cacheKey = "\(maskHeight)-\(fromTop)" as NSString
 
-        // Check cache first
-        var cachedMask: UIImage?
-        Self.cacheQueue.sync {
-            cachedMask = NavigationBarVariableBlurView.maskCache[cacheKey]
+        if let cachedMask = Self.maskCache.object(forKey: cacheKey) {
+            view.effect = UIBlurEffect.variableBlurEffect(radius: radius, imageMask: cachedMask)
+            return
         }
 
-        if let cachedMask {
-            view.effect = UIBlurEffect.variableBlurEffect(radius: radius, imageMask: cachedMask)
-        } else {
-            // Set to nil while loading to avoid visual artifacts
-            view.effect = nil
-
-            Task {
-                let maskImage = await createGradientImage(maskHeight: maskHeight, fromTop: fromTop)
-                await MainActor.run {
-                    Self.cacheQueue.async {
-                        NavigationBarVariableBlurView.maskCache[cacheKey] = maskImage
-                    }
-                    view.effect = UIBlurEffect.variableBlurEffect(radius: radius, imageMask: maskImage)
-                }
+        // Miss: clear while we render the gradient, then cache + apply on the main actor.
+        view.effect = nil
+        Task {
+            let maskImage = await createGradientImage(maskHeight: maskHeight, fromTop: fromTop)
+            await MainActor.run {
+                Self.maskCache.setObject(maskImage, forKey: cacheKey)
+                view.effect = UIBlurEffect.variableBlurEffect(radius: radius, imageMask: maskImage)
             }
         }
     }
