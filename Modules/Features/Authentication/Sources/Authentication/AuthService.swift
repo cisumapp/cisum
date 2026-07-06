@@ -23,6 +23,10 @@ public final class AuthService {
     public private(set) var error: Error?
     public private(set) var isGuestMode: Bool
 
+    /// False until the first session check completes (after Clerk finishes loading). Used to
+    /// avoid flashing the login screen before we know whether the user is signed in.
+    public private(set) var hasResolvedInitialSession = false
+
     public var isAuthenticated: Bool {
         session != nil && user != nil
     }
@@ -40,9 +44,17 @@ public final class AuthService {
     }
 
     public func checkSession() async {
+        // Wait (bounded) for Clerk's internal load so a signed-in user isn't briefly seen as
+        // logged out. ponytail: 3s cap, 50ms poll — clerk-ios 1.2.3 exposes no awaitable load().
+        var waitedMs = 0
+        while !Clerk.shared.isLoaded, waitedMs < 3000 {
+            try? await Task.sleep(for: .milliseconds(50))
+            waitedMs += 50
+        }
         session = Clerk.shared.session
         user = Clerk.shared.user
         error = nil
+        hasResolvedInitialSession = true
         PerfLog.debug("[AuthService] checkSession: authenticated=\(isAuthenticated), user=\(user?.id ?? "nil")")
     }
 

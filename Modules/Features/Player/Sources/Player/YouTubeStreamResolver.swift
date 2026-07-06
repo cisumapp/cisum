@@ -542,6 +542,15 @@ public struct YouTubeStreamResolver: StreamResolutionProvider {
         // Artist similarity (weight: 0.25)
         let artistScore = tokenOverlapScore(sourceArtist, normalizedCandidateArtist)
 
+        // Title gate: a candidate sharing no title token with the source (and not a substring
+        // match) is a different song — don't let artist overlap alone carry it.
+        if !sourceTitle.isEmpty, titleScore == 0,
+           !normalizedCandidateTitle.contains(sourceTitle),
+           !sourceTitle.contains(normalizedCandidateTitle)
+        {
+            return -0.5
+        }
+
         // Exact match bonuses
         let exactTitleBonus = sourceTitle == normalizedCandidateTitle ? 0.30 : 0
         let exactArtistBonus = sourceArtist == normalizedCandidateArtist ? 0.15 : 0

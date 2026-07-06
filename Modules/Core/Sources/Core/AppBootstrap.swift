@@ -31,29 +31,43 @@ private let lifecycleSP = CisumSignpost.lifecycle
 
 @MainActor
 enum AppBootstrap {
-    static let spotifyRefreshTaskID = "studio.cisum.spotify.refresh"
+    nonisolated static let spotifyRefreshTaskID = "studio.cisum.spotify.refresh"
 
     /// Register the Spotify background-refresh task. Must be called during app launch (before
     /// launch completes). Best-effort: iOS schedules opportunistically — the real freshness
     /// guarantees are the on-demand + foreground/hourly headless refreshes.
     static func registerSpotifyBackgroundRefresh() {
         #if os(iOS)
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: spotifyRefreshTaskID, using: nil) { task in
-            let work = Task { @MainActor in
-                await SpotifySessionCoordinator.shared.refreshActiveSessions()
-            }
-            task.expirationHandler = { work.cancel() }
-            Task {
-                _ = await work.value
-                scheduleSpotifyBackgroundRefresh()
-                task.setTaskCompleted(success: true)
-            }
+        // BGTaskScheduler runs the launch handler on a PRIVATE BACKGROUND QUEUE. Route it to a
+        // nonisolated function so the closure doesn't inherit this enum's @MainActor isolation
+        // (which would trip Swift's executor assertion and SIGTRAP). Main-actor work hops inside.
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: spotifyRefreshTaskID, using: nil) { @Sendable task in
+            handleSpotifyBackgroundRefresh(task)
         }
         scheduleSpotifyBackgroundRefresh()
         #endif
     }
 
-    static func scheduleSpotifyBackgroundRefresh() {
+    #if os(iOS)
+    /// Invoked by BGTaskScheduler on a background queue — MUST stay `nonisolated`.
+    nonisolated static func handleSpotifyBackgroundRefresh(_ task: BGTask) {
+        // ponytail: BGTask isn't Sendable, but its expirationHandler/setTaskCompleted are safe to
+        // call from any queue per BGTaskScheduler's contract — rebind to cross the async boundary.
+        nonisolated(unsafe) let task = task
+        let work = Task { @MainActor in
+            await SpotifySessionCoordinator.shared.refreshActiveSessions()
+        }
+        task.expirationHandler = { work.cancel() }
+        Task {
+            _ = await work.value
+            scheduleSpotifyBackgroundRefresh()
+            task.setTaskCompleted(success: true)
+        }
+    }
+    #endif
+
+    /// nonisolated: only touches the thread-safe BGTaskScheduler, so it's callable from any executor.
+    nonisolated static func scheduleSpotifyBackgroundRefresh() {
         #if os(iOS)
         let request = BGAppRefreshTaskRequest(identifier: spotifyRefreshTaskID)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60) // ~30 min

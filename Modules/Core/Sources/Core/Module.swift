@@ -400,7 +400,10 @@ public final class cisumModule {
     @ViewBuilder
     public var rootView: some View {
         let authService = container.userServices.authService
-        if authService.isAuthenticated || authService.isGuestMode {
+        // Show home immediately (it has its own loading placeholders). Only fall back to login
+        // once the initial session check confirms there's genuinely no session — this avoids the
+        // login-screen flash for signed-in users without an intermediate splash.
+        if authService.isAuthenticated || authService.isGuestMode || !authService.hasResolvedInitialSession {
             Aesthetics.RootView(playerOverlayState: .init()) {
                 self.applyEnvironment(to: RootView(module: self))
             } overlayWrapper: { overlay in

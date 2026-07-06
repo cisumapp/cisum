@@ -271,7 +271,7 @@ struct NowPlayingFooter: View {
 
 //            AirPlayButton(activeTintColor: playerViewModel.currentAccentColor.opacity(0.2).uiColor)
             AirPlayButton()
-                .opacity(0.2)
+                .opacity(0.8)
                 .frame(width: 48, height: 48)
                 .padding(.top, -13)
 
@@ -291,7 +291,7 @@ struct NowPlayingFooter: View {
                     .font(.title2)
             }
         }
-        .foregroundColor(.white.opacity(0.2))
+        .foregroundColor(.white.opacity(0.8))
 //        .blendMode(.overlay)
     }
 }
