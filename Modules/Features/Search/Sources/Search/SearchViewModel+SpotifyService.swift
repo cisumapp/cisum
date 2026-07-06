@@ -96,6 +96,17 @@ extension SearchViewModel {
         if !normalizedSourceArtist.isEmpty, artistOverlap == 0 {
             return 0
         }
+
+        // Title gate: mirror the artist gate. A candidate that shares NO title token with the
+        // source and is not a substring match either way is a different song that merely shares
+        // the artist (e.g. "Ik Kudi Acoustic" by Paresh Pahuja resolving to his "Dooron Dooron").
+        if Self.titleGateRejects(
+            sourceTitle: normalizedSourceTitle,
+            candidateTitle: normalizedCandidateTitle,
+            titleOverlap: titleOverlap
+        ) {
+            return 0
+        }
         let titleContainsBonus = normalizedCandidateTitle.contains(normalizedSourceTitle) ? 0.16 : 0
         let sourceContainsBonus = normalizedSourceTitle.contains(normalizedCandidateTitle) ? 0.08 : 0
         let exactTitleBonus = normalizedSourceTitle == normalizedCandidateTitle ? 0.36 : 0
@@ -205,4 +216,33 @@ extension SearchViewModel {
 
         return markers.contains { title.contains($0) }
     }
+
+    /// Pure title-gate decision, extracted so it stays testable (see `_selfCheck`).
+    /// Rejects a candidate that shares no title token with the source and is not a
+    /// substring match either way — i.e. a different song that only shares the artist.
+    nonisolated static func titleGateRejects(
+        sourceTitle: String,
+        candidateTitle: String,
+        titleOverlap: Double
+    ) -> Bool {
+        guard !sourceTitle.isEmpty else { return false }
+        guard titleOverlap == 0 else { return false }
+        return !candidateTitle.contains(sourceTitle) && !sourceTitle.contains(candidateTitle)
+    }
+
+    #if DEBUG
+    /// One runnable check for the title gate. Fails loudly if the logic breaks.
+    nonisolated static func _selfCheck() {
+        // Reported bug: same artist, different song → rejected.
+        assert(titleGateRejects(sourceTitle: "ik kudi acoustic", candidateTitle: "dooron dooron", titleOverlap: 0) == true)
+        // Correct match with shared tokens → allowed.
+        assert(titleGateRejects(sourceTitle: "ik kudi acoustic", candidateTitle: "ik kudi", titleOverlap: 0.5) == false)
+        // Exact title → allowed.
+        assert(titleGateRejects(sourceTitle: "rock with you", candidateTitle: "rock with you", titleOverlap: 1) == false)
+        // Substring containment with 0 Jaccard (candidate wraps source) → allowed.
+        assert(titleGateRejects(sourceTitle: "faasle", candidateTitle: "faasle official video", titleOverlap: 0) == false)
+        // Empty source title → never gate (nothing to compare).
+        assert(titleGateRejects(sourceTitle: "", candidateTitle: "anything", titleOverlap: 0) == false)
+    }
+    #endif
 }
