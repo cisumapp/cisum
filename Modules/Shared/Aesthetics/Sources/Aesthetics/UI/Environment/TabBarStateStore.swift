@@ -15,9 +15,13 @@ import SwiftUI
 public final class TabBarStateStore {
     public static let shared = TabBarStateStore()
 
-    /// Set by `iOSTabView.bottomTabBar` each time phase or geometry changes.
-    /// `nil` only before the first layout pass.
+    /// Republished by `iOSTabView` whenever the state, screen width or safe area
+    /// changes. `nil` only before the first publish.
     public var accessoryOffsets: ResponsiveLayout.AccessoryOffsets?
+
+    /// The state the offsets were resolved from. Lets the overlay branch on a
+    /// meaningful value instead of reverse-engineering one from the numbers.
+    public var accessoryState: ResponsiveLayout.AccessoryState?
 
     private init() {}
 }

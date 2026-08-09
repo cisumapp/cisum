@@ -1,6 +1,6 @@
+@testable import Aesthetics
 import Foundation
 import Testing
-@testable import Aesthetics
 
 // Values below are on-device measurements from TabBarGeometryProbe (DEBUG), taken
 // on iPhone 12 mini (375x812) and iPhone 14 (390x844), both safeBottom 34.
@@ -9,12 +9,30 @@ import Testing
 private let miniWidth: CGFloat = 375
 private let fourteenWidth: CGFloat = 390
 
+// Landscape screen width is the portrait height.
+private let miniLandscapeWidth: CGFloat = 812
+private let fourteenLandscapeWidth: CGFloat = 844
+
+private func portrait(
+    _ placement: ResponsiveLayout.AccessoryState.Placement,
+    search: Bool = false
+) -> ResponsiveLayout.AccessoryState {
+    .init(orientation: .portrait, placement: placement, searchActive: search)
+}
+
+private func landscape(
+    _ placement: ResponsiveLayout.AccessoryState.Placement,
+    search: Bool = false
+) -> ResponsiveLayout.AccessoryState {
+    .init(orientation: .landscape, placement: placement, searchActive: search)
+}
+
 // MARK: - Portrait
 
 @Test func portraitInlineMatchesMeasuredGeometry() {
     for width in [miniWidth, fourteenWidth] {
         let offsets = ResponsiveLayout.AccessoryOffsets(
-            phase: .inline,
+            state: portrait(.inline),
             screenWidth: width,
             safeAreaBottom: 34
         )
@@ -27,15 +45,17 @@ private let fourteenWidth: CGFloat = 390
 }
 
 @Test func portraitMinimizedDropsToTwentyOne() {
-    let offsets = ResponsiveLayout.AccessoryOffsets(
-        phase: .expanded,
-        screenWidth: fourteenWidth,
-        safeAreaBottom: 34
-    )
+    for width in [miniWidth, fourteenWidth] {
+        let offsets = ResponsiveLayout.AccessoryOffsets(
+            state: portrait(.minimized),
+            screenWidth: width,
+            safeAreaBottom: 34
+        )
 
-    #expect(offsets.sideInset == 21)
-    #expect(offsets.width == fourteenWidth - 42)
-    #expect(offsets.bottomOffset == 21)
+        #expect(offsets.sideInset == 21)
+        #expect(offsets.width == width - 42)
+        #expect(offsets.bottomOffset == 21)
+    }
 }
 
 // MARK: - Portrait + search
@@ -46,10 +66,9 @@ private let fourteenWidth: CGFloat = 390
 @Test func searchNarrowsAndLiftsWhenInline() {
     for width in [miniWidth, fourteenWidth] {
         let offsets = ResponsiveLayout.AccessoryOffsets(
-            phase: .inlineWithSearch,
+            state: portrait(.inline, search: true),
             screenWidth: width,
-            safeAreaBottom: 34,
-            isSearchExpanded: true
+            safeAreaBottom: 34
         )
 
         #expect(offsets.sideInset == 28)
@@ -60,44 +79,44 @@ private let fourteenWidth: CGFloat = 390
 
 /// The sign flips when minimized: 21 -> 28, not 21 -> 9 as a flat -12 would give.
 @Test func searchPushesDownWhenMinimized() {
-    let offsets = ResponsiveLayout.AccessoryOffsets(
-        phase: .expandedWithSearch,
-        screenWidth: fourteenWidth,
-        safeAreaBottom: 34,
-        isSearchExpanded: true
-    )
+    for width in [miniWidth, fourteenWidth] {
+        let offsets = ResponsiveLayout.AccessoryOffsets(
+            state: portrait(.minimized, search: true),
+            screenWidth: width,
+            safeAreaBottom: 34
+        )
 
-    #expect(offsets.sideInset == 28)
-    #expect(offsets.bottomOffset == 28)
+        #expect(offsets.sideInset == 28)
+        #expect(offsets.width == width - 56)
+        #expect(offsets.bottomOffset == 28)
+    }
 }
 
-/// A search-role tab merely existing must not move anything — only an open field does.
-@Test func searchTabPresenceAloneDoesNotChangeGeometry() {
-    let present = ResponsiveLayout.AccessoryOffsets(
-        phase: .inlineWithSearch,
+/// Only an open search field moves the accessory. A search-role tab merely existing
+/// is not represented in the state at all, so this asserts the default.
+@Test func searchInactiveMatchesPlainPortrait() {
+    let inactive = ResponsiveLayout.AccessoryOffsets(
+        state: portrait(.inline, search: false),
         screenWidth: fourteenWidth,
-        safeAreaBottom: 34,
-        isSearchExpanded: false
+        safeAreaBottom: 34
     )
-    let absent = ResponsiveLayout.AccessoryOffsets(
-        phase: .inline,
+    let plain = ResponsiveLayout.AccessoryOffsets(
+        state: portrait(.inline),
         screenWidth: fourteenWidth,
         safeAreaBottom: 34
     )
 
-    #expect(present == absent)
+    #expect(inactive == plain)
 }
 
 // MARK: - Landscape
 
 @Test func landscapeUsesWiderInsetAndLowerOffsets() {
-    // Landscape screen width is the portrait height.
-    for width in [CGFloat(812), CGFloat(844)] {
+    for width in [miniLandscapeWidth, fourteenLandscapeWidth] {
         let inline = ResponsiveLayout.AccessoryOffsets(
-            phase: .inline,
+            state: landscape(.inline),
             screenWidth: width,
-            safeAreaBottom: 20,
-            isLandscape: true
+            safeAreaBottom: 20
         )
 
         #expect(inline.accessoryHeight == 48)
@@ -106,12 +125,12 @@ private let fourteenWidth: CGFloat = 390
         #expect(inline.bottomOffset == 70)
 
         let minimized = ResponsiveLayout.AccessoryOffsets(
-            phase: .expanded,
+            state: landscape(.minimized),
             screenWidth: width,
-            safeAreaBottom: 20,
-            isLandscape: true
+            safeAreaBottom: 20
         )
 
+        #expect(minimized.sideInset == 38)
         #expect(minimized.bottomOffset == 18)
     }
 }
@@ -120,16 +139,28 @@ private let fourteenWidth: CGFloat = 390
 /// extrapolating the portrait deltas. Locks that deliberate choice.
 @Test func landscapeIgnoresSearchBecauseItIsUnmeasured() {
     let searching = ResponsiveLayout.AccessoryOffsets(
-        phase: .inlineWithSearch,
-        screenWidth: 844,
-        safeAreaBottom: 20,
-        isSearchExpanded: true,
-        isLandscape: true
+        state: landscape(.inline, search: true),
+        screenWidth: fourteenLandscapeWidth,
+        safeAreaBottom: 20
+    )
+    let notSearching = ResponsiveLayout.AccessoryOffsets(
+        state: landscape(.inline),
+        screenWidth: fourteenLandscapeWidth,
+        safeAreaBottom: 20
     )
 
+    #expect(searching == notSearching)
     #expect(searching.sideInset == 38)
-    #expect(searching.width == 844 - 76)
     #expect(searching.bottomOffset == 70)
+}
+
+// MARK: - State semantics
+
+@Test func effectiveSearchActiveIsPortraitOnly() {
+    #expect(portrait(.inline, search: true).effectiveSearchActive == true)
+    #expect(portrait(.inline, search: false).effectiveSearchActive == false)
+    #expect(landscape(.inline, search: true).effectiveSearchActive == false)
+    #expect(landscape(.inline, search: false).effectiveSearchActive == false)
 }
 
 // MARK: - iOS 17/18 custom-bar path
@@ -139,7 +170,7 @@ private let fourteenWidth: CGFloat = 390
 /// custom bar is a different height; closing that needs the bar resized.
 @Test func customBarPathDerivesFromBarHeight() {
     let offsets = ResponsiveLayout.AccessoryOffsets(
-        phase: .inline,
+        state: portrait(.inline),
         screenWidth: fourteenWidth,
         safeAreaBottom: 34,
         tabBarHeight: 56
@@ -148,21 +179,33 @@ private let fourteenWidth: CGFloat = 390
     #expect(offsets.bottomOffset == 98)
 
     let searching = ResponsiveLayout.AccessoryOffsets(
-        phase: .inline,
+        state: portrait(.inline, search: true),
         screenWidth: fourteenWidth,
         safeAreaBottom: 34,
-        tabBarHeight: 56,
-        isSearchExpanded: true
+        tabBarHeight: 56
     )
 
     #expect(searching.bottomOffset == 91) // 98 - 7
+}
+
+/// Minimized ignores tabBarHeight entirely — the bar is hidden, so there is
+/// nothing to clear.
+@Test func customBarPathIgnoresBarHeightWhenMinimized() {
+    let offsets = ResponsiveLayout.AccessoryOffsets(
+        state: portrait(.minimized),
+        screenWidth: fourteenWidth,
+        safeAreaBottom: 34,
+        tabBarHeight: 56
+    )
+
+    #expect(offsets.bottomOffset == 21)
 }
 
 // MARK: - Derived accessors
 
 @Test func bottomInsetFromSafeAreaIsScreenRelative() {
     let offsets = ResponsiveLayout.AccessoryOffsets(
-        phase: .inline,
+        state: portrait(.inline),
         screenWidth: fourteenWidth,
         safeAreaBottom: 34
     )
@@ -175,7 +218,7 @@ private let fourteenWidth: CGFloat = 390
 /// offset is smaller than the safe-area inset.
 @Test func bottomInsetFromSafeAreaClampsAtFour() {
     let offsets = ResponsiveLayout.AccessoryOffsets(
-        phase: .expanded,
+        state: portrait(.minimized),
         screenWidth: fourteenWidth,
         safeAreaBottom: 34
     )

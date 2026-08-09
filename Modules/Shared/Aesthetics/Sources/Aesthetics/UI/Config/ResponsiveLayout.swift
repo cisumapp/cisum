@@ -30,12 +30,42 @@ public enum ResponsiveLayout {
         }
     }
 
-    /// Accessory phases for tab bars and player overlays.
-    public enum AccessoryPhase {
-        case inline // tab bar visible, accessory docked above it
-        case expanded // tab bar hidden (scroll), accessory dropped to bottom
-        case inlineWithSearch // inline, a .search role tab is present
-        case expandedWithSearch // expanded, a .search role tab is present
+    /// The determinable states the system accessory actually has.
+    ///
+    /// Every field is observable from the main SwiftUI tree, so the state can be
+    /// recomputed rather than inferred. Geometry is a pure function of this value
+    /// plus screen width — see the measured table in the header below.
+    public struct AccessoryState: Equatable, Sendable {
+        public enum Orientation: Equatable, Sendable {
+            case portrait
+            case landscape
+        }
+
+        /// Mirrors the system's `TabViewBottomAccessoryPlacement`.
+        public enum Placement: Equatable, Sendable {
+            /// Tab bar visible, accessory docked above it.
+            case inline
+            /// Tab bar hidden on scroll, accessory dropped toward the home indicator.
+            case minimized
+        }
+
+        public var orientation: Orientation
+        public var placement: Placement
+        /// Whether the search field is actually open. A search-role tab merely
+        /// existing does not move the accessory.
+        public var searchActive: Bool
+
+        public init(orientation: Orientation, placement: Placement, searchActive: Bool = false) {
+            self.orientation = orientation
+            self.placement = placement
+            self.searchActive = searchActive
+        }
+
+        /// Landscape + search is unmeasured and confirmed not to differ, so search
+        /// is deliberately ignored there rather than extrapolating portrait deltas.
+        public var effectiveSearchActive: Bool {
+            orientation == .portrait && searchActive
+        }
     }
 
     // MARK: - Accessory Offsets
@@ -56,11 +86,10 @@ public enum ResponsiveLayout {
     //   portrait + search   inset 28  width screenWidth - 56   inline 84  minimized 28
     //   landscape           inset 38  width screenWidth - 76   inline 70  minimized 18
     //
-    // Search is keyed on `isSearchExpanded` (the field is actually open), NOT on
-    // the `AccessoryPhase` WithSearch variants — those only mean "a search-role tab
-    // exists", which does not move anything. Search shifts bottomOffset by -7 when
-    // inline and +7 when minimized; the previous flat -12 was wrong in magnitude
-    // and, for the minimized case, in sign.
+    // Search is keyed on `AccessoryState.searchActive` — the field actually being
+    // open. A search-role tab merely existing does not move anything. Search shifts
+    // bottomOffset by -7 when inline and +7 when minimized; the flat -12 this
+    // replaced was wrong in magnitude and, for the minimized case, in sign.
     //
     // IMPORTANT: bottomOffset is measured from the physical screen bottom, NOT
     // the safe-area boundary. Use `bottomInsetFromScreenEdge` with ignoresSafeArea
@@ -114,48 +143,38 @@ public enum ResponsiveLayout {
         // MARK: Init
 
         /// - Parameters:
-        ///   - phase: The current tab bar / search phase.
-        ///   - screenWidth: `UIScreen.main.bounds.width` — do NOT use a GeometryProxy
-        ///     inside the tab/safe-area region; it reports a reduced height and
-        ///     will produce wrong measurements.
-        ///   - safeAreaBottom: `proxy.safeAreaInsets.bottom` from an outer GeometryReader.
-        ///   - tabBarHeight: **iOS 17/18 only** — pass the actual custom bar height
+        ///   - state: the resolved accessory state. Compute it in the main SwiftUI
+        ///     tree — the overlay window never receives the environment it needs.
+        ///   - screenWidth: full screen width in the current orientation. Prefer the
+        ///     window scene's coordinate space; `UIScreen.main.bounds` lags rotation.
+        ///   - safeAreaBottom: used by the iOS 17/18 derived formula and by
+        ///     `bottomInsetFromSafeArea`.
+        ///   - tabBarHeight: **iOS 17/18 only** — the real custom bar height
         ///     (`56 * screenScale`). When `0` (default, iOS 26) the measured
         ///     constants are used instead.
-        ///   - isSearchExpanded: whether the search field is actually open. This,
-        ///     not the phase's WithSearch variant, is what moves the accessory.
-        ///   - isLandscape: drive from `verticalSizeClass == .compact`, which changes
-        ///     in lockstep with layout. Do not derive from `UIScreen.main.bounds`,
-        ///     which lags rotation.
         public init(
-            phase: AccessoryPhase,
+            state: AccessoryState,
             screenWidth: CGFloat,
             safeAreaBottom: CGFloat = 0,
-            tabBarHeight: CGFloat = 0,
-            isSearchExpanded: Bool = false,
-            isLandscape: Bool = false
+            tabBarHeight: CGFloat = 0
         ) {
             self.accessoryHeight = 48 // measured — constant in every state
             self.safeAreaBottom = safeAreaBottom
-
-            // Landscape + search is unmeasured, so landscape ignores search rather
-            // than extrapolating the portrait deltas. See the header note.
-            let searchActive = isSearchExpanded && !isLandscape
 
             let inset: CGFloat
             let inlineBottom: CGFloat
             let minimizedBottom: CGFloat
 
-            switch (isLandscape, searchActive) {
-            case (false, false):
+            switch (state.orientation, state.effectiveSearchActive) {
+            case (.portrait, false):
                 inset = 21
                 inlineBottom = 91
                 minimizedBottom = 21
-            case (false, true):
+            case (.portrait, true):
                 inset = 28
                 inlineBottom = 84
                 minimizedBottom = 28
-            case (true, _):
+            case (.landscape, _):
                 inset = 38
                 inlineBottom = 70
                 minimizedBottom = 18
@@ -164,18 +183,19 @@ public enum ResponsiveLayout {
             self.sideInset = inset
             self.width = screenWidth - inset * 2
 
-            switch phase {
-            case .inline, .inlineWithSearch:
+            switch state.placement {
+            case .inline:
                 if tabBarHeight > 0 {
                     // iOS 17/18: derive from the real custom bar height so the
                     // accessory always clears it. Note this lands ~7 pt lower than
                     // native iOS 26 (iPhone 14: 34 + 56 + 8 = 98 vs measured 91) —
                     // closing that gap needs the custom bar resized, not a constant.
-                    self.bottomOffset = safeAreaBottom + tabBarHeight + 8 + (searchActive ? -7 : 0)
+                    self.bottomOffset = safeAreaBottom + tabBarHeight + 8
+                        + (state.effectiveSearchActive ? -7 : 0)
                 } else {
                     self.bottomOffset = inlineBottom
                 }
-            case .expanded, .expandedWithSearch:
+            case .minimized:
                 // Tab bar hidden: accessory drops toward the home indicator.
                 self.bottomOffset = minimizedBottom
             }
