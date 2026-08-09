@@ -83,6 +83,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                         .tabViewBottomAccessory {
                             if let accessory = tabBarBottomAccessory {
                                 accessory
+                                    .measureTabAccessoryGeometry()
                                     .contentShape(.rect)
                                     .onTapGesture { expandMiniPlayer.toggle() }
                             }
@@ -108,6 +109,9 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
             playerContent
                 .ignoresSafeArea(.keyboard)
         }
+        #if DEBUG
+        .tabBarGeometryHUD()
+        #endif
         .environment(\.isSearchExpanded, $isSearchExpanded)
         .onAppear {
             isSearchExpanded = isSearchTabSelection(selection)
