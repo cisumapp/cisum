@@ -22,6 +22,9 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     @Environment(\.tabBarVisibility) private var tabBarVisibility
     @Environment(\.tabBarBottomAccessory) private var tabBarBottomAccessory
     @Environment(\.colorScheme) private var colorScheme
+    /// Drives the landscape axis of `AccessoryOffsets`. Size class changes in
+    /// lockstep with layout, unlike UIScreen.main.bounds which lags rotation.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @Binding var selection: SelectionValue
     let tabs: [TabViewData<SelectionValue>]
@@ -124,9 +127,13 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                     .map(\.safeAreaInsets.bottom) ?? 0
                 let hasSearch = tabs.contains { $0.role == .search }
                 let phase: ResponsiveLayout.AccessoryPhase = hasSearch ? .inlineWithSearch : .inline
-                // tabBarHeight = 0 → uses measured iOS 26 constant (91 pt)
+                // tabBarHeight = 0 → uses the measured iOS 26 constants
                 TabBarStateStore.shared.accessoryOffsets = .init(
-                    phase: phase, screenWidth: w, safeAreaBottom: sa
+                    phase: phase,
+                    screenWidth: w,
+                    safeAreaBottom: sa,
+                    isSearchExpanded: isSearchExpanded,
+                    isLandscape: verticalSizeClass == .compact
                 )
             }
         }
@@ -212,7 +219,8 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
             screenWidth: screenW,
             safeAreaBottom: safeBottom,
             tabBarHeight: customTabBarHeight, // triggers iOS 17/18 formula
-            isSearchExpanded: isSearchExpanded
+            isSearchExpanded: isSearchExpanded,
+            isLandscape: verticalSizeClass == .compact
         )
 
         return ZStack(alignment: .bottom) {
