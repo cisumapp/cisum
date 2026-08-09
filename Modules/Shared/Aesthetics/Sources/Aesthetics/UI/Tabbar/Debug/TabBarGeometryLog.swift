@@ -34,6 +34,10 @@ public final class TabBarGeometryLog {
         latest = metrics
         guard !distinctSamples.contains(metrics) else { return }
         distinctSamples.append(metrics)
+        // Printed as it happens so a run is readable in the Xcode console without
+        // pausing in the debugger. `print` rather than PerfLog: this is a DEBUG-only
+        // tool and the output must never be filtered away.
+        print("[TabGeom] \(distinctSamples.count). \(metrics.summaryLine)")
     }
 
     /// Called by the iOS 26-only placement probe. Stored for the next frame sample
