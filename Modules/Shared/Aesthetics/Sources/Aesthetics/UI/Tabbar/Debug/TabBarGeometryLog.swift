@@ -30,8 +30,32 @@ public final class TabBarGeometryLog {
     /// Rotating the device or changing placement appends; a redundant relayout does not.
     public private(set) var distinctSamples: [TabAccessoryMetrics] = []
 
+    /// How long a frame must hold still before it counts as a real state.
+    ///
+    /// Rotation and the tab-bar hide/show animation both walk the accessory through
+    /// intermediate frames. Without this, each one is committed as a distinct sample
+    /// and swamps the run — the first iPhone 14 run produced 13 samples for roughly
+    /// six actual states.
+    private static let settleDuration = Duration.milliseconds(300)
+
+    private var pendingSample: TabAccessoryMetrics?
+    private var settleToken = 0
+
     public func record(_ metrics: TabAccessoryMetrics) {
+        // The HUD reads `latest`, so it stays live even while a frame is still settling.
         latest = metrics
+        pendingSample = metrics
+        settleToken &+= 1
+        let token = settleToken
+
+        Task { @MainActor in
+            try? await Task.sleep(for: Self.settleDuration)
+            guard token == settleToken, let settled = pendingSample else { return }
+            commit(settled)
+        }
+    }
+
+    private func commit(_ metrics: TabAccessoryMetrics) {
         guard !distinctSamples.contains(metrics) else { return }
         distinctSamples.append(metrics)
         // Printed as it happens so a run is readable in the Xcode console without
@@ -50,6 +74,9 @@ public final class TabBarGeometryLog {
         latest = nil
         latestPlacement = "unread"
         distinctSamples.removeAll()
+        // Invalidate any in-flight settle so it cannot commit into the cleared run.
+        pendingSample = nil
+        settleToken &+= 1
     }
 
     /// Paste-ready dump for comparing against `ResponsiveLayout`'s constants.
