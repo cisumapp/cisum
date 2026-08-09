@@ -46,6 +46,7 @@ public extension View {
 /// Records the accessory's frame. Works on every supported OS —
 /// `onGeometryChange` is iOS 16+.
 private struct TabAccessoryGeometryProbe: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     func body(content: Content) -> some View {
@@ -57,9 +58,20 @@ private struct TabAccessoryGeometryProbe: ViewModifier {
     }
 
     private func record(frame: CGRect) {
-        let screen = UIScreen.main.bounds
-        let window = (UIApplication.shared.connectedScenes.first as? UIWindowScene)
-            .flatMap { $0.windows.first(where: \.isKeyWindow) }
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+            ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
+
+        // Skip the UniversalOverlay PassThroughWindow (windowLevel .statusBar + 1) —
+        // its insets and bounds are not the app's.
+        let window = scene?.windows.first { $0.windowLevel == .normal }
+            ?? scene?.windows.first
+
+        // The scene's coordinate space tracks rotation in lockstep with layout.
+        // UIScreen.main.bounds does not, which is what produced the bottom-431.5
+        // sample in the first run.
+        let screen = scene?.coordinateSpace.bounds ?? UIScreen.main.bounds
 
         TabBarGeometryLog.shared.record(
             TabAccessoryMetrics(
@@ -68,9 +80,30 @@ private struct TabAccessoryGeometryProbe: ViewModifier {
                 screenBounds: screen,
                 safeAreaBottom: window?.safeAreaInsets.bottom ?? 0,
                 safeAreaTop: window?.safeAreaInsets.top ?? 0,
-                isLandscape: verticalSizeClass == .compact
+                horizontalSizeClassDescription: Self.describe(horizontalSizeClass),
+                verticalSizeClassDescription: Self.describe(verticalSizeClass),
+                interfaceOrientationDescription: Self.describe(scene?.interfaceOrientation),
+                coordinateSpace: TabAccessoryMetrics.classify(frame: frame, screenBounds: screen)
             )
         )
+    }
+
+    private static func describe(_ sizeClass: UserInterfaceSizeClass?) -> String {
+        switch sizeClass {
+        case .compact: "compact"
+        case .regular: "regular"
+        default: "unknown"
+        }
+    }
+
+    private static func describe(_ orientation: UIInterfaceOrientation?) -> String {
+        switch orientation {
+        case .portrait: "portrait"
+        case .portraitUpsideDown: "portraitUpsideDown"
+        case .landscapeLeft: "landscapeLeft"
+        case .landscapeRight: "landscapeRight"
+        default: "unknown"
+        }
     }
 }
 
@@ -172,15 +205,19 @@ private struct TabBarGeometryHUD: View {
             if let latest = log.latest {
                 Text("accessory  h \(latest.measuredHeight, specifier: "%.1f")   w \(latest.measuredWidth, specifier: "%.1f")")
                 Text("x \(latest.measuredSideInset, specifier: "%.1f")   bottomOffset \(latest.measuredBottomOffset, specifier: "%.1f")")
-                Text("placement \(latest.placementDescription)")
-                Text("safe t\(latest.safeAreaTop, specifier: "%.0f") b\(latest.safeAreaBottom, specifier: "%.0f")   \(latest.isLandscape ? "landscape" : "portrait")")
+                Text("platter  h \(latest.derivedPlatterHeight, specifier: "%.1f")   bottom \(latest.derivedPlatterBottomOffset, specifier: "%.1f")")
+                    .foregroundStyle(.green)
+
+                Text("placement \(latest.placementDescription)   space \(latest.coordinateSpace.rawValue)")
+                Text("\(latest.interfaceOrientationDescription)   size h:\(latest.horizontalSizeClassDescription) v:\(latest.verticalSizeClassDescription)")
+                Text("safe t\(latest.safeAreaTop, specifier: "%.0f") b\(latest.safeAreaBottom, specifier: "%.0f")")
 
                 Text("vs const:  h48  w\(latest.screenBounds.width - 42, specifier: "%.0f")  x21  bottom91")
                     .foregroundStyle(.yellow)
 
-                if !latest.looksLikeWindowCoordinates {
-                    Text("⚠︎ .global is NOT window space — values unusable")
-                        .foregroundStyle(.red)
+                if latest.coordinateSpace == .inconsistent {
+                    Text("⚠︎ frame/screen disagree — rotation in flight")
+                        .foregroundStyle(.orange)
                 }
 
                 Text("distinct samples: \(log.distinctSamples.count)")
