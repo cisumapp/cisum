@@ -41,29 +41,40 @@ public enum ResponsiveLayout {
     // MARK: - Accessory Offsets
 
     //
-    // All constants are empirically measured on real iOS 26.5 builds using a
-    // UIKit geometry probe that walks the view hierarchy to the actual accessory
-    // platter and reads its frame in window coordinates.
+    // All constants are empirically measured on real iOS 26 builds by
+    // `TabBarGeometryProbe` (DEBUG, Tabbar/Debug/), which reads the live
+    // `.tabViewBottomAccessory` frame via `onGeometryChange` and grows it by the
+    // 1.5 pt platter inset. See that file for the measurement method.
     //
-    // Measured on 4 devices (notch 375, Dynamic Island 390/402/440), all portrait,
-    // all safeBottom = 34:
+    // Measured on iPhone 12 mini (375x812, safeTop 50) and iPhone 14 (390x844,
+    // safeTop 47), both safeBottom = 34. Every derived platter value landed on an
+    // exact integer on both devices:
     //
-    //   accessoryHeight : 48 pt  (constant across all widths)
-    //   width           : screenWidth - 42 pt  (21 pt each side, constant)
-    //   bottomOffset    : 91 pt (inline) | 21 pt (expanded)   from SCREEN bottom
+    //   accessoryHeight : 48 pt   in every state, both orientations
+    //
+    //   portrait            inset 21  width screenWidth - 42   inline 91  minimized 21
+    //   portrait + search   inset 28  width screenWidth - 56   inline 84  minimized 28
+    //   landscape           inset 38  width screenWidth - 76   inline 70  minimized 18
+    //
+    // Search is keyed on `isSearchExpanded` (the field is actually open), NOT on
+    // the `AccessoryPhase` WithSearch variants — those only mean "a search-role tab
+    // exists", which does not move anything. Search shifts bottomOffset by -7 when
+    // inline and +7 when minimized; the previous flat -12 was wrong in magnitude
+    // and, for the minimized case, in sign.
     //
     // IMPORTANT: bottomOffset is measured from the physical screen bottom, NOT
     // the safe-area boundary. Use `bottomInsetFromScreenEdge` with ignoresSafeArea
     // views, and `bottomInsetFromSafeArea` inside safeAreaInset content.
     //
     // Limitations:
-    //   • All measured devices share safeBottom = 34. The 91/21 values may or may
-    //     not shift on a device with a different safeBottom; no such iOS 26 device
-    //     currently exists. Re-measure if one appears.
-    //   • Landscape: height 44, width screenWidth - 76, bottomOffset 72.
-    //     Not currently implemented — add a landscape axis when needed.
-    //   • Search presence does NOT change any metric today; the WithSearch variants
-    //     carry identical numbers but are kept for future-proofing.
+    //   • Both measured devices share safeBottom = 34, so these values are
+    //     confirmed constant across widths and top insets but cannot be
+    //     distinguished from a function of a 34 pt bottom inset. Every iOS 26
+    //     iPhone with a notch or Dynamic Island is 34. Re-measure if a
+    //     home-button device ever runs iOS 26.
+    //   • Landscape + search is NOT measured. Landscape deliberately ignores
+    //     search rather than extrapolating the portrait deltas — a 7 pt error in a
+    //     rare state beats inventing an unverified number.
 
     /// Computed offsets and dimensions for accessory overlays (like the mini-player).
     /// Initialise with the real `safeAreaBottom` from a GeometryReader for
@@ -109,38 +120,64 @@ public enum ResponsiveLayout {
         ///     will produce wrong measurements.
         ///   - safeAreaBottom: `proxy.safeAreaInsets.bottom` from an outer GeometryReader.
         ///   - tabBarHeight: **iOS 17/18 only** — pass the actual custom bar height
-        ///     (`56 * screenScale`). When `0` (default, iOS 26) the empirically
-        ///     measured `91 pt` constant is used instead.
-        ///     The iOS 26 brief explicitly states that search presence does NOT
+        ///     (`56 * screenScale`). When `0` (default, iOS 26) the measured
+        ///     constants are used instead.
+        ///   - isSearchExpanded: whether the search field is actually open. This,
+        ///     not the phase's WithSearch variant, is what moves the accessory.
+        ///   - isLandscape: drive from `verticalSizeClass == .compact`, which changes
+        ///     in lockstep with layout. Do not derive from `UIScreen.main.bounds`,
+        ///     which lags rotation.
         public init(
             phase: AccessoryPhase,
             screenWidth: CGFloat,
             safeAreaBottom: CGFloat = 0,
             tabBarHeight: CGFloat = 0,
-            isSearchExpanded: Bool = false
+            isSearchExpanded: Bool = false,
+            isLandscape: Bool = false
         ) {
-            self.accessoryHeight = 48 // measured — do not scale
-            self.sideInset = 21 // measured — do not scale
-            self.width = screenWidth - 42
+            self.accessoryHeight = 48 // measured — constant in every state
             self.safeAreaBottom = safeAreaBottom
+
+            // Landscape + search is unmeasured, so landscape ignores search rather
+            // than extrapolating the portrait deltas. See the header note.
+            let searchActive = isSearchExpanded && !isLandscape
+
+            let inset: CGFloat
+            let inlineBottom: CGFloat
+            let minimizedBottom: CGFloat
+
+            switch (isLandscape, searchActive) {
+            case (false, false):
+                inset = 21
+                inlineBottom = 91
+                minimizedBottom = 21
+            case (false, true):
+                inset = 28
+                inlineBottom = 84
+                minimizedBottom = 28
+            case (true, _):
+                inset = 38
+                inlineBottom = 70
+                minimizedBottom = 18
+            }
+
+            self.sideInset = inset
+            self.width = screenWidth - inset * 2
 
             switch phase {
             case .inline, .inlineWithSearch:
                 if tabBarHeight > 0 {
-                    // iOS 17/18: compute from real bar height so the accessory
-                    // always clears the bar, regardless of search state.
-                    // Formula: safeArea + barHeight + 8 pt gap.
-                    // e.g. iPhone 14: 34 + 56 + 8 = 98 pt from screen bottom
-                    self.bottomOffset = safeAreaBottom + tabBarHeight + 8 + (isSearchExpanded ? -12 : 0)
+                    // iOS 17/18: derive from the real custom bar height so the
+                    // accessory always clears it. Note this lands ~7 pt lower than
+                    // native iOS 26 (iPhone 14: 34 + 56 + 8 = 98 vs measured 91) —
+                    // closing that gap needs the custom bar resized, not a constant.
+                    self.bottomOffset = safeAreaBottom + tabBarHeight + 8 + (searchActive ? -7 : 0)
                 } else {
-                    // iOS 26: empirically measured constant.
-                    // Search presence does NOT change this value (brief §"core finding").
-                    self.bottomOffset = 91 + (isSearchExpanded ? -12 : 0)
+                    self.bottomOffset = inlineBottom
                 }
             case .expanded, .expandedWithSearch:
-                // Tab bar hidden: accessory drops to near the home indicator.
-                // Same on both iOS 26 (measured) and iOS 17/18.
-                self.bottomOffset = 21
+                // Tab bar hidden: accessory drops toward the home indicator.
+                self.bottomOffset = minimizedBottom
             }
         }
     }
