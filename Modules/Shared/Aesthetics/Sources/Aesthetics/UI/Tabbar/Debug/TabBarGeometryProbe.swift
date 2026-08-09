@@ -100,11 +100,68 @@ private struct TabAccessoryPlacementProbe: ViewModifier {
 // MARK: - HUD
 
 private struct TabBarGeometryHUD: View {
+    @State private var showAllSamples = false
+    @State private var didCopy = false
+
     var body: some View {
         // Polls instead of observing — see TabBarGeometryLog's note.
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-            readout
+            VStack(alignment: .leading, spacing: 6) {
+                readout
+
+                if showAllSamples {
+                    sampleList
+                }
+
+                controls
+            }
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(8)
+            .background(.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 8)
+            .padding(.top, 60)
         }
+    }
+
+    /// Every distinct sample, so a full walkthrough can be screenshotted or read
+    /// without the debugger.
+    @ViewBuilder
+    private var sampleList: some View {
+        let samples = TabBarGeometryLog.shared.distinctSamples
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Array(samples.enumerated()), id: \.offset) { index, sample in
+                    Text("\(index + 1). \(sample.summaryLine)")
+                        .foregroundStyle(.green)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: 260)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 10) {
+            Button(showAllSamples ? "Hide list" : "Show all") {
+                showAllSamples.toggle()
+            }
+
+            Button(didCopy ? "Copied ✓" : "Copy") {
+                UIPasteboard.general.string = TabBarGeometryLog.shared.exportText()
+                didCopy = true
+            }
+
+            Button("Reset") {
+                TabBarGeometryLog.shared.reset()
+                didCopy = false
+            }
+        }
+        .font(.system(size: 10, weight: .bold, design: .monospaced))
+        .buttonStyle(.plain)
+        .foregroundStyle(.cyan)
     }
 
     @ViewBuilder
@@ -133,12 +190,6 @@ private struct TabBarGeometryHUD: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 10, weight: .medium, design: .monospaced))
-        .foregroundStyle(.white)
-        .padding(8)
-        .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
-        .padding(.top, 60)
-        .allowsHitTesting(false)
     }
 }
 #endif
