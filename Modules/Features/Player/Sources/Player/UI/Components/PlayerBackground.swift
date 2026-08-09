@@ -19,6 +19,10 @@ struct PlayerBackground: View {
     let isPlayerExpanded: Bool
     let isFullExpanded: Bool
     var canBeExpanded: Bool = true
+    /// Collapsed pill height. Drives both the frame and the collapsed corner
+    /// radius so the background matches whatever the caller collapses to —
+    /// the measured platter height on iOS 26, the island height on iOS 17/18.
+    var collapsedHeight: CGFloat = Utilities.AppConstants.dynamicPlayerIslandHeight
 
     var body: some View {
         ZStack {
@@ -83,7 +87,7 @@ struct PlayerBackground: View {
             }
         }
         .clipShape(.rect(cornerRadius: dynamicCornerRadius))
-        .frame(height: isPlayerExpanded ? nil : Utilities.AppConstants.dynamicPlayerIslandHeight)
+        .frame(height: isPlayerExpanded ? nil : collapsedHeight)
     }
 }
 
@@ -97,7 +101,7 @@ fileprivate extension PlayerBackground {
     }
 
     var collapsedPlayerCornerRadius: CGFloat {
-        Utilities.AppConstants.dynamicPlayerIslandHeight / 2
+        collapsedHeight / 2
     }
 }
 #endif

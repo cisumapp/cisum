@@ -56,27 +56,48 @@ private struct ExpandablePlayerInner: View {
 
     // MARK: - Collapsed position helpers
 
-    /// Bottom padding that places the mini-player pill exactly where the
-    /// system's tab bar accessory sits — sourced from `TabBarStateStore` when
-    /// available, or computed from `ResponsiveLayout` as a fallback.
+    /// Offsets published by `iOSTabView`.
+    ///
+    /// The fallback derives from the same measured table rather than a separate set
+    /// of magic numbers, so a device we have never run on still lands in the right
+    /// place. It only applies before the first publish — this view lives in the
+    /// detached overlay window, so `tabBarVisibility` / `isSearchExpanded` here are
+    /// always their defaults and cannot be used to refine it.
+    private var accessoryOffsets: ResponsiveLayout.AccessoryOffsets {
+        TabBarStateStore.shared.accessoryOffsets
+            ?? .init(
+                state: .init(
+                    orientation: size.width > size.height ? .landscape : .portrait,
+                    placement: .inline,
+                    searchActive: false
+                ),
+                screenWidth: size.width,
+                safeAreaBottom: safeArea.bottom
+            )
+    }
+
+    /// Places the pill exactly where the system accessory sits.
     private var collapsedBottomPadding: CGFloat {
-        if let offsets = TabBarStateStore.shared.accessoryOffsets {
-            return offsets.bottomInsetFromScreenEdge
-        }
-        // Fallback: ResponsiveLayout estimate before first layout pass.
-        let scale = ResponsiveLayout.DeviceSizeClass(width: size.width).scaleFactor(for: size.width)
-        return safeArea.bottom + (isSearchFieldExpanded ? 77 * scale : 88 * scale)
+        accessoryOffsets.bottomInsetFromScreenEdge
     }
 
     /// Horizontal padding in the collapsed state.
     private var collapsedHorizontalPadding: CGFloat {
-        if let offsets = TabBarStateStore.shared.accessoryOffsets {
-            return offsets.sideInset
+        accessoryOffsets.sideInset
+    }
+
+    /// iOS 26: the measured platter height, so expansion starts exactly where the
+    /// native accessory is. Nothing is visible at rest there, so this is an
+    /// animation origin only.
+    ///
+    /// iOS 17/18: today's pill height — the overlay *is* the visible mini player on
+    /// that path and its size must not change.
+    private var collapsedHeight: CGFloat {
+        if #available(iOS 26.0, *) {
+            accessoryOffsets.accessoryHeight
+        } else {
+            Utilities.AppConstants.dynamicPlayerIslandHeight
         }
-        let scale = ResponsiveLayout.DeviceSizeClass(width: size.width).scaleFactor(for: size.width)
-        return isTabbarVisible
-            ? (isSearchFieldExpanded ? 30 * scale : 20 * scale)
-            : (isSearchFieldExpanded ? 20 * scale : 10 * scale)
     }
 
     @Namespace private var namespace
@@ -233,14 +254,21 @@ private extension ExpandablePlayerInner {
         ZStack(alignment: .top) {
             PlayerBackground(
                 isPlayerExpanded: isPlayerExpanded,
-                isFullExpanded: isFullyExpanded
+                isFullExpanded: isFullyExpanded,
+                collapsedHeight: collapsedHeight
             )
 
-            DynamicPlayerIsland(
-                isPlayerExpanded: $isPlayerExpanded,
-                namespace: namespace
-            )
-            .opacity(isPlayerExpanded ? 0 : 1)
+            // iOS 26 has a real .tabViewBottomAccessory acting as the collapsed
+            // pill, so drawing a second one here is what produced the two-layer
+            // handoff. iOS 17/18 has no native accessory — the overlay is the
+            // only mini player there.
+            if #unavailable(iOS 26.0) {
+                DynamicPlayerIsland(
+                    isPlayerExpanded: $isPlayerExpanded,
+                    namespace: namespace
+                )
+                .opacity(isPlayerExpanded ? 0 : 1)
+            }
 
             NowPlayingView(
                 isPlayerExpanded: isPlayerExpanded,
@@ -251,7 +279,7 @@ private extension ExpandablePlayerInner {
 
             ProgressTracker(progress: progressTrackState)
         }
-        .frame(height: isPlayerExpanded ? nil : Utilities.AppConstants.dynamicPlayerIslandHeight, alignment: .top)
+        .frame(height: isPlayerExpanded ? nil : collapsedHeight, alignment: .top)
         .offset(y: offsetY)
         .ignoresSafeArea()
     }

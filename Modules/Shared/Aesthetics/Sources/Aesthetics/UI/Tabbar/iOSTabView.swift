@@ -116,26 +116,14 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         .tabBarGeometryHUD()
         #endif
         .environment(\.isSearchExpanded, $isSearchExpanded)
+        // Single publisher for both OS paths. Keyed so rotation, search, tab-bar
+        // visibility and width changes each republish — the previous .onAppear seed
+        // ran once, leaving the overlay on launch-time geometry forever.
+        .task(id: accessoryPublishKey) {
+            publishAccessoryOffsets()
+        }
         .onAppear {
             isSearchExpanded = isSearchTabSelection(selection)
-            // Seed the store immediately so ExpandablePlayer has valid offsets
-            // even before the first layout pass on iOS 26 (where bottomTabBar isn't called).
-            if #available(iOS 26.0, *) {
-                let w = UIScreen.main.bounds.width
-                let sa = (UIApplication.shared.connectedScenes.first as? UIWindowScene)
-                    .flatMap { $0.windows.first(where: \.isKeyWindow) }
-                    .map(\.safeAreaInsets.bottom) ?? 0
-                let hasSearch = tabs.contains { $0.role == .search }
-                let phase: ResponsiveLayout.AccessoryPhase = hasSearch ? .inlineWithSearch : .inline
-                // tabBarHeight = 0 → uses the measured iOS 26 constants
-                TabBarStateStore.shared.accessoryOffsets = .init(
-                    phase: phase,
-                    screenWidth: w,
-                    safeAreaBottom: sa,
-                    isSearchExpanded: isSearchExpanded,
-                    isLandscape: verticalSizeClass == .compact
-                )
-            }
         }
         .onChange(of: selection) { _, newValue in
             let isSearchSelected = isSearchTabSelection(newValue)
@@ -147,6 +135,79 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
 
     private func isSearchTabSelection(_ value: SelectionValue) -> Bool {
         tabs.first(where: { $0.role == .search })?.value == value
+    }
+
+    // MARK: - Accessory geometry
+
+    /// The accessory's current state, resolved from the main tree. The overlay
+    /// window is a detached SwiftUI tree and never receives this environment,
+    /// which is why the result is published through `TabBarStateStore`.
+    private var accessoryState: ResponsiveLayout.AccessoryState {
+        .init(
+            orientation: verticalSizeClass == .compact ? .landscape : .portrait,
+            placement: tabBarVisibility == .visible ? .inline : .minimized,
+            searchActive: isSearchExpanded
+        )
+    }
+
+    private var foregroundScene: UIWindowScene? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+            ?? UIApplication.shared.connectedScenes.first as? UIWindowScene
+    }
+
+    /// Scene coordinate space tracks rotation in lockstep with layout.
+    /// `UIScreen.main.bounds` lags it — that is what produced the corrupt
+    /// bottom-431.5 sample while the geometry probe was being developed.
+    private var currentScreenWidth: CGFloat {
+        foregroundScene?.coordinateSpace.bounds.width ?? UIScreen.main.bounds.width
+    }
+
+    private var currentSafeAreaBottom: CGFloat {
+        // windowLevel .normal skips the UniversalOverlay PassThroughWindow
+        // (.statusBar + 1), whose insets are not the app's.
+        let window = foregroundScene?.windows.first { $0.windowLevel == .normal }
+            ?? foregroundScene?.windows.first
+        return window?.safeAreaInsets.bottom ?? 0
+    }
+
+    /// Composite key so rotation, search, tab-bar visibility *and* width changes
+    /// (iPad multitasking) each retrigger the publish.
+    private struct AccessoryPublishKey: Equatable {
+        let state: ResponsiveLayout.AccessoryState
+        let screenWidth: CGFloat
+        let safeAreaBottom: CGFloat
+    }
+
+    private var accessoryPublishKey: AccessoryPublishKey {
+        .init(
+            state: accessoryState,
+            screenWidth: currentScreenWidth,
+            safeAreaBottom: currentSafeAreaBottom
+        )
+    }
+
+    /// Written from `.task`, not during body evaluation — mutating `@Observable`
+    /// state mid-update triggers "AttributeGraph: setting value during update".
+    private func publishAccessoryOffsets() {
+        let state = accessoryState
+        let width = currentScreenWidth
+
+        // iOS 26 uses the measured constants (tabBarHeight 0). The custom bar path
+        // passes its real height so the accessory clears the hand-rolled bar.
+        var tabBarHeight: CGFloat = 0
+        if #unavailable(iOS 26.0) {
+            tabBarHeight = 56 * ResponsiveLayout.DeviceSizeClass(width: width).scaleFactor(for: width)
+        }
+
+        TabBarStateStore.shared.accessoryState = state
+        TabBarStateStore.shared.accessoryOffsets = .init(
+            state: state,
+            screenWidth: width,
+            safeAreaBottom: currentSafeAreaBottom,
+            tabBarHeight: tabBarHeight
+        )
     }
 
     private var visibleTabs: [TabViewData<SelectionValue>] {
@@ -206,22 +267,15 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         // Search expansion only changes internal layout, NOT the bar's outer frame.
         let customTabBarHeight: CGFloat = 56 * screenScale
 
-        let phase: ResponsiveLayout.AccessoryPhase = {
-            let hasSearch = tabs.contains { $0.role == .search }
-            if tabBarVisibility == .visible {
-                return hasSearch ? .inlineWithSearch : .inline
-            } else {
-                return hasSearch ? .expandedWithSearch : .expanded
-            }
-        }()
-        let offsets = ResponsiveLayout.AccessoryOffsets(
-            phase: phase,
-            screenWidth: screenW,
-            safeAreaBottom: safeBottom,
-            tabBarHeight: customTabBarHeight, // triggers iOS 17/18 formula
-            isSearchExpanded: isSearchExpanded,
-            isLandscape: verticalSizeClass == .compact
-        )
+        // Prefer the published value so both paths agree; fall back to a local
+        // computation only before the first publish lands.
+        let offsets = TabBarStateStore.shared.accessoryOffsets
+            ?? ResponsiveLayout.AccessoryOffsets(
+                state: accessoryState,
+                screenWidth: screenW,
+                safeAreaBottom: safeBottom,
+                tabBarHeight: customTabBarHeight // triggers iOS 17/18 formula
+            )
 
         return ZStack(alignment: .bottom) {
             if #available(iOS 26.0, *) {
@@ -267,12 +321,8 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         // Spring feels more natural than easeInOut when the bar snaps in/out.
         .animation(.spring(response: 0.4, dampingFraction: 0.82), value: tabBarVisibility)
         .environment(\.tabBarAccessoryOffsets, offsets)
-        // Defer the store write to after the view is committed.
-        // Writing an @Observable property directly during body evaluation
-        // triggers "AttributeGraph: setting value during update" and can crash.
-        .task(id: offsets) {
-            TabBarStateStore.shared.accessoryOffsets = offsets
-        }
+        // The store write lives on the single publisher in `body` — see the
+        // .task(id: accessoryPublishKey) there. Duplicating it here would race it.
     }
 }
 #endif
