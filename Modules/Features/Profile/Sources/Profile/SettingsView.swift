@@ -11,6 +11,7 @@ public struct SettingsView: View {
     @Environment(PrefetchSettings.self) private var settings
     @Environment(NetworkPathMonitor.self) private var networkMonitor
     @Environment(PlaybackControlSettings.self) private var playbackControlSettings
+    @Environment(PlayerThemeSettings.self) private var playerThemeSettings
     @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
     @Environment(AuthService.self) private var authService
 
@@ -28,7 +29,16 @@ public struct SettingsView: View {
     public var body: some View {
         Form {
             Section("Player") {
-                // add toggle for vinyl
+                Picker("Theme", selection: Bindable(playerThemeSettings).selected) {
+                    ForEach(PlayerThemeID.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+
+                Text(playerThemeSettings.selected.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 // add slider for managing vinyl speed
             }
 

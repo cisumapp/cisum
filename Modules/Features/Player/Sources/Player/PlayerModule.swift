@@ -68,6 +68,7 @@ public final class PlayerModule {
         DynamicPlayerIsland(isPlayerExpanded: isExpanded, namespace: namespace)
             .environment(viewModel)
             .environment(viewModel.progress)
+            .environment(PlayerThemeSettings.shared)
     }
 
     /// The full-screen player.
@@ -79,6 +80,7 @@ public final class PlayerModule {
         ExpandablePlayer(show: show, isPlayerExpanded: isExpanded, collapsedFrame: collapsedFrame)
             .environment(viewModel)
             .environment(viewModel.progress)
+            .environment(PlayerThemeSettings.shared)
     }
 
     // MARK: - Lifecycle

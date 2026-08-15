@@ -100,6 +100,8 @@ private struct ExpandablePlayerInner: View {
         }
     }
 
+    @Environment(PlayerThemeSettings.self) private var themeSettings
+
     @Namespace private var namespace
 
     @State private var offsetY: CGFloat = 0.0
@@ -251,10 +253,16 @@ private extension ExpandablePlayerInner {
     }
 
     func playerContent(size: CGSize) -> some View {
-        ZStack(alignment: .top) {
-            PlayerBackground(
-                isPlayerExpanded: isPlayerExpanded,
-                isFullExpanded: isFullyExpanded,
+        // Only these three views vary by theme. Everything else in this file — the pan gesture,
+        // stacked(), resizeWindow, offsetY, the collapsed geometry — is shared, so the player
+        // opens and dismisses identically whichever theme is selected.
+        let theme = themeSettings.selected
+
+        return ZStack(alignment: .top) {
+            PlayerThemeRenderer.background(
+                theme,
+                expanded: isPlayerExpanded,
+                fullyExpanded: isFullyExpanded,
                 collapsedHeight: collapsedHeight
             )
 
@@ -263,15 +271,17 @@ private extension ExpandablePlayerInner {
             // handoff. iOS 17/18 has no native accessory — the overlay is the
             // only mini player there.
             if #unavailable(iOS 26.0) {
-                DynamicPlayerIsland(
-                    isPlayerExpanded: $isPlayerExpanded,
+                PlayerThemeRenderer.miniPlayer(
+                    theme,
+                    expanded: $isPlayerExpanded,
                     namespace: namespace
                 )
                 .opacity(isPlayerExpanded ? 0 : 1)
             }
 
-            DefaultNowPlayingView(
-                isPlayerExpanded: isPlayerExpanded,
+            PlayerThemeRenderer.expanded(
+                theme,
+                expanded: isPlayerExpanded,
                 size: size,
                 namespace: namespace
             )
