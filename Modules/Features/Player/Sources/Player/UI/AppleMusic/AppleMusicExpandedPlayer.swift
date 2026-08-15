@@ -25,14 +25,24 @@ struct AppleMusicExpandedPlayer: View {
         VStack(spacing: 12) {
             grip
 
-            artwork
-                .frame(height: size.width - Const.horizontalPadding * 2)
-                // The reference tightens this on short devices so the controls still fit without
-                // scrolling.
-                .padding(.vertical, size.height < 700 ? 10 : 30)
-                .padding(.horizontal, Const.horizontalPadding)
+            // Both the artwork and the controls are conditional, not merely faded.
+            //
+            // This view is crossfaded by the caller with `.opacity(isPlayerExpanded ? 1 : 0)`, so
+            // while collapsed it is still in the tree. If the artwork stayed present it would be a
+            // second `matchedGeometryEffect` source alongside the mini player's, SwiftUI would pick
+            // one arbitrarily, and the artwork would jump instead of flying.
+            if isPlayerExpanded {
+                artwork
+                    .matchedGeometryEffect(id: PlayerMatchedGeometry.artwork, in: namespace)
+                    .frame(height: size.width - Const.horizontalPadding * 2)
+                    // The reference tightens this on short devices so the controls still fit
+                    // without scrolling.
+                    .padding(.vertical, size.height < 700 ? 10 : 30)
+                    .padding(.horizontal, Const.horizontalPadding)
 
-            AppleMusicControls()
+                AppleMusicControls()
+                    .transition(.move(edge: .bottom))
+            }
         }
         .padding(.top, AppConstants.safeAreaInsets.top)
         .padding(.bottom, AppConstants.safeAreaInsets.bottom)
