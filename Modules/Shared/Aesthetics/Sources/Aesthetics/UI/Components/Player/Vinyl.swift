@@ -36,48 +36,52 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
         GeometryReader { geo in
             let sizes = ResponsiveLayout.VinylSizes(screenWidth: geo.size.width)
 
-            TimelineView(.animation) { timeline in
-                ZStack {
-                    VStack {
-                        HStack {
-                            ZStack(alignment: .topLeading) {
-                                previousVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetPrevious)
+            ZStack {
+                VStack {
+                    HStack {
+                        ZStack(alignment: .topLeading) {
+                            previousVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetPrevious)
 
-                                if let previousLabel {
-                                    sideLabel(previousLabel, alignment: .leading)
-                                        .padding(.leading, sizes.sideLabelInset)
-                                        .padding(.top, sizes.sideLabelTopInset)
-                                }
+                            if let previousLabel {
+                                sideLabel(previousLabel, alignment: .leading)
+                                    .padding(.leading, sizes.sideLabelInset)
+                                    .padding(.top, sizes.sideLabelTopInset)
                             }
-                            .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
-
-                            Spacer(minLength: 0)
-
-                            ZStack(alignment: .topTrailing) {
-                                nextVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetNext)
-
-                                if let upnextLabel {
-                                    sideLabel(upnextLabel, alignment: .trailing)
-                                        .padding(.trailing, sizes.sideLabelInset)
-                                        .padding(.top, sizes.sideLabelTopInset)
-                                }
-                            }
-                            .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
                         }
+                        .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
 
-                        Spacer()
+                        Spacer(minLength: 0)
+
+                        ZStack(alignment: .topTrailing) {
+                            nextVinyl(size: sizes.sideDiskSize, offsetX: sizes.sideDiskOffsetNext)
+
+                            if let upnextLabel {
+                                sideLabel(upnextLabel, alignment: .trailing)
+                                    .padding(.trailing, sizes.sideLabelInset)
+                                    .padding(.top, sizes.sideLabelTopInset)
+                            }
+                        }
+                        .frame(width: sizes.sideSlotWidth, height: sizes.sideSlotHeight)
                     }
-                    .offset(y: sizes.mainVStackOffsetY)
 
-                    heroVinyl(timeline: timeline, size: sizes.heroDiskSize)
-                        .overlay {
-                            vinylShade
-                        }
-                        .position(
-                            x: geo.size.width / 2,
-                            y: heroCenterY(for: geo.size.height)
-                        )
+                    Spacer()
                 }
+                .offset(y: sizes.mainVStackOffsetY)
+
+                // The TimelineView wraps ONLY the spinning disc. It previously wrapped this whole
+                // ZStack, so the two static side discs, both side labels, the shade and the
+                // positioning all re-evaluated at 60-120fps for no reason — nothing outside the
+                // hero disc changes between frames.
+                TimelineView(.animation) { timeline in
+                    heroVinyl(timeline: timeline, size: sizes.heroDiskSize)
+                }
+                .overlay {
+                    vinylShade
+                }
+                .position(
+                    x: geo.size.width / 2,
+                    y: heroCenterY(for: geo.size.height)
+                )
             }
         }
         .background(Color(hex: "101010"))
@@ -110,10 +114,9 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     }
 
     func heroVinyl(timeline: TimelineViewDefaultContext, size: CGFloat) -> some View {
-        VinylDisk(size: size) {
+        VinylDisk(size: size, rotation: rotation(at: timeline.date)) {
             content()
         }
-        .rotationEffect(.degrees(rotation(at: timeline.date)))
     }
 
     private var vinylShade: LinearGradient {
@@ -208,30 +211,44 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     }
 }
 
+/// A record: artwork under grooves and a gloss overlay, with the centre label on top.
+///
+/// The disc is deliberately dumb about time. The caller owns the angle, so a static disc costs
+/// nothing — no `TimelineView`, no per-frame re-evaluation — and only the spinning one pays.
 struct VinylDisk<Content: View>: View {
     let size: CGFloat
+
+    /// Current angle in degrees. Defaults to 0 so a static disc reads as `VinylDisk(size:) { ... }`.
+    var rotation: Double = 0
+
+    /// Declared last so the trailing closure binds here rather than to `rotation`.
     let content: () -> Content
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(.clear)
-                .overlay {
-                    content()
-                }
-                .clipShape(.circle)
-                .padding(1)
+            Group {
+                Circle()
+                    .fill(.clear)
+                    .overlay {
+                        content()
+                    }
+                    .clipShape(.circle)
+                    .padding(1)
 
-            Image.vinylGrooves
-                .resizable()
-                .scaledToFill()
-                .opacity(0.5)
-                .padding(5)
+                Image.vinylGrooves
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(0.5)
+                    .padding(5)
 
-            Image.vinylOverlay
-                .resizable()
-                .scaledToFill()
+                Image.vinylOverlay
+                    .resizable()
+                    .scaledToFill()
+            }
+            .rotationEffect(.degrees(rotation))
 
+            // Outside the rotating group on purpose: the centre label is the fixed spindle area,
+            // and spinning it made the whole disc read as a flat rotating image.
             Image.vinylCenter
                 .resizable()
         }
