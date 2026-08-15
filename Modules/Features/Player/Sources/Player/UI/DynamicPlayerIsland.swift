@@ -1,3 +1,4 @@
+import Aesthetics
 import Models
 
 //
@@ -25,6 +26,7 @@ public struct DynamicPlayerIsland: View {
 
     public var body: some View {
         nowPlaying
+            .playerZoomSource(in: namespace)
             .frame(height: Utilities.AppConstants.dynamicPlayerIslandHeight)
             .contentShape(.rect)
             .transformEffect(.identity)
