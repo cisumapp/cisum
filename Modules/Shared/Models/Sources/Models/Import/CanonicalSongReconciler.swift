@@ -61,11 +61,17 @@ public enum CanonicalSongReconciler {
 
     /// Levenshtein-ratio similarity, 0.0–1.0 (ported).
     static func similarity(_ a: String, _ b: String) -> Double {
-        if a == b { return 1.0 }
+        if a == b {
+            return 1.0
+        }
         let aChars = Array(a), bChars = Array(b)
         let aLen = aChars.count, bLen = bChars.count
-        if aLen == 0 { return bLen == 0 ? 1.0 : 0.0 }
-        if bLen == 0 { return 0.0 }
+        if aLen == 0 {
+            return bLen == 0 ? 1.0 : 0.0
+        }
+        if bLen == 0 {
+            return 0.0
+        }
 
         var prev = Array(0 ... bLen)
         var curr = Array(repeating: 0, count: bLen + 1)

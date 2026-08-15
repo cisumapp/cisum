@@ -107,12 +107,12 @@ public enum TextNormalizer {
 
     /// Characters providers spell differently for the same release.
     private static let characterFolds: [(String, String)] = [
-        ("\u{2018}", "'"), ("\u{2019}", "'"),   // curly single quotes
+        ("\u{2018}", "'"), ("\u{2019}", "'"), // curly single quotes
         ("\u{201C}", "\""), ("\u{201D}", "\""), // curly double quotes
-        ("\u{FF08}", "("), ("\u{FF09}", ")"),   // full-width parentheses
-        ("\u{3010}", "["), ("\u{3011}", "]"),   // CJK lenticular brackets
-        ("\u{2013}", "-"), ("\u{2014}", "-"),   // en/em dash
-        ("\u{00A0}", " "),                      // non-breaking space
+        ("\u{FF08}", "("), ("\u{FF09}", ")"), // full-width parentheses
+        ("\u{3010}", "["), ("\u{3011}", "]"), // CJK lenticular brackets
+        ("\u{2013}", "-"), ("\u{2014}", "-"), // en/em dash
+        ("\u{00A0}", " "), // non-breaking space
         ("&", " and "),
     ]
 }

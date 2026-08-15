@@ -33,7 +33,6 @@ struct macOSApp: App {
     var body: some Scene {
         WindowGroup {
             cisum.rootView
-                .environment(\.playerViewModel, cisum.playerViewModel)
                 .environment(searchOverlay)
                 .tint(cisum.playerAccentColor)
                 .background {
@@ -57,7 +56,6 @@ struct macOSApp: App {
 
         Settings {
             cisum.settingsView
-                .environment(\.playerViewModel, cisum.playerViewModel)
         }
     }
 

@@ -1,3 +1,4 @@
+import Authentication
 import Foundation
 import Observation
 import SwiftUI

@@ -17,14 +17,16 @@ public enum ArtworkURL {
 
         // Apple Music / iTunes — force 1000² (supports far larger, 1000 is a crisp, light target).
         if str.contains("mzstatic.com"),
-           let r = str.range(of: #"\d+x\d+"#, options: .regularExpression) {
+           let r = str.range(of: #"\d+x\d+"#, options: .regularExpression)
+        {
             str.replaceSubrange(r, with: "1000x1000")
             return URL(string: str) ?? url
         }
 
         // Spotify cover art — normalize the size code to the 640² maximum.
         if str.contains("i.scdn.co/image/ab67616d"),
-           let r = str.range(of: #"ab67616d[0-9a-f]{8}"#, options: .regularExpression) {
+           let r = str.range(of: #"ab67616d[0-9a-f]{8}"#, options: .regularExpression)
+        {
             str.replaceSubrange(r, with: "ab67616d0000b273")
             return URL(string: str) ?? url
         }
@@ -41,7 +43,8 @@ public enum ArtworkURL {
 
         // Plain YouTube video thumbnails — capped; sddefault is the largest reliably present.
         if str.contains("ytimg.com"),
-           let r = str.range(of: #"/(default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg"#, options: .regularExpression) {
+           let r = str.range(of: #"/(default|mqdefault|hqdefault|sddefault|maxresdefault)\.jpg"#, options: .regularExpression)
+        {
             str.replaceSubrange(r, with: "/sddefault.jpg")
             return URL(string: str) ?? url
         }

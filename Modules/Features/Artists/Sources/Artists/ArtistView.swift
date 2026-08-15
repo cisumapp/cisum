@@ -10,8 +10,8 @@ import YouTubeSDK
 public struct ArtistView: View {
     let artist: Artist
     @State private var palette: ImageColorPalette?
-    @Environment(\.playerViewModel) private var playerViewModel
-    @Environment(\.searchViewModel) private var searchViewModel
+    @Environment(\.playbackCommands) private var playbackCommands
+    @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Environment(PlayerPresentationController.self) private var playerPresentationController
 
     @Query private var topTracks: [Song]
@@ -71,72 +71,14 @@ public struct ArtistView: View {
     private func playTracks(startingAt index: Int, shuffled: Bool = false) {
         guard !topTracks.isEmpty else { return }
 
-        let externalTracks: [ExternalQueueTrack] = topTracks.compactMap { track in
-            let sourceProvider = track.preferredFallbackProvider ?? .youtube
-            let payload: FederatedSearchPayload
-            let mediaID: String
+        // Each song already knows which services it exists on, so this is a mapping rather
+        // than a reconstruction. It replaced a ~65-line block that rebuilt a
+        // SpotifySearchTrack, a FederatedSearchItem, a payload enum, and a stream-resolving
+        // closure per track, on every tap.
+        let refs = topTracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
+        guard !refs.isEmpty else { return }
 
-            if sourceProvider == .spotify, let spotifyID = track.spotifyTrackID {
-                mediaID = spotifyID
-                let spotifyTrack = SpotifySearchTrack(
-                    id: spotifyID,
-                    title: track.title,
-                    artistName: track.primaryArtistName ?? "",
-                    albumName: track.albumTitle,
-                    artworkURL: track.artworkURLString.flatMap { URL(string: $0) },
-                    durationSeconds: track.durationSeconds ?? 0,
-                    previewURL: track.spotifyPreviewURLString.flatMap { URL(string: $0) }
-                )
-                payload = .spotify(spotifyTrack)
-            } else if let ytID = track.youtubeVideoID ?? track.youtubeMusicVideoID {
-                mediaID = ytID
-                let ytSong = YouTubeMusicSong(
-                    id: ytID,
-                    title: track.title,
-                    artists: [track.primaryArtistName ?? ""].filter { !$0.isEmpty },
-                    album: track.albumTitle,
-                    duration: track.durationSeconds.map { TimeInterval($0) },
-                    thumbnailURL: track.artworkURLString.flatMap { URL(string: $0) },
-                    videoId: ytID,
-                    isExplicit: track.isExplicit
-                )
-                payload = .youtube(YouTubeMediaRef(song: ytSong))
-            } else {
-                return nil
-            }
-
-            let item = FederatedSearchItem(
-                id: mediaID,
-                title: track.title,
-                subtitle: track.primaryArtistName ?? "",
-                artworkURL: track.artworkURLString.flatMap { URL(string: $0) },
-                durationSeconds: track.durationSeconds,
-                isPlayable: true,
-                isExplicit: track.isExplicit,
-                audioQualityLabel: nil,
-                audioCodecLabel: nil,
-                payload: payload
-            )
-
-            return ExternalQueueTrack(
-                mediaID: mediaID,
-                title: track.title,
-                artist: track.primaryArtistName ?? "",
-                artworkURL: track.artworkURLString.flatMap { URL(string: $0) } ?? (artist.artworkURLString.flatMap { URL(string: $0) }),
-                service: sourceProvider == .spotify ? .spotify : .youtube,
-                isExplicit: track.isExplicit,
-                qualityLabelHint: nil,
-                codecLabelHint: nil,
-                resolvePayload: {
-                    guard let resolved = try await searchViewModel?.resolveExternalStream(for: item) else {
-                        throw NSError(domain: "ArtistView", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to resolve stream"])
-                    }
-                    return resolved
-                }
-            )
-        }
-
-        playerViewModel.setQueue(externalTracks, startIndex: index, shuffled: shuffled)
+        playbackCommands?.setQueue(refs, startIndex: index, shuffled: shuffled)
         playerPresentationController.expand()
     }
 }

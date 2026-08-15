@@ -61,18 +61,23 @@ public enum AudioSession {
             object: nil,
             queue: .main
         ) { notification in
+            // Read everything out of the notification here, in the nonisolated callback.
+            // `Notification` is not Sendable, so carrying it into the isolated closure below is a
+            // data-race diagnostic under Swift 6; these two scalars are fine to hand over.
             guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw)
             else { return }
+
+            let shouldResume = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) }
+                ?? false
 
             MainActor.assumeIsolated {
                 switch type {
                 case .began:
                     onInterruption(true)
                 case .ended:
-                    let options = (notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
-                        .map(AVAudioSession.InterruptionOptions.init(rawValue:)) ?? []
-                    onInterruption(!options.contains(.shouldResume))
+                    onInterruption(!shouldResume)
                 @unknown default:
                     break
                 }
@@ -107,7 +112,7 @@ public enum AudioSession {
     public static func activate() {}
     public static func deactivate() {}
 
-    public static func observe(onInterruption: @escaping @MainActor (Bool) -> Void) -> [NSObjectProtocol] {
+    public static func observe(onInterruption _: @escaping @MainActor (Bool) -> Void) -> [NSObjectProtocol] {
         []
     }
 }

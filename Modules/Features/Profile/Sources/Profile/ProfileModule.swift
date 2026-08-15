@@ -1,7 +1,7 @@
+import Authentication
 import Caching
 import Networking
 import Player
-import Plugins
 import SwiftUI
 import YouTubeSDK
 

@@ -240,7 +240,9 @@ public actor ImportDownloadManager {
                 )
                 await progress.upsert(.init(id: jobID, title: title, provider: job.provider, processed: processed, total: max(total, processed), state: .running))
                 PerfLog.debug("ImportDownloadManager: job \(jobID) page committed processed=\(processed)")
-                if cursor == nil { break }
+                if cursor == nil {
+                    break
+                }
             }
 
             // Finalize.
@@ -347,7 +349,9 @@ public actor ImportDownloadManager {
     }
 
     private static func importProvider(for snap: PlaylistImportJobStore.JobSnapshot) -> ImportProvider {
-        if snap.sourcePlaylistID.hasPrefix("local:") { return .localFile }
+        if snap.sourcePlaylistID.hasPrefix("local:") {
+            return .localFile
+        }
         switch snap.sourceProvider {
         case .spotify: return .spotify
         case .appleMusic: return .appleMusic

@@ -150,8 +150,12 @@ final class HomeViewModel {
     }
 
     private func loadInitialFeed(force: Bool) async {
-        if isLoading { return }
-        if didLoadInitialFeed, !force { return }
+        if isLoading {
+            return
+        }
+        if didLoadInitialFeed, !force {
+            return
+        }
 
         if !force, let cache = await HomeFeedCache.load(), Date().timeIntervalSince(cache.timestamp) < 21600 {
             topSongs = cache.topSongs

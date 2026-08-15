@@ -1,3 +1,4 @@
+import Authentication
 import Foundation
 import Models
 import SwiftData
@@ -156,7 +157,9 @@ public actor SearchCacheHintStore {
         for id in ids {
             let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
-            if seen.contains(trimmed) { continue }
+            if seen.contains(trimmed) {
+                continue
+            }
             seen.insert(trimmed)
             deduplicated.append(trimmed)
         }

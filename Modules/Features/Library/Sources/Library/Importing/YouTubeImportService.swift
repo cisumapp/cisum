@@ -34,7 +34,9 @@ public final class YouTubeImportService: ImportService {
         guard await MainActor.run(body: { youtube.isAuthenticated }) else { throw ImportError.notAuthorized }
         let sections = try await youtube.music.getLibraryPlaylists()
         let playlists = sections.flatMap(\.items).compactMap { item -> YouTubeMusicPlaylist? in
-            if case let .playlist(p) = item { return p }
+            if case let .playlist(p) = item {
+                return p
+            }
             return nil
         }
         return playlists.prefix(max(1, limit)).map { p in
@@ -188,7 +190,9 @@ public final class YouTubeImportService: ImportService {
     static func parseDuration(_ value: String) -> Double? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        if let s = Double(trimmed), s > 0 { return s }
+        if let s = Double(trimmed), s > 0 {
+            return s
+        }
         let parts = trimmed.split(separator: ":").compactMap { Double($0) }
         switch parts.count {
         case 2: return parts[0] * 60 + parts[1]

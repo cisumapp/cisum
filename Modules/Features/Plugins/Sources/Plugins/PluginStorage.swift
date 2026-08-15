@@ -23,7 +23,7 @@ public actor PluginStorage {
             .appendingPathComponent("cisum/Plugins", isDirectory: true)
 
         self.directory = base
-        indexURL = base.appendingPathComponent("index.json")
+        self.indexURL = base.appendingPathComponent("index.json")
     }
 
     /// Loads every installed plugin, source included.
@@ -49,7 +49,7 @@ public actor PluginStorage {
 
         var records = (try? loadIndex()) ?? []
         var stripped = plugin
-        stripped.source = ""   // source lives in its own file, never duplicated in the index
+        stripped.source = "" // source lives in its own file, never duplicated in the index
 
         if let existing = records.firstIndex(where: { $0.id == plugin.id }) {
             records[existing] = stripped

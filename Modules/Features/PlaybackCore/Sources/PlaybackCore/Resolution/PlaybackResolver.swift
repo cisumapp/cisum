@@ -66,36 +66,58 @@ public final class PlaybackResolver {
         }
         CisumSignpost.cache.event("cache-miss", "\(ref.sourceID) \(ref.title)")
 
-        guard let source = sources.source(for: ref.sourceID) else {
-            throw ResolutionError.sourceUnavailable(ref.sourceID)
-        }
-
         // ── Step 2: the track id is known. Resolve directly, no search. ─────────────────
-        do {
-            let stream = try await source.stream(trackID: ref.sourceTrackID, quality: selector.preferred)
-            persistIfPossible(ref, stream: stream)
-            return stream
-        } catch {
-            // A stored id can stop working: two known modules mint a session token at load time
-            // and embed it in every track id, so yesterday's id is meaningless today. Falling back
-            // to a fresh match is the correct response, not surfacing an error.
-            PerfLog.warning("Direct resolve failed for \(ref.sourceID)/\(ref.sourceTrackID): \(error.localizedDescription). Re-matching.")
+        //
+        // Skipped when the ref's own source cannot stream. Some services are metadata-only from
+        // cisum's point of view — Spotify has the best catalogue data but its API returns no
+        // playable audio — so a Spotify ref means "this track, identified by Spotify", not "play
+        // it from Spotify". That distinction is why `sourceID` and playback are separate concepts.
+        if let source = sources.source(for: ref.sourceID), source.capabilities.contains(.stream) {
+            do {
+                let stream = try await source.stream(trackID: ref.sourceTrackID, quality: selector.preferred)
+                persistIfPossible(ref, stream: stream)
+                return stream
+            } catch {
+                // A stored id can stop working: two known modules mint a session token at load
+                // time and embed it in every track id, so yesterday's id is meaningless today.
+                // Falling back to a fresh match is the correct response, not surfacing an error.
+                PerfLog.warning("Direct resolve failed for \(ref.sourceID)/\(ref.sourceTrackID): \(error.localizedDescription). Re-matching.")
+            }
         }
 
-        // ── Step 3: re-match, then persist so this never happens again for this pair. ───
+        // ── Step 3: match on a source that can actually play, then persist. ────────────
+        //
+        // This replaces what the search layer used to call the "hidden fallback" — resolving a
+        // Spotify result by searching YouTube for it. Same behaviour, correct location: it needs
+        // the matcher and the source registry, neither of which belongs in a search view model,
+        // and doing it here means the binding gets persisted so it happens once rather than
+        // on every play.
         let target = MatchTarget(
             title: ref.title,
             artist: ref.artist,
             durationSeconds: ref.durationSeconds
         )
 
-        guard let match = try await matcher.match(target, on: source) else {
-            throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title)
+        for source in sources.playable {
+            guard let match = try? await matcher.match(target, on: source),
+                  let stream = try? await source.stream(trackID: match.track.id, quality: selector.preferred)
+            else { continue }
+
+            // Persisted against the *playing* source, so the next play resolves straight from it.
+            let playbackRef = PlayableRef(
+                songID: ref.songID,
+                sourceID: source.id,
+                sourceTrackID: match.track.id,
+                title: ref.title,
+                artist: ref.artist,
+                artworkURL: ref.artworkURL,
+                durationSeconds: ref.durationSeconds
+            )
+            persist?(playbackRef, match.track, stream)
+            return stream
         }
 
-        let stream = try await source.stream(trackID: match.track.id, quality: selector.preferred)
-        persist?(ref, match.track, stream)
-        return stream
+        throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title)
     }
 
     private func persistIfPossible(_ ref: PlayableRef, stream: SourceStream) {

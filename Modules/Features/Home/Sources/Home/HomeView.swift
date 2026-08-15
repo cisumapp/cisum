@@ -11,7 +11,7 @@ public struct HomeView: View {
     @Environment(\.router) private var router
     @State private var viewModel: HomeViewModel
 
-    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.searchViewModel) private var searchViewModel
     @Environment(PlayerPresentationController.self) private var playerPresentationController
 
@@ -146,15 +146,42 @@ public struct HomeView: View {
         switch item {
         case let .musicSong(song):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
+            playbackCommands?.load(
+                PlayableRef.youtubeMusic(
+                    videoID: song.videoId,
+                    title: song.title,
+                    artist: song.artists.joined(separator: ", "),
+                    artworkURL: song.thumbnailURL,
+                    durationSeconds: song.duration
+                ),
+                preserveQueue: false
+            )
             playerPresentationController.expand()
         case let .main(.song(song)):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
+            playbackCommands?.load(
+                PlayableRef.youtubeMusic(
+                    videoID: song.videoId,
+                    title: song.title,
+                    artist: song.artists.joined(separator: ", "),
+                    artworkURL: song.thumbnailURL,
+                    durationSeconds: song.duration
+                ),
+                preserveQueue: false
+            )
             playerPresentationController.expand()
         case let .main(.video(video)):
             searchViewModel?.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(youtube: YouTubeMediaRef(video: video), preserveQueue: false)
+            playbackCommands?.load(
+                PlayableRef.youtubeVideo(
+                    videoID: video.id,
+                    title: video.title,
+                    artist: video.author,
+                    artworkURL: video.thumbnailURL.flatMap(URL.init(string:)),
+                    durationSeconds: TimeInterval(video.lengthInSeconds)
+                ),
+                preserveQueue: false
+            )
             playerPresentationController.expand()
         case let .musicPlaylist(playlist):
             router.navigate(to: .playlist(id: playlist.id))

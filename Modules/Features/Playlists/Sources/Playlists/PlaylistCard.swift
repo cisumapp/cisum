@@ -51,8 +51,8 @@ struct PlaylistTrackListView: View {
     var isDetail: Bool = false
 
     @Environment(PlayerPresentationController.self) private var playerPresentationController
-    @Environment(\.searchViewModel) private var searchViewModel
-    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.preferredSourceIDs) private var preferredSourceIDs
+    @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.modelContext) private var modelContext
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     @Environment(\.savedLibrary) private var savedLibrary
@@ -354,24 +354,26 @@ struct PlaylistTrackListView: View {
     private func playPlaylist(startingAt index: Int) async {
         guard tracks.indices.contains(index) else { return }
 
-        let queueTracks = tracks.compactMap { makePlayableQueueTrack(for: $0) }
-        guard !queueTracks.isEmpty else { return }
+        // Items with no resolved provider id are dropped, so the tapped row's position has to be
+        // recomputed against the filtered list rather than reused.
+        let refs = tracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
+        guard !refs.isEmpty else { return }
 
-        let selectedItem = tracks[index]
-        let selectedMediaID = playbackMediaID(for: selectedItem)
-        guard let startIndex = queueTracks.firstIndex(where: { $0.mediaID == selectedMediaID })
-        else { return }
+        let selected = tracks[index].playableRef(preferring: preferredSourceIDs)
+        let startIndex = selected.flatMap { refs.firstIndex(of: $0) } ?? 0
 
-        playerViewModel.setQueue(queueTracks, startIndex: startIndex)
+        playbackCommands?.setQueue(refs, startIndex: startIndex, shuffled: false)
         markPlayed()
         playerPresentationController.expand()
     }
 
     private func playShuffled() async {
-        let queueTracks = tracks.compactMap { makePlayableQueueTrack(for: $0) }.shuffled()
-        guard !queueTracks.isEmpty else { return }
+        let refs = tracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
+        guard !refs.isEmpty else { return }
 
-        playerViewModel.setQueue(queueTracks, startIndex: 0)
+        // The queue shuffles itself; shuffling here as well would defeat restoring the original
+        // order when the user turns shuffle back off.
+        playbackCommands?.setQueue(refs, startIndex: 0, shuffled: true)
         markPlayed()
         playerPresentationController.expand()
     }
@@ -379,37 +381,6 @@ struct PlaylistTrackListView: View {
     private func markPlayed() {
         let id = playlist.playlistID
         Task { await playlistLibraryStore?.markPlaylistPlayed(playlistID: id) }
-    }
-
-    private func makePlayableQueueTrack(for track: PlaylistItem) -> ExternalQueueTrack {
-        let artworkURL = track.artworkURLString.flatMap { URL(string: $0) }
-        let searchItem = makeSearchItem(for: track, artworkURL: artworkURL)
-        let itemKey = track.itemKey
-
-        return ExternalQueueTrack(
-            mediaID: playbackMediaID(for: track),
-            title: track.title,
-            artist: track.artistName ?? "",
-            artworkURL: artworkURL,
-            service: searchItem.service,
-            isExplicit: false,
-            qualityLabelHint: nil,
-            codecLabelHint: nil,
-            resolvePayload: {
-                guard let resolved = try await searchViewModel?.resolveExternalStream(for: searchItem) else {
-                    throw FederatedSearchError.noPlayableStream(
-                        "Unable to resolve a playable stream for \"\(track.title)\"."
-                    )
-                }
-
-                // Cache the resolved ID!
-                if resolved.mediaID != searchItem.id {
-                    await playlistLibraryStore?.updateProviderID(for: itemKey, provider: resolved.service.rawValue, trackID: resolved.mediaID)
-                }
-
-                return resolved
-            }
-        )
     }
 
     private func playbackMediaID(for track: PlaylistItem) -> String {

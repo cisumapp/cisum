@@ -1,3 +1,4 @@
+import Authentication
 import Foundation
 
 public struct SuggestionCandidate {
@@ -51,12 +52,16 @@ public enum SuggestionRanker {
     }
 
     private static func jaroWinkler(_ s1: String, _ s2: String) -> Double {
-        if s1 == s2 { return 1.0 }
+        if s1 == s2 {
+            return 1.0
+        }
         let a1 = Array(s1)
         let a2 = Array(s2)
         let l1 = a1.count
         let l2 = a2.count
-        if l1 == 0 || l2 == 0 { return 0 }
+        if l1 == 0 || l2 == 0 {
+            return 0
+        }
 
         let matchDistance = max(0, max(l1, l2) / 2 - 1)
         var a1Matches = Array(repeating: false, count: l1)
@@ -75,7 +80,9 @@ public enum SuggestionRanker {
             }
         }
 
-        if matches == 0 { return 0 }
+        if matches == 0 {
+            return 0
+        }
 
         var t = 0
         var k = 0
@@ -83,7 +90,9 @@ public enum SuggestionRanker {
             while !a2Matches[k] {
                 k += 1
             }
-            if a1[i] != a2[k] { t += 1 }
+            if a1[i] != a2[k] {
+                t += 1
+            }
             k += 1
         }
 

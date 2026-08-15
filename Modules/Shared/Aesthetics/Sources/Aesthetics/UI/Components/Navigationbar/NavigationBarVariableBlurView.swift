@@ -29,7 +29,7 @@ struct NavigationBarVariableBlurView: UIViewRepresentable {
     let maskHeight: CGFloat
     let fromTop: Bool
 
-    // NSCache is thread-safe; replaces the hand-rolled Dictionary + queue that raced.
+    /// NSCache is thread-safe; replaces the hand-rolled Dictionary + queue that raced.
     private static let maskCache = NSCache<NSString, UIImage>()
 
     // MARK: - UIViewRepresentable Methods

@@ -51,7 +51,9 @@ public final class NowPlayingState {
 
     public init() {}
 
-    public var isEmpty: Bool { ref == nil }
+    public var isEmpty: Bool {
+        ref == nil
+    }
 }
 
 /// Transport state. Changes on user action.

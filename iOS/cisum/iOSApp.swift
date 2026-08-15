@@ -30,7 +30,6 @@ struct iOSApp: App {
             #warning("fonts are not expanded </3")
             cisum.rootView
 //                .fontWidth(.expanded)
-                .environment(\.playerViewModel, cisum.playerViewModel)
                 .persistentSystemOverlays(.hidden)
                 .tint(cisum.playerAccentColor)
                 .modelContainer(cisum.modelContainer)
@@ -39,7 +38,7 @@ struct iOSApp: App {
                     cisum.handleIncomingURL(url)
                 }
                 .onAppear {
-                    PerfLog.mark("root-view-appeared")
+                    PerfLog.mark("ios-root-view-appeared")
                 }
         }
         .onChange(of: scenePhase) { _, newPhase in

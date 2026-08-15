@@ -1,8 +1,8 @@
 import Aesthetics
+import Authentication
 import Kingfisher
 import Models
 import Playlists
-import Plugins
 import SwiftData
 import SwiftUI
 import Utilities
@@ -371,7 +371,11 @@ public struct LibraryView: View {
     private var libraryActionErrorBinding: Binding<Bool> {
         Binding(
             get: { viewModel.libraryActionErrorMessage != nil },
-            set: { if !$0 { viewModel.libraryActionErrorMessage = nil } }
+            set: {
+                if !$0 {
+                    viewModel.libraryActionErrorMessage = nil
+                }
+            }
         )
     }
 

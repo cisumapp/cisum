@@ -1,4 +1,6 @@
 //
+import ProviderSDK
+
 //  AppBootstrap.swift
 //  cisum
 //
@@ -128,20 +130,13 @@ enum AppBootstrap {
         let savedLibrary = SavedLibraryService(store: playlistLibraryStore)
         let playlistImportJobStore = PlaylistImportJobStore(modelContainer: modelContainer)
         let centralMediaStore = CentralMediaStore(modelContainer: modelContainer)
-        let artworkVideoProcessor = ArtworkVideoProcessor.shared
         let metadataCache = VideoMetadataCache.shared
-        let providerSDK = Plugins.makeProviderSDK()
-        let includeProviderSDK = UserDefaults.standard.object(forKey: "plugins.provider_sdk_enabled") as? Bool ?? true
-        let includeYouTubeFallback = UserDefaults.standard.object(forKey: "plugins.youtube_fallback_enabled") as? Bool ?? true
+        // Sources are built from the user's enabled plugins. Native adapters for YouTube and
+        // Spotify conform to the same MusicSource protocol and join this registry once written;
+        // nothing downstream will need to change when they do.
+        let pluginStore = PluginStore()
+        let sourceRegistry = SourceRegistry()
 
-        Plugins.configurePlaybackURLResolver(
-            providerSDK: providerSDK,
-            youtube: youtube,
-            mediaCacheStore: mediaCacheStore,
-            metadataCache: metadataCache,
-            includeProviderSDK: includeProviderSDK,
-            includeYouTubeFallback: includeYouTubeFallback
-        )
         let searchCache = SearchResultsCache.shared
         let radioSessionStore = RadioSessionStore.shared
         let playbackMetricsStore = PlaybackMetricsStore.shared
@@ -166,11 +161,25 @@ enum AppBootstrap {
         )
         let providerServices = ProviderServices(
             youtube: youtube,
-            streamingProviderSettings: streamingProviderSettings
+            streamingProviderSettings: streamingProviderSettings,
+            sourceRegistry: sourceRegistry,
+            pluginStore: pluginStore
         )
 
         Task { @MainActor in
-            await ProviderManifestStore.shared.reconcilePersistedManifests()
+            await pluginStore.load()
+
+            // Native SDKs and downloaded plugins go into the same registry and are
+            // indistinguishable from there on. YouTube first because it is the default playback
+            // backend; the user's plugin ordering takes over once they install something.
+            var sources: [any MusicSource] = [
+                YouTubeMusicSource(youtube: youtube),
+                YouTubeVideoSource(youtube: youtube),
+            ]
+            await sources.append(contentsOf: SourceBuilder.buildSources(from: pluginStore))
+
+            sourceRegistry.replace(with: sources)
+            sourceRegistry.preferredSourceID = sourceRegistry.preferredSourceID ?? "youtube_music"
         }
 
         Task { @MainActor in
@@ -180,78 +189,22 @@ enum AppBootstrap {
 //            await youtube.restoreSession()
         }
 
-        #if os(iOS)
-        let playerViewModel = PlayerViewModel(
-            youtube: youtube,
-            settings: prefetchSettings,
-            artworkVideoProcessor: artworkVideoProcessor,
-            metadataCache: metadataCache,
-            mediaCacheStore: mediaCacheStore,
-            playbackMetricsStore: playbackMetricsStore,
-            radioSessionStore: radioSessionStore,
-            scrobbleTrack: { state, playedAt in
-                let duration = state.durationHint.map { Double($0) } ?? 0
-                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
-                try await lastFMScrobbler.scrobble(item, playedAt: playedAt)
-            },
-            recordNowPlayingTrack: { state in
-                let duration = state.durationHint.map { Double($0) } ?? 0
-                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
-                try await lastFMScrobbler.recordNowPlaying(item)
-            },
-            isScrobblingEnabled: { lastFMSettings.enabled },
-            isLocalHistoryEnabled: { lastFMSettings.localHistoryEnabled },
-            startListeningSession: { state in
-                await listeningHistoryStore.startSession(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, streamingService: state.streamingService.rawValue)
-            },
-            finishListeningSession: { sessionID, endedAt, listenedSeconds, wasScrobbled, scrobbledAt in
-                Task {
-                    await listeningHistoryStore.finishSession(id: sessionID, endedAt: endedAt, listenedSeconds: listenedSeconds, wasScrobbled: wasScrobbled, scrobbledAt: scrobbledAt)
-                }
-            },
-            markScrobbledSession: { sessionID, scrobbledAt in
-                Task {
-                    await listeningHistoryStore.markScrobbled(id: sessionID, scrobbledAt: scrobbledAt)
-                }
-            },
-            artworkColorExtractor: artworkColorExtractor
+        // One construction, both platforms. The previous version built this twice — 45 near
+        // identical lines per platform, differing only in an artwork-colour argument — and passed
+        // in eleven collaborators plus seven closures, because the view model implemented queueing,
+        // searching, scoring, resolution, artwork, and scrobbling itself. It now coordinates
+        // components that own those jobs, so it needs the source registry and nothing else.
+        let player = PlayerViewModel(sources: sourceRegistry)
+
+        // Persistence is injected rather than reached for, because Player does not import
+        // SwiftData. These three closures are what make "match once, then never search again"
+        // actually stick across launches.
+        let songSourceStore = SongSourceStore(modelContainer: modelContainer)
+        player.configurePersistence(
+            lookup: { songSourceStore.lookup($0) },
+            persist: { songSourceStore.persist($0, track: $1, stream: $2) },
+            invalidate: { songSourceStore.invalidate($0) }
         )
-        #else
-        let playerViewModel = PlayerViewModel(
-            youtube: youtube,
-            settings: prefetchSettings,
-            artworkVideoProcessor: artworkVideoProcessor,
-            metadataCache: metadataCache,
-            mediaCacheStore: mediaCacheStore,
-            playbackMetricsStore: playbackMetricsStore,
-            radioSessionStore: radioSessionStore,
-            scrobbleTrack: { state, playedAt in
-                let duration = state.durationHint.map { Double($0) } ?? 0
-                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
-                try await lastFMScrobbler.scrobble(item, playedAt: playedAt)
-            },
-            recordNowPlayingTrack: { state in
-                let duration = state.durationHint.map { Double($0) } ?? 0
-                let item = LastFMPlaybackItem(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, durationSeconds: duration > 0 ? UInt(duration) : nil)
-                try await lastFMScrobbler.recordNowPlaying(item)
-            },
-            isScrobblingEnabled: { lastFMSettings.enabled },
-            isLocalHistoryEnabled: { lastFMSettings.localHistoryEnabled },
-            startListeningSession: { state in
-                await listeningHistoryStore.startSession(mediaID: state.mediaID, title: state.title, artist: state.artist, album: state.albumName, artworkURL: state.artworkURL, streamingService: state.streamingService.rawValue)
-            },
-            finishListeningSession: { sessionID, endedAt, listenedSeconds, wasScrobbled, scrobbledAt in
-                Task {
-                    await listeningHistoryStore.finishSession(id: sessionID, endedAt: endedAt, listenedSeconds: listenedSeconds, wasScrobbled: wasScrobbled, scrobbledAt: scrobbledAt)
-                }
-            },
-            markScrobbledSession: { sessionID, scrobbledAt in
-                Task {
-                    await listeningHistoryStore.markScrobbled(id: sessionID, scrobbledAt: scrobbledAt)
-                }
-            }
-        )
-        #endif
 
         let searchViewModel = SearchViewModel(
             youtube: youtube,
@@ -263,7 +216,7 @@ enum AppBootstrap {
             centralMediaStore: centralMediaStore,
             metadataCache: metadataCache,
             searchCache: searchCache,
-            providerSDK: providerSDK // H-1: wire up all streaming providers for unified search
+            sourceRegistry: sourceRegistry
         )
 
         let playbackServices = PlaybackServices(
@@ -274,8 +227,7 @@ enum AppBootstrap {
             listeningHistoryStore: listeningHistoryStore,
             streamingProviderSettings: streamingProviderSettings,
             radioSessionStore: radioSessionStore,
-            artworkVideoProcessor: artworkVideoProcessor,
-            playerViewModel: playerViewModel
+            player: player
         )
 
         let searchServices = SearchServices(

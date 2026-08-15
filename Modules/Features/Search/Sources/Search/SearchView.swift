@@ -1,10 +1,10 @@
 import Aesthetics
+import Authentication
 import Kingfisher
 import Library
 import Models
 import Player
 import Playlists
-import Plugins
 import SwiftData
 import SwiftUI
 import Tracks
@@ -18,7 +18,7 @@ import SpotifySDK
 public struct SearchView: View {
     @Environment(PlayerPresentationController.self) private var presentationController
     @Environment(\.searchViewModel) private var searchViewModelOptional
-    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     @Environment(\.centralMediaStore) private var centralMediaStore
 
@@ -99,7 +99,6 @@ public struct SearchView: View {
             case .success:
                 SearchResultsList(
                     searchViewModel: searchViewModel,
-                    playerViewModel: playerViewModel,
                     isImportingSpotifyPlaylistID: $viewModel.isImportingSpotifyPlaylistID,
                     showNonPlayableAlert: $viewModel.showNonPlayableAlert,
                     nonPlayableMessage: $viewModel.nonPlayableMessage,
@@ -169,7 +168,7 @@ public struct SearchView: View {
         switch item.payload {
         case let .youtube(ref):
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(youtube: ref, preserveQueue: false)
+            playbackCommands?.load(PlayableRef(youtube: ref), preserveQueue: false)
             presentationController.expand()
 
         case .spotify:
@@ -213,26 +212,16 @@ public struct SearchView: View {
 
     private func playSpotifyTrack(_ item: FederatedSearchItem) async {
         do {
-            guard let selectedPayload = try await searchViewModel.resolveExternalStream(for: item)
-            else {
+            // No pre-resolution here any more. The view supplies an identity; the player resolves
+            // it, caches the stream URL, and persists the binding so the next play skips all of it.
+            guard let ref = item.playableRef else {
                 throw FederatedSearchError.noPlayableStream(
-                    "Unable to resolve a YouTube-backed stream for this Spotify track."
-                )
-            }
-
-            guard
-                let selectedTrack = makeExternalQueueTrack(
-                    for: item,
-                    preResolvedPayload: selectedPayload
-                )
-            else {
-                throw FederatedSearchError.noPlayableStream(
-                    "Unable to build the Spotify playback track."
+                    "This result has no playable source."
                 )
             }
 
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(external: selectedTrack, preserveQueue: false)
+            playbackCommands?.load(ref, preserveQueue: false)
             presentationController.expand()
         } catch {
             viewModel.nonPlayableMessage = error.localizedDescription
@@ -242,26 +231,16 @@ public struct SearchView: View {
 
     private func playProviderSDKTrack(_ item: FederatedSearchItem) async {
         do {
-            guard let selectedPayload = try await searchViewModel.resolveExternalStream(for: item)
-            else {
+            // No pre-resolution here any more. The view supplies an identity; the player resolves
+            // it, caches the stream URL, and persists the binding so the next play skips all of it.
+            guard let ref = item.playableRef else {
                 throw FederatedSearchError.noPlayableStream(
-                    "Unable to resolve a stream for this track."
-                )
-            }
-
-            guard
-                let selectedTrack = makeExternalQueueTrack(
-                    for: item,
-                    preResolvedPayload: selectedPayload
-                )
-            else {
-                throw FederatedSearchError.noPlayableStream(
-                    "Unable to build the playback track."
+                    "This result has no playable source."
                 )
             }
 
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
-            playerViewModel.load(external: selectedTrack, preserveQueue: false)
+            playbackCommands?.load(ref, preserveQueue: false)
             presentationController.expand()
         } catch {
             viewModel.nonPlayableMessage = error.localizedDescription
@@ -346,75 +325,5 @@ public struct SearchView: View {
     private func playlistID(for item: FederatedSearchItem) -> String? {
         guard case let .spotifyPlaylist(playlist) = item.payload else { return nil }
         return playlist.id
-    }
-
-    private func makeExternalQueueTracks(
-        from items: [FederatedSearchItem],
-        selectedItemID: String,
-        selectedPayload: ExternalStreamPayload
-    ) -> [ExternalQueueTrack] {
-        let tracks = items.compactMap { entry in
-            makeExternalQueueTrack(
-                for: entry,
-                preResolvedPayload: entry.id == selectedItemID ? selectedPayload : nil
-            )
-        }
-
-        if tracks.isEmpty {
-            let fallbackTrack = ExternalQueueTrack(
-                mediaID: selectedPayload.mediaID,
-                title: selectedPayload.title,
-                artist: selectedPayload.artist,
-                artworkURL: selectedPayload.artworkURL,
-                service: selectedPayload.service,
-                isExplicit: false,
-                qualityLabelHint: selectedPayload.qualityLabel,
-                codecLabelHint: selectedPayload.codecLabel,
-                resolvePayload: {
-                    selectedPayload
-                }
-            )
-            return [fallbackTrack]
-        }
-
-        return tracks
-    }
-
-    private func makeExternalQueueTrack(
-        for item: FederatedSearchItem,
-        preResolvedPayload: ExternalStreamPayload? = nil
-    ) -> ExternalQueueTrack? {
-        switch item.payload {
-        case .spotify, .youtube, .providerSDK:
-            break
-        case .spotifyArtist, .spotifyPlaylist:
-            return nil
-        }
-
-        let mediaID = preResolvedPayload?.mediaID ?? item.id
-
-        return ExternalQueueTrack(
-            mediaID: mediaID,
-            title: preResolvedPayload?.title ?? item.title,
-            artist: preResolvedPayload?.artist ?? item.displayArtist,
-            artworkURL: preResolvedPayload?.artworkURL ?? item.artworkURL,
-            service: preResolvedPayload?.service ?? item.service,
-            isExplicit: item.isExplicit,
-            qualityLabelHint: preResolvedPayload?.qualityLabel ?? item.audioQualityLabel,
-            codecLabelHint: preResolvedPayload?.codecLabel ?? item.audioCodecLabel,
-            resolvePayload: {
-                if let preResolvedPayload {
-                    return preResolvedPayload
-                }
-
-                guard let payload = try await searchViewModel.resolveExternalStream(for: item)
-                else {
-                    throw FederatedSearchError.noPlayableStream(
-                        "Unable to resolve a playable stream for this track."
-                    )
-                }
-                return payload
-            }
-        )
     }
 }

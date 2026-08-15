@@ -85,8 +85,12 @@ public struct DiscoverView: View {
 
     @MainActor
     private func loadDiscoverSections(force: Bool = false) async {
-        if isLoading { return }
-        if didLoadInitialSections, !force { return }
+        if isLoading {
+            return
+        }
+        if didLoadInitialSections, !force {
+            return
+        }
 
         isLoading = true
         errorMessage = nil
@@ -233,7 +237,7 @@ private struct DiscoverChartRow: View {
     let rank: Int
     let item: YouTubeChartItem
 
-    @Environment(\.playerViewModel) private var playerViewModel
+    @Environment(\.playbackCommands) private var playbackCommands
     @Environment(PlayerPresentationController.self) private var playerPresentationController
     @Environment(\.router) private var router
 
@@ -261,17 +265,13 @@ private struct DiscoverChartRow: View {
 
     private func playItem(_ item: YouTubeChartItem) {
         if item.type == .song || item.type == .video {
-            let song = YouTubeMusicSong(
-                id: item.id,
+            let ref = PlayableRef.youtubeMusic(
+                videoID: item.id,
                 title: item.title,
-                artists: [item.subtitle],
-                album: nil,
-                duration: nil,
-                thumbnailURL: item.thumbnailURL,
-                videoId: item.id,
-                isExplicit: false
+                artist: item.subtitle,
+                artworkURL: item.thumbnailURL
             )
-            playerViewModel.load(youtube: YouTubeMediaRef(song: song), preserveQueue: false)
+            playbackCommands?.load(ref, preserveQueue: false)
             playerPresentationController.expand()
         } else if item.type == .artist {
             router.navigate(to: .artist(id: item.id))

@@ -159,6 +159,7 @@ public final class PluginStore {
     }
 
     // MARK: - The catalog seam
+
     //
     // What the composition root reads to build sources. Returning plain values, not something
     // executable, is the point: this module never learns what a MusicSource is.

@@ -1,7 +1,7 @@
 import Aesthetics
+import Authentication
 import Kingfisher
 import Playlists
-import Plugins
 import SwiftData
 import SwiftUI
 import Utilities
@@ -592,7 +592,11 @@ public struct SpotifyPlaylistImportSheet: View {
     private var showsErrorAlert: Binding<Bool> {
         Binding(
             get: { errorMessage != nil },
-            set: { if !$0 { errorMessage = nil } }
+            set: {
+                if !$0 {
+                    errorMessage = nil
+                }
+            }
         )
     }
 }

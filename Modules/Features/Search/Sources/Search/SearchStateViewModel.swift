@@ -1,3 +1,4 @@
+import Authentication
 import SwiftUI
 
 @Observable

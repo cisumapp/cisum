@@ -40,8 +40,37 @@ public final class PlaybackServices {
     public let listeningHistoryStore: ListeningHistoryStore
     public let streamingProviderSettings: StreamingProviderSettings
     public let radioSessionStore: RadioSessionStore
-    public let artworkVideoProcessor: ArtworkVideoProcessor
-    public let playerViewModel: any PlayerViewModelInterface
+    // ArtworkVideoProcessor (729 LOC of FFmpeg) left Player during the architecture reset —
+    // generating animated artwork is not a playback concern. The code is preserved at
+    // .reset-reference/Player-Sources/ for when animated artwork is rebuilt as its own module.
+
+    /// The concrete player. Held so `PlayerModule` can be built from it and so the state objects
+    /// below have a single owner.
+    public let player: PlayerViewModel
+
+    /// Commands, exposed as the protocol so callers cannot reach into player internals.
+    public var playbackCommands: any PlaybackCommands {
+        player
+    }
+
+    /// The four published state objects, split by update frequency. They are surfaced individually
+    /// rather than through `player` so each view can take only the one it reads — see
+    /// Models/Playback/PlayerState.swift for why that matters.
+    public var nowPlayingState: NowPlayingState {
+        player.nowPlaying
+    }
+
+    public var transportState: TransportState {
+        player.transport
+    }
+
+    public var progressState: ProgressState {
+        player.progress
+    }
+
+    public var lyricsPresentation: LyricsPresentation {
+        player.lyrics
+    }
 
     public init(
         playbackControlSettings: PlaybackControlSettings,
@@ -51,8 +80,7 @@ public final class PlaybackServices {
         listeningHistoryStore: ListeningHistoryStore,
         streamingProviderSettings: StreamingProviderSettings,
         radioSessionStore: RadioSessionStore,
-        artworkVideoProcessor: ArtworkVideoProcessor,
-        playerViewModel: any PlayerViewModelInterface
+        player: PlayerViewModel
     ) {
         self.playbackControlSettings = playbackControlSettings
         self.playbackMetricsStore = playbackMetricsStore
@@ -61,8 +89,7 @@ public final class PlaybackServices {
         self.listeningHistoryStore = listeningHistoryStore
         self.streamingProviderSettings = streamingProviderSettings
         self.radioSessionStore = radioSessionStore
-        self.artworkVideoProcessor = artworkVideoProcessor
-        self.playerViewModel = playerViewModel
+        self.player = player
     }
 }
 
@@ -156,12 +183,35 @@ public final class ProviderServices {
     public let youtube: YouTube
     public let streamingProviderSettings: StreamingProviderSettings
 
+    /// Every music source the app can play from — native SDKs and user-installed plugins alike.
+    ///
+    /// Built by `AppBootstrap`. Nothing downstream knows whether a given source is a JavaScript
+    /// plugin, a JSON manifest, or a hand-written Swift SDK.
+    public let sourceRegistry: SourceRegistry
+
+    /// The user's installed plugins. Owns installation, settings, and updates — never execution.
+    public let pluginStore: PluginStore
+
+    /// Source ids in the user's preferred order, best first.
+    ///
+    /// Views pass this to `playableRef(preferring:)` so a song plays from the user's chosen
+    /// service when it exists there.
+    public var preferredSourceIDs: [String] {
+        let ordered = sourceRegistry.playable.map(\.id)
+        guard let preferred = sourceRegistry.preferredSourceID else { return ordered }
+        return [preferred] + ordered.filter { $0 != preferred }
+    }
+
     public init(
         youtube: YouTube,
-        streamingProviderSettings: StreamingProviderSettings
+        streamingProviderSettings: StreamingProviderSettings,
+        sourceRegistry: SourceRegistry,
+        pluginStore: PluginStore
     ) {
         self.youtube = youtube
         self.streamingProviderSettings = streamingProviderSettings
+        self.sourceRegistry = sourceRegistry
+        self.pluginStore = pluginStore
     }
 }
 

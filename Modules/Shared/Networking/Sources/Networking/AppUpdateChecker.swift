@@ -48,9 +48,14 @@ public final class AppUpdateChecker {
             )
             guard show else { return }
             forced = force
-            if let s = m.download_url, let u = URL(string: s) { downloadURL = u }
-            else { downloadURL = URL(string: "itms-beta://") } // fallback: opens TestFlight app
-            if let msg = m.message, !msg.isEmpty { message = msg }
+            if let s = m.download_url, let u = URL(string: s) {
+                downloadURL = u
+            } else {
+                downloadURL = URL(string: "itms-beta://")
+            } // fallback: opens TestFlight app
+            if let msg = m.message, !msg.isEmpty {
+                message = msg
+            }
             updateAvailable = true
         } catch {
             // silent

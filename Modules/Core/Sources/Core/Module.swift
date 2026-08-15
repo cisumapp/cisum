@@ -68,7 +68,7 @@ public final class cisumModule {
 
         Task {
             do {
-                _ = try await ProviderManifestStore.shared.importManifest(from: url)
+                try await container.providerServices.pluginStore.install(from: url)
             } catch {
                 PerfLog.debug("Failed to import provider manifest: \(error.localizedDescription)")
             }
@@ -88,72 +88,25 @@ public final class cisumModule {
     }
 
     private func playSharedSong(_ song: SharedSong) {
-        let player = container.playbackServices.playerViewModel
+        let commands = container.playbackServices.playbackCommands
         let presentation = container.appServices.playerPresentationController
 
-        switch song.provider {
-        case .youtube, .youtubeMusic:
-            let ref = YouTubeMediaRef(
-                videoID: song.id,
-                title: song.title,
-                artist: song.artist,
-                album: song.album,
-                artworkURL: song.artworkURL,
-                durationSeconds: song.durationSeconds,
-                isExplicit: song.isExplicit,
-                isMusic: song.isMusic
-            )
-            player.load(youtube: ref, preserveQueue: false)
-            presentation.expand()
-        case .spotify:
-            playSharedSpotifySong(song)
-        default:
-            PerfLog.warning("Shared song provider \(song.provider.rawValue) is not playable")
-        }
-    }
-
-    private func playSharedSpotifySong(_ song: SharedSong) {
-        let searchViewModel = container.searchServices.searchViewModel
-        let track = SpotifySearchTrack(
-            id: song.id,
-            title: song.title,
-            artistName: song.artist,
-            albumName: song.album,
-            artworkURL: song.artworkURL,
-            durationSeconds: song.durationSeconds ?? 0,
-            previewURL: nil,
-            isrc: nil
-        )
-        let item = FederatedSearchItem(
-            id: song.id,
-            title: song.title,
-            subtitle: song.artist,
-            artworkURL: song.artworkURL,
-            durationSeconds: song.durationSeconds,
-            isPlayable: true,
-            isExplicit: song.isExplicit,
-            audioQualityLabel: nil,
-            audioCodecLabel: nil,
-            payload: .spotify(track)
-        )
-        let queueTrack = ExternalQueueTrack(
-            mediaID: song.id,
+        // Every provider is handled the same way now. A shared link carries a provider and an id,
+        // which is exactly a PlayableRef — so there is no per-provider branch, and no rebuilding a
+        // SpotifySearchTrack and a FederatedSearchItem just to construct a resolver closure.
+        // A provider cisum has never seen still works, provided the user has a plugin for it.
+        let ref = PlayableRef(
+            songID: nil,
+            sourceID: song.provider.rawValue,
+            sourceTrackID: song.id,
             title: song.title,
             artist: song.artist,
             artworkURL: song.artworkURL,
-            service: .spotify,
-            isExplicit: song.isExplicit,
-            qualityLabelHint: nil,
-            codecLabelHint: nil,
-            resolvePayload: {
-                guard let resolved = try await searchViewModel.resolveExternalStream(for: item) else {
-                    throw FederatedSearchError.noPlayableStream("Unable to resolve a stream for \"\(song.title)\".")
-                }
-                return resolved
-            }
+            durationSeconds: song.durationSeconds
         )
-        container.playbackServices.playerViewModel.load(external: queueTrack, preserveQueue: false)
-        container.appServices.playerPresentationController.expand()
+
+        commands.load(ref, preserveQueue: false)
+        presentation.expand()
     }
 
     /// Imports a shared playlist (from a `cisum://playlist` link) and returns its local id, or nil on
@@ -254,7 +207,7 @@ public final class cisumModule {
         PluginsView()
             .environment(container)
             .environment(container.playbackServices.streamingProviderSettings)
-            .environment(ProviderManifestStore.shared)
+            .environment(container.providerServices.pluginStore)
     }
 
     public var profileView: some View {
@@ -348,8 +301,9 @@ public final class cisumModule {
         player.currentVideoId
     }
 
-    public var playerViewModel: any PlayerViewModelInterface {
-        container.playbackServices.playerViewModel
+    /// Commands for starting playback, for callers outside the SwiftUI environment.
+    public var playbackCommands: any PlaybackCommands {
+        container.playbackServices.playbackCommands
     }
 
     public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> some View {
@@ -385,7 +339,16 @@ public final class cisumModule {
             .environment(container.appServices)
             .environment(container.appServices.playerPresentationController)
             .environment(container.appServices.searchOverlayController)
-            .environment(\.playerViewModel, container.playbackServices.playerViewModel)
+            // The four state objects go in individually rather than as one player, so a view
+            // takes only what it reads. That is the entire payoff of the frequency-based split in
+            // PlayerState.swift — injecting a single object would put the 30 Hz fan-out straight
+            // back.
+            .environment(container.playbackServices.nowPlayingState)
+            .environment(container.playbackServices.transportState)
+            .environment(container.playbackServices.progressState)
+            .environment(container.playbackServices.lyricsPresentation)
+            .environment(\.playbackCommands, container.playbackServices.playbackCommands)
+            .environment(\.preferredSourceIDs, container.providerServices.preferredSourceIDs)
             .environment(\.searchViewModel, container.searchServices.searchViewModel)
             .environment(container.userServices.authService)
             .environment(container.userServices.spotifySessionCoordinator)
@@ -460,7 +423,7 @@ public final class cisumModule {
         self.library = LibraryModule()
 
         self.player = PlayerModule(
-            dependencies: PlayerDependencies(viewModel: container.playbackServices.playerViewModel)
+            dependencies: PlayerDependencies(viewModel: container.playbackServices.player)
         )
 
         self.profile = ProfileModule(

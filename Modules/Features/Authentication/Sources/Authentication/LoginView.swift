@@ -347,7 +347,9 @@ public struct LoginView: View {
             let result = await authService.signInWithEmailPassword(email: email, password: password)
             switch result {
             case .success:
-                if let onLoginSuccess { await onLoginSuccess(false) }
+                if let onLoginSuccess {
+                    await onLoginSuccess(false)
+                }
             case .accountNotFound, .needsProfile:
                 isNewUser = true
                 withAnimation { step = .profile }
@@ -364,8 +366,12 @@ public struct LoginView: View {
                 firstName: firstName, lastName: lastName.isEmpty ? nil : lastName
             )
             if ok {
-                if let onLoginSuccess { await onLoginSuccess(true) }
-            } else { errorMessage = authService.error?.localizedDescription ?? "Sign-up failed" }
+                if let onLoginSuccess {
+                    await onLoginSuccess(true)
+                }
+            } else {
+                errorMessage = authService.error?.localizedDescription ?? "Sign-up failed"
+            }
         }
     }
 
@@ -374,7 +380,9 @@ public struct LoginView: View {
             let result = await authService.completeOAuthSignUp(username: username, firstName: firstName, lastName: lastName)
             switch result {
             case .success:
-                if let onLoginSuccess { await onLoginSuccess(true) }
+                if let onLoginSuccess {
+                    await onLoginSuccess(true)
+                }
             case let .failed(message):
                 errorMessage = message
             case .accountNotFound, .needsProfile:
@@ -389,7 +397,9 @@ public struct LoginView: View {
             let result = await authService.signInWithApple()
             switch result {
             case .success:
-                if let onLoginSuccess { await onLoginSuccess(false) }
+                if let onLoginSuccess {
+                    await onLoginSuccess(false)
+                }
             case .needsProfile:
                 isNewUser = true
                 isOAuthFlow = true
@@ -408,7 +418,9 @@ public struct LoginView: View {
             let result = await authService.signInWithGoogle()
             switch result {
             case .success:
-                if let onLoginSuccess { await onLoginSuccess(false) }
+                if let onLoginSuccess {
+                    await onLoginSuccess(false)
+                }
             case .needsProfile:
                 isNewUser = true
                 isOAuthFlow = true

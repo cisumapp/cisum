@@ -22,10 +22,14 @@ public actor PlaybackURLEphemeralStore {
         guard let entry = store[mediaID] else { return nil }
 
         // Check explicit expiresAt first.
-        if let expires = entry.expiresAt, Date() >= expires { return nil }
+        if let expires = entry.expiresAt, Date() >= expires {
+            return nil
+        }
 
         // Check age relative to savedAt
-        if Date().timeIntervalSince(entry.savedAt) > maxAge { return nil }
+        if Date().timeIntervalSince(entry.savedAt) > maxAge {
+            return nil
+        }
 
         return entry.candidates
     }

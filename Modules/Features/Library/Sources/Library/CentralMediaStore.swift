@@ -204,12 +204,24 @@ public actor CentralMediaStore {
         entry.artworkURLString = snapshot.artworkURLString
         entry.isExplicit = snapshot.isExplicit
         entry.providerFingerprint = snapshot.providerFingerprint
-        entry.spotifyTrackID = snapshot.spotifyTrackID
-        entry.spotifyTrackURI = snapshot.spotifyTrackURI
-        entry.spotifyPreviewURLString = snapshot.spotifyPreviewURLString
-        entry.youtubeVideoID = snapshot.youtubeVideoID
-        entry.youtubeMusicVideoID = snapshot.youtubeMusicVideoID
-        entry.appleMusicSongID = snapshot.appleMusicSongID
+
+        // Provider ids become SongSource rows instead of columns on Song. `bind` is idempotent,
+        // so re-importing the same track updates the existing row rather than duplicating it.
+        let incoming: [(String, String?)] = [
+            ("spotify", snapshot.spotifyTrackID),
+            ("youtube", snapshot.youtubeVideoID),
+            ("youtube_music", snapshot.youtubeMusicVideoID),
+            ("apple_music", snapshot.appleMusicSongID),
+        ]
+        for (sourceID, trackID) in incoming {
+            guard let trackID, !trackID.isEmpty else { continue }
+            entry.bind(
+                sourceID: sourceID,
+                sourceTrackID: trackID,
+                durationSeconds: snapshot.durationSeconds
+            )
+        }
+
         entry.updatedAt = .now
 
         saveContext()
@@ -258,67 +270,41 @@ public actor CentralMediaStore {
         let trimmedID = spotifyTrackID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedID.isEmpty else { return nil }
 
-        var descriptor = FetchDescriptor<Song>(
-            predicate: #Predicate { $0.spotifyTrackID == trimmedID }
+        // Fetch the SongSource row and walk back to its song. The old version could query
+        // Song directly because Spotify had its own column; with open-ended sources the
+        // representation is the thing being looked up.
+        var descriptor = FetchDescriptor<SongSource>(
+            predicate: #Predicate { $0.sourceID == "spotify" && $0.sourceTrackID == trimmedID }
         )
         descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
+        return (try? modelContext.fetch(descriptor).first)?.song
     }
 
-    public struct ProviderIDsSnapshot: Sendable {
-        public let youtubeVideoID: String?
-        public let youtubeMusicVideoID: String?
-        public let tidalID: String?
-        public let qobuzID: String?
-        public let soundcloudID: String?
-        public let deezerID: String?
-        public let appleMusicSongID: String?
-    }
-
-    public func cachedProviderIDs(forSpotifyTrackID spotifyTrackID: String) -> ProviderIDsSnapshot? {
-        guard let song = songBySpotifyTrackID(spotifyTrackID) else { return nil }
-        return ProviderIDsSnapshot(
-            youtubeVideoID: song.youtubeVideoID,
-            youtubeMusicVideoID: song.youtubeMusicVideoID,
-            tidalID: song.tidalID,
-            qobuzID: song.qobuzID,
-            soundcloudID: song.soundcloudID,
-            deezerID: song.deezerID,
-            appleMusicSongID: song.appleMusicSongID
+    /// Provider ids already known for a song, keyed by source.
+    ///
+    /// Replaces `ProviderIDsSnapshot`, which had one field per provider and so could not report
+    /// anything about a user-installed plugin. A dictionary carries whatever the song actually has.
+    public func cachedSourceIDs(forSpotifyTrackID spotifyTrackID: String) -> [String: String] {
+        guard let song = songBySpotifyTrackID(spotifyTrackID) else { return [:] }
+        return Dictionary(
+            song.sources.map { ($0.sourceID, $0.sourceTrackID) },
+            uniquingKeysWith: { first, _ in first }
         )
     }
 
+    /// Records that a Spotify track is playable from another source.
+    ///
+    /// - Parameter sourceID: An open string, so a plugin works here exactly like a built-in
+    ///   service does. The previous version switched over a closed `MediaProvider` enum with a
+    ///   `default: break`, which silently discarded the result for anything it had no case for —
+    ///   meaning a plugin could never have its playback target cached, and every play re-searched.
     public func cacheSpotifyPlaybackTarget(
         spotifyTrackID: String,
         mediaID: String,
-        provider: MediaProvider
+        sourceID: String
     ) {
-        guard let song = songBySpotifyTrackID(spotifyTrackID) else {
-            return
-        }
-
-        switch provider {
-        case .youtube:
-            song.youtubeVideoID = mediaID
-        case .youtubeMusic:
-            song.youtubeMusicVideoID = mediaID
-        case .spotify:
-            song.spotifyTrackID = mediaID
-        case .appleMusic:
-            song.appleMusicSongID = mediaID
-        case .tidal:
-            song.tidalID = mediaID
-        case .qobuz:
-            song.qobuzID = mediaID
-        case .soundcloud:
-            song.soundcloudID = mediaID
-        case .deezer:
-            song.deezerID = mediaID
-        default:
-            break
-        }
-
-        song.preferredFallbackProvider = provider
+        guard let song = songBySpotifyTrackID(spotifyTrackID) else { return }
+        song.bind(sourceID: sourceID, sourceTrackID: mediaID)
         song.lastResolvedAt = .now
         saveContext()
     }
@@ -397,20 +383,22 @@ public actor CentralMediaStore {
         return song
     }
 
+    /// Finds an existing song by one provider's id for it.
+    ///
+    /// One query against `SongSource`, where the old version had a nine-case switch with a
+    /// `default: return nil` — so an import from any provider not in that list silently created a
+    /// duplicate song every time. `MediaProvider.rawValue` already matches the `sourceID`
+    /// convention ("spotify", "youtube_music", …), and an id from a plugin works here too.
     private func existingSongByProviderID(_ t: IncomingTrack) -> Song? {
         let id = t.providerTrackID
         guard !id.isEmpty else { return nil }
-        switch t.provider {
-        case .spotify: return fetchFirstSong(predicate: #Predicate { $0.spotifyTrackID == id })
-        case .youtube: return fetchFirstSong(predicate: #Predicate { $0.youtubeVideoID == id })
-        case .youtubeMusic: return fetchFirstSong(predicate: #Predicate { $0.youtubeMusicVideoID == id })
-        case .appleMusic: return fetchFirstSong(predicate: #Predicate { $0.appleMusicSongID == id })
-        case .tidal: return fetchFirstSong(predicate: #Predicate { $0.tidalID == id })
-        case .qobuz: return fetchFirstSong(predicate: #Predicate { $0.qobuzID == id })
-        case .soundcloud: return fetchFirstSong(predicate: #Predicate { $0.soundcloudID == id })
-        case .deezer: return fetchFirstSong(predicate: #Predicate { $0.deezerID == id })
-        default: return nil
-        }
+        let sourceID = t.provider.rawValue
+
+        var descriptor = FetchDescriptor<SongSource>(
+            predicate: #Predicate { $0.sourceID == sourceID && $0.sourceTrackID == id }
+        )
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor).first)?.song
     }
 
     private func fuzzyMatch(_ t: IncomingTrack) -> Song? {
@@ -445,46 +433,67 @@ public actor CentralMediaStore {
     private func merge(_ t: IncomingTrack, into song: Song) {
         // Union provider IDs + URIs + ISRC (never overwrite a known value with nil).
         unionProviderID(t, on: song)
-        if let uri = t.spotifyTrackURI, song.spotifyTrackURI == nil { song.spotifyTrackURI = uri }
-        if let preview = t.spotifyPreviewURLString, song.spotifyPreviewURLString == nil {
-            song.spotifyPreviewURLString = preview
+        if song.isrc == nil, let isrc = t.isrc, !isrc.isEmpty {
+            song.isrc = isrc
+            song.isrcSourceID = t.provider.rawValue
         }
-        if song.isrc == nil, let isrc = t.isrc, !isrc.isEmpty { song.isrc = isrc }
 
         // Scalar metadata: overwrite when the incoming provider is the new base, else gap-fill.
-        let newBase = CanonicalSongReconciler.mergedBaseProvider(current: song.metadataBaseProvider, incoming: t.provider)
+        // Which source's metadata wins. Provenance is now per field rather than one authoritative
+        // provider per song, so this records where the title came from specifically.
+        let currentBase: MediaProvider? = song.titleSourceID.flatMap { MediaProvider(rawValue: $0) }
+        let newBase = CanonicalSongReconciler.mergedBaseProvider(current: currentBase, incoming: t.provider)
         if newBase == t.provider {
             song.title = t.title
             song.normalizedTitle = normalizedRankingText(t.title)
-            if let a = t.artistName { song.primaryArtistName = a }
-            if let al = t.albumName { song.albumTitle = al }
-            if let d = t.durationSeconds { song.durationSeconds = d }
-            if let art = t.artworkURLString { song.artworkURLString = art }
+            if let a = t.artistName {
+                song.primaryArtistName = a
+            }
+            if let al = t.albumName {
+                song.albumTitle = al
+            }
+            if let d = t.durationSeconds {
+                song.durationSeconds = d
+            }
+            if let art = t.artworkURLString {
+                song.artworkURLString = art
+            }
             song.isExplicit = t.isExplicit
+            song.titleSourceID = t.provider.rawValue
         } else {
-            if song.primaryArtistName == nil, let a = t.artistName { song.primaryArtistName = a }
-            if song.albumTitle == nil, let al = t.albumName { song.albumTitle = al }
-            if song.durationSeconds == nil, let d = t.durationSeconds { song.durationSeconds = d }
-            if song.artworkURLString == nil, let art = t.artworkURLString { song.artworkURLString = art }
+            if song.primaryArtistName == nil, let a = t.artistName {
+                song.primaryArtistName = a
+            }
+            if song.albumTitle == nil, let al = t.albumName {
+                song.albumTitle = al
+            }
+            if song.durationSeconds == nil, let d = t.durationSeconds {
+                song.durationSeconds = d
+            }
+            if song.artworkURLString == nil, let art = t.artworkURLString {
+                song.artworkURLString = art
+                song.artworkSourceID = t.provider.rawValue
+            }
         }
-        song.metadataBaseProvider = newBase
+        song.titleSourceID = newBase.rawValue
         song.updatedAt = .now
     }
 
+    /// Records the incoming provider's id for this song.
+    ///
+    /// `bind` is idempotent and handles both the new-row and update cases, so the nine-case
+    /// switch this replaced is gone along with its `default: break` — which used to drop the id
+    /// for any provider without a column.
     private func unionProviderID(_ t: IncomingTrack, on song: Song) {
         let id = t.providerTrackID
         guard !id.isEmpty else { return }
-        switch t.provider {
-        case .spotify: if song.spotifyTrackID == nil { song.spotifyTrackID = id }
-        case .youtube: if song.youtubeVideoID == nil { song.youtubeVideoID = id }
-        case .youtubeMusic: if song.youtubeMusicVideoID == nil { song.youtubeMusicVideoID = id }
-        case .appleMusic: if song.appleMusicSongID == nil { song.appleMusicSongID = id }
-        case .tidal: if song.tidalID == nil { song.tidalID = id }
-        case .qobuz: if song.qobuzID == nil { song.qobuzID = id }
-        case .soundcloud: if song.soundcloudID == nil { song.soundcloudID = id }
-        case .deezer: if song.deezerID == nil { song.deezerID = id }
-        default: break
-        }
+
+        song.bind(
+            sourceID: t.provider.rawValue,
+            sourceTrackID: id,
+            isrc: t.isrc,
+            durationSeconds: t.durationSeconds
+        )
     }
 }
 
@@ -651,28 +660,27 @@ private extension CentralMediaStore {
     }
 
     func existingSong(for snapshot: SongSnapshot) -> Song? {
-        if let spotifyTrackID = snapshot.spotifyTrackID,
-           let match = fetchFirstSong(predicate: #Predicate { $0.spotifyTrackID == spotifyTrackID })
-        {
-            return match
-        }
+        // Any known provider id identifies the song, so this is one loop over the ids the snapshot
+        // actually has rather than four hand-written blocks — and it extends to a plugin's id
+        // without another block being added.
+        let candidates: [(String, String?)] = [
+            ("spotify", snapshot.spotifyTrackID),
+            ("youtube", snapshot.youtubeVideoID),
+            ("youtube_music", snapshot.youtubeMusicVideoID),
+            ("apple_music", snapshot.appleMusicSongID),
+        ]
 
-        if let youtubeVideoID = snapshot.youtubeVideoID,
-           let match = fetchFirstSong(predicate: #Predicate { $0.youtubeVideoID == youtubeVideoID })
-        {
-            return match
-        }
+        for (sourceID, trackID) in candidates {
+            guard let trackID, !trackID.isEmpty else { continue }
 
-        if let youtubeMusicVideoID = snapshot.youtubeMusicVideoID,
-           let match = fetchFirstSong(predicate: #Predicate { $0.youtubeMusicVideoID == youtubeMusicVideoID })
-        {
-            return match
-        }
+            var descriptor = FetchDescriptor<SongSource>(
+                predicate: #Predicate { $0.sourceID == sourceID && $0.sourceTrackID == trackID }
+            )
+            descriptor.fetchLimit = 1
 
-        if let appleMusicSongID = snapshot.appleMusicSongID,
-           let match = fetchFirstSong(predicate: #Predicate { $0.appleMusicSongID == appleMusicSongID })
-        {
-            return match
+            if let match = (try? modelContext.fetch(descriptor).first)?.song {
+                return match
+            }
         }
 
         let providerFingerprint = snapshot.providerFingerprint

@@ -47,7 +47,9 @@ enum PlaylistShareLink {
     }
 
     private static func readableAuthor(_ playlist: SharedPlaylist) -> String? {
-        if case let .embedded(_, author, _, _) = playlist { return author }
+        if case let .embedded(_, author, _, _) = playlist {
+            return author
+        }
         return nil
     }
 }
