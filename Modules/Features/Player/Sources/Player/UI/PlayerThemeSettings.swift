@@ -59,12 +59,6 @@ enum PlayerThemeRenderer {
                 fullyExpanded: fullyExpanded,
                 collapsedHeight: collapsedHeight
             )
-        case .appleMusic:
-            AppleMusicPlayerTheme().background(
-                expanded: expanded,
-                fullyExpanded: fullyExpanded,
-                collapsedHeight: collapsedHeight
-            )
         }
     }
 
@@ -77,8 +71,6 @@ enum PlayerThemeRenderer {
         switch id {
         case .default:
             DefaultPlayerTheme().miniPlayer(expanded: expanded, namespace: namespace)
-        case .appleMusic:
-            AppleMusicPlayerTheme().miniPlayer(expanded: expanded, namespace: namespace)
         }
     }
 
@@ -92,8 +84,6 @@ enum PlayerThemeRenderer {
         switch id {
         case .default:
             DefaultPlayerTheme().expanded(expanded: expanded, size: size, namespace: namespace)
-        case .appleMusic:
-            AppleMusicPlayerTheme().expanded(expanded: expanded, size: size, namespace: namespace)
         }
     }
 }
