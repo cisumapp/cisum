@@ -8,6 +8,7 @@
 import AVFoundation
 import Foundation
 import Models
+import ProviderSDK
 import Utilities
 
 /// Drives `AVPlayer`. Knows about audio, not about music.
@@ -52,16 +53,23 @@ public final class PlaybackEngine {
 
     // MARK: - Transport
 
-    /// Loads a URL and begins playback.
+    /// Loads a stream and begins playback.
     ///
-    /// - Parameter headers: Some providers require a `User-Agent` or `Referer` on the media
-    ///   request itself, not just on the API call that produced the URL.
-    public func play(url: URL, headers: [String: String] = [:]) {
-        let asset = headers.isEmpty
-            ? AVURLAsset(url: url)
-            : AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
+    /// Takes the whole `SourceStream` rather than a bare URL because the headers are not optional
+    /// extra: a googlevideo URL is signed for one client and the CDN checks the User-Agent. Losing
+    /// them is silent — nothing throws, AVFoundation only logs `CRABS ... ReadError`, and the
+    /// player sits at 0:00 looking paused.
+    public func play(_ stream: SourceStream) {
+        let asset = stream.headers.isEmpty
+            ? AVURLAsset(url: stream.url)
+            : AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
 
         let item = AVPlayerItem(asset: asset)
+        // Both of these existed on the old engine and were lost. The buffer duration is what makes
+        // playback start promptly instead of after a full prefetch.
+        item.preferredForwardBufferDuration = 2.0
+        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+
         observe(item)
 
         player.replaceCurrentItem(with: item)

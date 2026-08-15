@@ -49,38 +49,75 @@ public actor YouTubeMusicSource: MusicSource {
         }
     }
 
-    public func stream(trackID: String, quality _: QualityHint) async throws -> SourceStream {
-        let video = try await youtube.main.video(id: trackID)
+    /// Every way this track can be played, best first.
+    ///
+    /// Uses `YouTubeStreamResolver`, not `YouTubeClient.video(id:)`.
+    ///
+    /// That distinction is the whole reason playback broke. `video(id:)` sits under the header
+    /// "SmartTubeIOS-style — no decipher" and documents that it "does NOT do exhaustive retry —
+    /// the ViewModel handles that". It is a single unauthenticated iOS request: no signature
+    /// deciphering, no n-parameter descrambling, no PO token, no client fallback. Without
+    /// `html5Preference` and a signature timestamp, YouTube answers with `serverAbrStreamingUrl`
+    /// — SABR, which AVPlayer cannot play — and no HLS manifest, so every accessor returns nil.
+    ///
+    /// `YouTubeStreamResolver.resolve` is the ladder that actually works: unauthenticated Android
+    /// first for time-to-first-byte, then a seven-stage InnerTube client chain, then WKWebView HLS
+    /// extraction, deciphering and descrambling every URL along the way.
+    public func streamCandidates(trackID: String, quality _: QualityHint) async throws -> [SourceStream] {
+        let info = try await YouTubeStreamResolver.shared.resolve(videoId: trackID, preferAudio: true)
+        let expiry = Self.expiry(from: info)
 
-        // Audio-only first: this is a music player, and a muxed stream downloads video frames
-        // nobody looks at. HLS is the fallback because it always plays, at the cost of adaptive
-        // switching and slower start.
-        if let audio = video.bestAudioStream, let urlString = audio.playbackUrl,
-           let url = URL(string: urlString)
-        {
-            return SourceStream(
-                url: url,
-                kind: .direct,
-                mimeType: audio.mimeType,
-                bitrate: audio.bitrate,
-                qualityLabel: audio.audioQuality,
-                expiresAt: Self.expiry(from: video),
-                isCacheable: true
-            )
-        }
+        var candidates: [SourceStream] = []
 
-        if let hls = video.hlsURL {
-            return SourceStream(
+        // Each candidate carries the User-Agent of the client its URL was signed for. The CDN
+        // checks it, and a mismatch is rejected with no error thrown anywhere — it surfaces only
+        // as `CRABS ... ReadError` in the system log while the player sits at 0:00.
+        if let hls = info.hlsURL {
+            candidates.append(SourceStream(
                 url: hls,
                 kind: .hls,
-                mimeType: "application/vnd.apple.mpegurl",
+                mimeType: "application/x-mpegURL",
                 qualityLabel: "Adaptive",
-                expiresAt: Self.expiry(from: video),
-                isCacheable: true
-            )
+                expiresAt: expiry,
+                headers: ["User-Agent": InnerTubeClients.WebSafari.userAgent],
+                requiresProxyLoader: hls.absoluteString.contains("manifest.googlevideo.com")
+            ))
         }
 
-        throw SourceError.noStreamAvailable(source: id, trackID: trackID)
+        if let audio = info.bestAdaptiveAudioURL {
+            candidates.append(SourceStream(
+                url: audio,
+                kind: .direct,
+                mimeType: "audio/mp4",
+                expiresAt: expiry,
+                headers: ["User-Agent": InnerTubeClients.WebSafari.userAgent]
+            ))
+        }
+
+        // Muxed last on quality, but it is the candidate with no strings attached: an
+        // Android-signed progressive URL that needs only the Android UA — no manifest, no
+        // per-segment token, no resource-loader delegate.
+        if let muxed = info.bestMuxedDownloadURL {
+            candidates.append(SourceStream(
+                url: muxed,
+                kind: .direct,
+                mimeType: "video/mp4",
+                expiresAt: expiry,
+                headers: ["User-Agent": InnerTubeClients.Android.userAgent]
+            ))
+        }
+
+        guard !candidates.isEmpty else {
+            throw SourceError.noStreamAvailable(source: id, trackID: trackID)
+        }
+        return candidates
+    }
+
+    public func stream(trackID: String, quality: QualityHint) async throws -> SourceStream {
+        guard let best = try await streamCandidates(trackID: trackID, quality: quality).first else {
+            throw SourceError.noStreamAvailable(source: id, trackID: trackID)
+        }
+        return best
     }
 
     /// When YouTube's URLs stop working.
@@ -88,11 +125,14 @@ public actor YouTubeMusicSource: MusicSource {
     /// `googlevideo` URLs are signed with an expiry, typically around six hours. The SDK reports
     /// it as `expiresInSeconds`; when it is missing, returning `nil` lets the store apply its own
     /// conservative default rather than this file inventing one.
-    private static func expiry(from video: YouTubeVideo) -> Date? {
-        guard let seconds = video.streamingData?.expiresInSeconds,
-              let interval = TimeInterval(seconds)
-        else { return nil }
-        return Date.now.addingTimeInterval(interval)
+    /// YouTube's expiry, when it can be known.
+    ///
+    /// `PlayerInfo` does not surface one, so this is always nil and the store applies its own
+    /// conservative default instead. That is the documented meaning of a nil expiry — "unknown",
+    /// not "never" — and erring short costs one cheap re-resolve, where erring long costs a
+    /// playback failure the user sees.
+    private static func expiry(from _: PlayerInfo) -> Date? {
+        nil
     }
 }
 
@@ -131,9 +171,13 @@ public actor YouTubeVideoSource: MusicSource {
         .map(\.self)
     }
 
-    /// Stream resolution is identical for both catalogues — same player endpoint, same formats —
-    /// so it delegates rather than duplicating the format-selection logic.
+    /// Resolution is identical for both catalogues — same player endpoint, same formats — so it
+    /// delegates rather than duplicating the format selection.
     public func stream(trackID: String, quality: QualityHint) async throws -> SourceStream {
         try await music.stream(trackID: trackID, quality: quality)
+    }
+
+    public func streamCandidates(trackID: String, quality: QualityHint) async throws -> [SourceStream] {
+        try await music.streamCandidates(trackID: trackID, quality: quality)
     }
 }

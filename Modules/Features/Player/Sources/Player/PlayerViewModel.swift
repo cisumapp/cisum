@@ -136,6 +136,8 @@ public final class PlayerViewModel: PlaybackCommands {
     /// updates the UI instantly even when resolution takes a moment.
     private func start(_ ref: PlayableRef) {
         loadTask?.cancel()
+        pendingCandidates = []
+        hasRetriedCurrent = false
 
         nowPlaying.ref = ref
         nowPlaying.title = ref.title
@@ -155,11 +157,19 @@ public final class PlayerViewModel: PlaybackCommands {
             defer { CisumSignpost.playback.end("tap-to-play", state: span) }
 
             do {
-                let stream = try await resolver.resolve(ref)
+                let streams = try await resolver.resolve(ref)
                 guard !Task.isCancelled, nowPlaying.ref == ref else { return }
+                guard let first = streams.first else {
+                    throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title, underlying: nil)
+                }
+
+                // Keep the rest so a failure can fall through to the next one rather than
+                // skipping the track. YouTube legitimately returns an HLS manifest whose segments
+                // are then rejected, while the progressive URL for the same track plays fine.
+                pendingCandidates = Array(streams.dropFirst())
 
                 AudioSession.activate()
-                engine.play(url: stream.url)
+                engine.play(first)
                 publishNowPlaying()
 
                 let elapsed = started.duration(to: .now)
@@ -189,17 +199,33 @@ public final class PlayerViewModel: PlaybackCommands {
 
     private var hasRetriedCurrent = false
 
+    /// Alternative streams for the current track, in preference order.
+    private var pendingCandidates: [SourceStream] = []
+
     private func retryCurrentAfterFailure() {
         guard let ref = nowPlaying.ref else { return }
 
+        // Try the next candidate before doing anything more drastic. This is the cheap fix for the
+        // common case: the manifest resolved but its segments were rejected, and the progressive
+        // URL sitting behind it plays.
+        if !pendingCandidates.isEmpty {
+            let next = pendingCandidates.removeFirst()
+            PerfLog.warning("Playback failed; falling back to \(next.mimeType ?? next.kind.rawValue)")
+            AudioSession.activate()
+            engine.play(next)
+            publishNowPlaying()
+            return
+        }
+
         guard !hasRetriedCurrent else {
-            // Already retried with a fresh URL and it still failed; the track is genuinely
+            // Every candidate failed and a fresh resolve failed too; the track is genuinely
             // unplayable, so move on rather than looping.
             hasRetriedCurrent = false
             skipToNext()
             return
         }
 
+        // No candidates left: the cached URL may simply have expired. Drop it and resolve again.
         hasRetriedCurrent = true
         invalidateCachedStream?(ref)
         start(ref)
