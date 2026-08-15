@@ -74,15 +74,13 @@ public extension PlayerViewModel {
         transport.playbackMode
     }
 
-    /// Playback position.
-    ///
-    /// - Note: This forwards to `ProgressState`, which updates ~30×/second. Any view reading it
-    ///   through `PlayerViewModel` is invalidated at that rate along with every other view reading
-    ///   *anything* on this object. Views that display a moving clock can read `ProgressState`
-    ///   directly instead — `@Environment(ProgressState.self)` — and then only they redraw.
-    var currentTime: Double {
-        progress.currentTime
-    }
+    // `currentTime` is deliberately NOT forwarded here.
+    //
+    // It updates ~30 times a second, and anything reading it through this object would drag every
+    // other view reading anything on this object into re-rendering at that rate. Views that show a
+    // moving clock take `@Environment(ProgressState.self)` instead, so only they redraw.
+    //
+    // Adding a `currentTime` property back to this extension would silently undo that.
 
     // MARK: - Lyrics
 
