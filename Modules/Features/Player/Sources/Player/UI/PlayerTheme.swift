@@ -51,8 +51,18 @@ public protocol PlayerTheme: Sendable {
 public enum PlayerThemeID: String, CaseIterable, Sendable, Identifiable {
     /// cisum's own look — the spinning vinyl.
     case `default`
-    /// Apple Music's now-playing card.
-    case appleMusic
+
+    // Adding a theme is three steps and nothing else:
+    //
+    //   1. Write a type conforming to `PlayerTheme` — three views: background, miniPlayer,
+    //      expanded. `DefaultPlayerTheme` is the worked example, and it is a thin wrapper: every
+    //      view it returns already existed, which is what proves the seam is in the right place.
+    //   2. Add a case here, plus its `displayName` and `summary`.
+    //   3. Add the case to the three switches in `PlayerThemeRenderer`. The compiler will tell
+    //      you exactly where — that is why the renderer switches rather than storing a protocol
+    //      existential.
+    //
+    // The Settings picker iterates `allCases`, so a new theme appears there with no further work.
 
     public var id: String {
         rawValue
@@ -61,14 +71,12 @@ public enum PlayerThemeID: String, CaseIterable, Sendable, Identifiable {
     public var displayName: String {
         switch self {
         case .default: "Vinyl"
-        case .appleMusic: "Apple Music"
         }
     }
 
     public var summary: String {
         switch self {
         case .default: "A spinning record with the queue either side."
-        case .appleMusic: "Album art on a colour wash drawn from the artwork."
         }
     }
 }
