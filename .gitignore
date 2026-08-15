@@ -45,3 +45,6 @@ Modules/Features/Plugins.zip
 # gitingest/repomix context dumps — regenerable, huge, zero unique information
 digest.txt
 providersdk.txt
+
+# local planning and baseline notes — not part of the product
+docs/
