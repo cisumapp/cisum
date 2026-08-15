@@ -29,24 +29,31 @@ public final class Song {
     /// logically by the reconciler, not the store. `songID` remains the unique key.
     public var isrc: String?
 
-    /// Raw value of the provider whose metadata is the authoritative base for this canonical Song.
-    public var metadataBaseProviderRawValue: String?
+    // MARK: Provenance
+    //
+    // cisum picks the best source per FIELD, not one authoritative provider per song. Spotify may
+    // win on ISRC and title while artwork comes from elsewhere and playback from somewhere else
+    // again. These record which source each accepted value came from, so a later, better answer
+    // can replace it deliberately rather than by whoever wrote last.
 
-    public var spotifyTrackID: String?
-    public var spotifyTrackURI: String?
-    public var spotifyPreviewURLString: String?
+    /// Source whose title and artist were accepted.
+    public var titleSourceID: String?
+    /// Source whose artwork was accepted.
+    public var artworkSourceID: String?
+    /// Source that supplied the ISRC.
+    public var isrcSourceID: String?
 
-    public var youtubeVideoID: String?
-    public var youtubeMusicVideoID: String?
-    public var tidalID: String?
-    public var qobuzID: String?
-    public var soundcloudID: String?
-    public var deezerID: String?
+    /// Every service's representation of this song.
+    ///
+    /// Replaces the previous hardcoded column-per-provider layout (`spotifyTrackID`,
+    /// `youtubeVideoID`, `tidalID`, `qobuzID`, `soundcloudID`, `deezerID`, `appleMusicSongID`,
+    /// `preferredFallbackProviderRawValue`, `cachedFallbackMediaID`). That shape could not
+    /// represent a user-installed plugin at all: a plugin cannot be given a column, and the closed
+    /// `MediaProvider` enum could not be given a case. `SongSource.sourceID` is an open string,
+    /// so any plugin is a first-class identity source with no schema change.
+    @Relationship(deleteRule: .cascade)
+    public var sources: [SongSource]
 
-    public var appleMusicSongID: String?
-
-    public var preferredFallbackProviderRawValue: String?
-    public var cachedFallbackMediaID: String?
     public var lastResolvedAt: Date?
 
     public var createdAt: Date
@@ -71,19 +78,10 @@ public final class Song {
         isExplicit: Bool = false,
         providerFingerprint: String,
         isrc: String? = nil,
-        metadataBaseProviderRawValue: String? = nil,
-        spotifyTrackID: String? = nil,
-        spotifyTrackURI: String? = nil,
-        spotifyPreviewURLString: String? = nil,
-        youtubeVideoID: String? = nil,
-        youtubeMusicVideoID: String? = nil,
-        tidalID: String? = nil,
-        qobuzID: String? = nil,
-        soundcloudID: String? = nil,
-        deezerID: String? = nil,
-        appleMusicSongID: String? = nil,
-        preferredFallbackProviderRawValue: String? = nil,
-        cachedFallbackMediaID: String? = nil,
+        titleSourceID: String? = nil,
+        artworkSourceID: String? = nil,
+        isrcSourceID: String? = nil,
+        sources: [SongSource] = [],
         lastResolvedAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
@@ -100,42 +98,76 @@ public final class Song {
         self.isExplicit = isExplicit
         self.providerFingerprint = providerFingerprint
         self.isrc = isrc
-        self.metadataBaseProviderRawValue = metadataBaseProviderRawValue
-        self.spotifyTrackID = spotifyTrackID
-        self.spotifyTrackURI = spotifyTrackURI
-        self.spotifyPreviewURLString = spotifyPreviewURLString
-        self.youtubeVideoID = youtubeVideoID
-        self.youtubeMusicVideoID = youtubeMusicVideoID
-        self.tidalID = tidalID
-        self.qobuzID = qobuzID
-        self.soundcloudID = soundcloudID
-        self.deezerID = deezerID
-        self.appleMusicSongID = appleMusicSongID
-        self.preferredFallbackProviderRawValue = preferredFallbackProviderRawValue
-        self.cachedFallbackMediaID = cachedFallbackMediaID
+        self.titleSourceID = titleSourceID
+        self.artworkSourceID = artworkSourceID
+        self.isrcSourceID = isrcSourceID
+        self.sources = sources
         self.lastResolvedAt = lastResolvedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 
-    public var preferredFallbackProvider: MediaProvider? {
-        get {
-            guard let rawValue = preferredFallbackProviderRawValue else { return nil }
-            return MediaProvider(rawValue: rawValue)
-        }
-        set {
-            preferredFallbackProviderRawValue = newValue?.rawValue
-        }
+    // MARK: - Source lookup
+
+    /// This song's representation on a given service, if one is known.
+    public func source(_ sourceID: String) -> SongSource? {
+        sources.first { $0.sourceID == sourceID }
     }
 
-    /// Provider whose metadata is the authoritative base for this canonical Song.
-    public var metadataBaseProvider: MediaProvider? {
-        get {
-            guard let rawValue = metadataBaseProviderRawValue else { return nil }
-            return MediaProvider(rawValue: rawValue)
+    /// Records or updates how a service represents this song.
+    ///
+    /// Idempotent: matching an already-known (song, source) pair updates the existing row rather
+    /// than accumulating duplicates.
+    @discardableResult
+    public func bind(
+        sourceID: String,
+        sourceTrackID: String,
+        isrc: String? = nil,
+        durationSeconds: Double? = nil,
+        audioQualityLabel: String? = nil,
+        allowsStreamCaching: Bool = true
+    ) -> SongSource {
+        if let existing = source(sourceID) {
+            // A changed track id invalidates the cached URL — it points at the old track.
+            if existing.sourceTrackID != sourceTrackID {
+                existing.sourceTrackID = sourceTrackID
+                existing.invalidateStream()
+            }
+            existing.isrc = isrc ?? existing.isrc
+            existing.durationSeconds = durationSeconds ?? existing.durationSeconds
+            existing.audioQualityLabel = audioQualityLabel ?? existing.audioQualityLabel
+            existing.allowsStreamCaching = allowsStreamCaching
+            existing.lastVerifiedAt = .now
+            updatedAt = .now
+            return existing
         }
-        set {
-            metadataBaseProviderRawValue = newValue?.rawValue
-        }
+
+        let source = SongSource(
+            sourceID: sourceID,
+            sourceTrackID: sourceTrackID,
+            isrc: isrc,
+            durationSeconds: durationSeconds,
+            audioQualityLabel: audioQualityLabel,
+            allowsStreamCaching: allowsStreamCaching,
+            lastVerifiedAt: .now
+        )
+        source.song = self
+        sources.append(source)
+        updatedAt = .now
+        return source
+    }
+
+    /// A `PlayableRef` for this song on a given service, if it has a representation there.
+    public func playableRef(on sourceID: String) -> PlayableRef? {
+        guard let source = source(sourceID) else { return nil }
+        return PlayableRef(
+            songID: songID,
+            sourceID: source.sourceID,
+            sourceTrackID: source.sourceTrackID,
+            title: title,
+            artist: primaryArtistName ?? "",
+            artworkURL: artworkURLString.flatMap(URL.init(string:)),
+            durationSeconds: durationSeconds
+        )
     }
 }

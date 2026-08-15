@@ -18,6 +18,20 @@ public enum PlaybackMode: String, Sendable, CaseIterable {
     case repeatOne
 }
 
+/// - Warning: Superseded by the frequency-split state objects in `PlayerState.swift`
+///   (`NowPlayingState`, `TransportState`, `ProgressState`, `LyricsPresentation`) plus the
+///   `PlaybackCommands` protocol.
+///
+/// Kept temporarily so call sites can migrate one at a time instead of all 23 at once. Two
+/// specific problems make it unsuitable going forward:
+///
+/// 1. **One observable, four update frequencies.** `currentTime` ticks ~30x/second and invalidates
+///    every view reading any member — mini player, expanded player, lyrics, queue, artwork.
+/// 2. **`ExternalQueueTrack` carries a resolver closure instead of an identity**, so nothing can
+///    be cached, persisted, or compared, and every play re-searches.
+///
+/// Do not add members here. New work targets the split types.
+@available(*, deprecated, message: "Use NowPlayingState / TransportState / ProgressState / LyricsPresentation + PlaybackCommands")
 @MainActor
 public protocol PlayerViewModelInterface: AnyObject, Observable {
     // Basic Track Info
