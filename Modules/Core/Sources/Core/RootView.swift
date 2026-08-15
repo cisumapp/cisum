@@ -32,6 +32,10 @@ public struct RootView: View {
     @State private var showSettings = false
     @State private var appOrientation = AppOrientation(UIDevice.current.orientation)
     @State private var updateChecker = AppUpdateChecker()
+    /// iOS 26 zoom cover presentation — local @State so tapping the accessory
+    /// does NOT trigger RootView.body re-evaluation (which would destroy the
+    /// matchedTransitionSource identity).
+    @State private var isPlayerCoverPresented = false
     @Environment(\.openURL) private var openURL
     #else
     private var searchOverlay: SearchOverlayController {
@@ -52,56 +56,128 @@ public struct RootView: View {
         @Bindable var nav = navigationState
         @Bindable var deepLink = cisum.deepLinkCoordinator
 
-        iOSTabView(
-            selection: selectedTabBinding,
-            expandMiniPlayer: $presentation.isExpanded,
-            playerAnimationNamespace: playerAnimationNamespace,
-            searchText: cisum.searchText,
-            playerContent: cisum.applyEnvironment(to: cisum.expandablePlayer(
-                show: .constant(true),
-                isExpanded: $presentation.isExpanded,
-                collapsedFrame: .zero
-            )),
-            miniPlayerContent: cisum.applyEnvironment(to: cisum.miniPlayer(
-                isExpanded: $presentation.isExpanded,
-                namespace: playerAnimationNamespace
-            )),
-            // iOS 26 presents this in a zoom cover instead of the overlay. Same theme content,
-            // without the expansion machinery the system replaces.
-            zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
-            accentColor: cisum.playerAccentColor
-        ) {
-            Tab("Home", systemImage: "house.fill", value: TabItem.home) {
-                cisum.applyEnvironment(to: tabRoot(for: .home) {
-                    cisum.homeView
-                })
-            }
+        // iOS 26: replicate the reference project pattern exactly — source + cover in
+        // the NON-GENERIC RootView body, with @Namespace owned locally and modifiers
+        // applied directly (no @ViewBuilder wrappers).  This is required because
+        // SwiftUI's zoom transition cannot track source identity inside generic views.
+        Group {
+            if #available(iOS 26.0, *) {
+                iOSTabView(
+                    selection: selectedTabBinding,
+                    expandMiniPlayer: $presentation.isExpanded,
+                    playerAnimationNamespace: playerAnimationNamespace,
+                    searchText: cisum.searchText,
+                    playerContent: cisum.applyEnvironment(to: cisum.expandablePlayer(
+                        show: .constant(true),
+                        isExpanded: $presentation.isExpanded,
+                        collapsedFrame: .zero
+                    )),
+                    miniPlayerContent: cisum.applyEnvironment(to: cisum.miniPlayer(
+                        isExpanded: $presentation.isExpanded,
+                        namespace: playerAnimationNamespace
+                    )),
+                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
+                    accentColor: cisum.playerAccentColor
+                ) {
+                    Tab("Home", systemImage: "house.fill", value: TabItem.home) {
+                        cisum.applyEnvironment(to: tabRoot(for: .home) {
+                            cisum.homeView
+                        })
+                    }
 
-            Tab("Discover", systemImage: "globe", value: TabItem.discover) {
-                cisum.applyEnvironment(to: tabRoot(for: .discover) {
-                    cisum.discoverView
-                })
-            }
+                    Tab("Discover", systemImage: "globe", value: TabItem.discover) {
+                        cisum.applyEnvironment(to: tabRoot(for: .discover) {
+                            cisum.discoverView
+                        })
+                    }
 
-            Tab("Library", systemImage: "music.note.list", value: TabItem.library) {
-                cisum.applyEnvironment(to: tabRoot(for: .library) {
-                    cisum.libraryView
-                })
-            }
+                    Tab("Library", systemImage: "music.note.list", value: TabItem.library) {
+                        cisum.applyEnvironment(to: tabRoot(for: .library) {
+                            cisum.libraryView
+                        })
+                    }
 
-            Tab("Search", systemImage: "magnifyingglass", value: TabItem.search, role: .search) {
-                cisum.applyEnvironment(to: tabRoot(for: .search) {
-                    cisum.searchView
-                })
+                    Tab("Search", systemImage: "magnifyinglass", value: TabItem.search, role: .search) {
+                        cisum.applyEnvironment(to: tabRoot(for: .search) {
+                            cisum.searchView
+                        })
+                    }
+                } onSearchSubmit: {
+                    cisum.performSearch()
+                }
+                .tabViewBottomAccessory {
+                    cisum.applyEnvironment(to: cisum.miniPlayer(
+                        isExpanded: $presentation.isExpanded,
+                        namespace: playerAnimationNamespace
+                    ))
+                    .matchedTransitionSource(id: PlayerZoomID.miniPlayer, in: playerAnimationNamespace)
+                    .contentShape(.rect)
+                    .highPriorityGesture(TapGesture().onEnded {
+                        isPlayerCoverPresented.toggle()
+                    })
+                }
+            } else {
+                iOSTabView(
+                    selection: selectedTabBinding,
+                    expandMiniPlayer: $presentation.isExpanded,
+                    playerAnimationNamespace: playerAnimationNamespace,
+                    searchText: cisum.searchText,
+                    playerContent: cisum.applyEnvironment(to: cisum.expandablePlayer(
+                        show: .constant(true),
+                        isExpanded: $presentation.isExpanded,
+                        collapsedFrame: .zero
+                    )),
+                    miniPlayerContent: cisum.applyEnvironment(to: cisum.miniPlayer(
+                        isExpanded: $presentation.isExpanded,
+                        namespace: playerAnimationNamespace
+                    )),
+                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
+                    accentColor: cisum.playerAccentColor
+                ) {
+                    Tab("Home", systemImage: "house.fill", value: TabItem.home) {
+                        cisum.applyEnvironment(to: tabRoot(for: .home) {
+                            cisum.homeView
+                        })
+                    }
+
+                    Tab("Discover", systemImage: "globe", value: TabItem.discover) {
+                        cisum.applyEnvironment(to: tabRoot(for: .discover) {
+                            cisum.discoverView
+                        })
+                    }
+
+                    Tab("Library", systemImage: "music.note.list", value: TabItem.library) {
+                        cisum.applyEnvironment(to: tabRoot(for: .library) {
+                            cisum.libraryView
+                        })
+                    }
+
+                    Tab("Search", systemImage: "magnifyinglass", value: TabItem.search, role: .search) {
+                        cisum.applyEnvironment(to: tabRoot(for: .search) {
+                            cisum.searchView
+                        })
+                    }
+                } onSearchSubmit: {
+                    cisum.performSearch()
+                }
+                .tabbarBottomViewAccessory {
+                    cisum.applyEnvironment(to: cisum.miniPlayer(
+                        isExpanded: $presentation.isExpanded,
+                        namespace: playerAnimationNamespace
+                    ))
+                }
             }
-        } onSearchSubmit: {
-            cisum.performSearch()
         }
-        .tabbarBottomViewAccessory {
-            cisum.applyEnvironment(to: cisum.miniPlayer(
-                isExpanded: $presentation.isExpanded,
-                namespace: playerAnimationNamespace
-            ))
+        .fullScreenCover(isPresented: $isPlayerCoverPresented) {
+            Group {
+                if #available(iOS 18.0, *) {
+                    cisum.applyEnvironment(to: cisum.zoomedPlayer())
+                        .navigationTransition(.zoom(sourceID: PlayerZoomID.miniPlayer, in: playerAnimationNamespace))
+                } else {
+                    cisum.applyEnvironment(to: cisum.zoomedPlayer())
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .tabbarVisibility(tabBarVisibility)
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)

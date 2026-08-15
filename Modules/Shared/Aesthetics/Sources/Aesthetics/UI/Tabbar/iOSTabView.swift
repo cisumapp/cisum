@@ -32,11 +32,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
     @State private var showMiniPlayer: Bool = false
     @State private var isSearchExpanded: Bool = false
     @Binding var expandMiniPlayer: Bool
-    /// Local state for the iOS 26 zoom cover presentation.  Using a local
-    /// `@State` instead of the `expandMiniPlayer` binding avoids triggering
-    /// `RootView.body` re-evaluation on tap, which would destroy the accessory
-    /// view identity and break the `matchedTransitionSource` pairing.
-    @State private var isCoverPresented = false
     var playerAnimationNamespace: Namespace.ID
 
     var searchText: Binding<String>
@@ -82,38 +77,11 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
     public var body: some View {
         Group {
             if #available(iOS 26.0, *) {
-                #if DEBUG
-                if iOSTabViewDebug.showBothTabBars {
-                    ZStack {
-                        NativeTabView
-                            .tabViewBottomAccessory {
-                                miniPlayerContent
-                                    .contentShape(.rect)
-                                    .onTapGesture { isCoverPresented.toggle() }
-                            }
-                        iOS26TabView
-                            .allowsHitTesting(false)
-                            .opacity(0.6)
-                    }
-                } else {
-                    NativeTabView
-                        .tabViewBottomAccessory {
-                            miniPlayerContent
-                                .measureTabAccessoryGeometry()
-                                .contentShape(.rect)
-                                .highPriorityGesture(TapGesture().onEnded { isCoverPresented.toggle() })
-                        }
-                }
-                #else
+                // iOS 26: the tab view is returned bare — the .tabViewBottomAccessory
+                // (source) and .fullScreenCover (cover) are applied by RootView so
+                // they live in a non-generic view body, which is required for the
+                // zoom transition pairing to work.
                 NativeTabView
-                    .tabViewBottomAccessory {
-                        miniPlayerContent
-                            .contentShape(.rect)
-                            .highPriorityGesture(TapGesture().onEnded {
-                                isCoverPresented.toggle()
-                            })
-                    }
-                #endif
             } else {
                 // iOS 17/18: the custom bar, with the player hosted in the detached overlay
                 // window. The overlay used to wrap the whole Group, so it ran on iOS 26 too and
@@ -124,23 +92,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
                             .ignoresSafeArea(.keyboard)
                     }
             }
-        }
-        // iOS 26: the accessory IS the collapsed player, so tapping it presents the expanded one
-        // as a cover that zooms out of it. No overlay window, no pan gesture, no window stacking —
-        // the system provides the transition and its interactive swipe-down dismiss.
-        //
-        // Applied directly (not through a @ViewBuilder wrapper) so SwiftUI can track the
-        // _ConditionalContent type for the zoom transition pairing.
-        .fullScreenCover(isPresented: $isCoverPresented) {
-            Group {
-                if #available(iOS 18.0, *) {
-                    zoomedPlayerContent
-                        .navigationTransition(.zoom(sourceID: PlayerZoomID.miniPlayer, in: playerAnimationNamespace))
-                } else {
-                    zoomedPlayerContent
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .environment(\.isSearchExpanded, $isSearchExpanded)
         // Single publisher for both OS paths. Keyed so rotation, search, tab-bar
