@@ -135,7 +135,15 @@ enum AppBootstrap {
         // Spotify conform to the same MusicSource protocol and join this registry once written;
         // nothing downstream will need to change when they do.
         let pluginStore = PluginStore()
-        let sourceRegistry = SourceRegistry()
+
+        // Seeded synchronously with the native sources. Plugin loading below is async, and
+        // buildDependencies returns before it finishes — a tap in that window used to find an
+        // empty registry and fail with no log at all.
+        let sourceRegistry = SourceRegistry(sources: [
+            YouTubeMusicSource(youtube: youtube),
+            YouTubeVideoSource(youtube: youtube),
+        ])
+        sourceRegistry.preferredSourceID = "youtube_music"
 
         let searchCache = SearchResultsCache.shared
         let radioSessionStore = RadioSessionStore.shared

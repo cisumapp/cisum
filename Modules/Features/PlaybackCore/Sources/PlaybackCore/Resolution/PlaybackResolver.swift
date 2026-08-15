@@ -49,20 +49,21 @@ public final class PlaybackResolver {
     }
 
     /// Resolves a playable stream.
-    public func resolve(_ ref: PlayableRef) async throws -> SourceStream {
+    public func resolve(_ ref: PlayableRef) async throws -> [SourceStream] {
         let span = CisumSignpost.resolver.begin("stream-resolve", "\(ref.sourceID) \(ref.title)")
         defer { CisumSignpost.resolver.end("stream-resolve", state: span) }
 
         // ── Step 1: a cached URL that is still good. No network at all. ──────────────────
         if let binding = lookup?(ref), let cached = binding.freshStreamURL() {
             CisumSignpost.cache.event("cache-hit", "\(ref.sourceID) \(ref.title)")
-            return SourceStream(
+            return [SourceStream(
                 url: cached,
                 kind: cached.pathExtension.lowercased() == "m3u8" ? .hls : .direct,
                 mimeType: binding.cachedStreamMIMEType,
                 expiresAt: binding.cachedStreamExpiresAt,
-                isCacheable: binding.allowsStreamCaching
-            )
+                isCacheable: binding.allowsStreamCaching,
+                headers: binding.cachedStreamHeaders
+            )]
         }
         CisumSignpost.cache.event("cache-miss", "\(ref.sourceID) \(ref.title)")
 
@@ -74,14 +75,19 @@ public final class PlaybackResolver {
         // it from Spotify". That distinction is why `sourceID` and playback are separate concepts.
         if let source = sources.source(for: ref.sourceID), source.capabilities.contains(.stream) {
             do {
-                let stream = try await source.stream(trackID: ref.sourceTrackID, quality: selector.preferred)
-                persistIfPossible(ref, stream: stream)
-                return stream
+                let streams = try await source.streamCandidates(
+                    trackID: ref.sourceTrackID,
+                    quality: selector.preferred
+                )
+                if let best = streams.first {
+                    persistIfPossible(ref, stream: best)
+                }
+                return streams
             } catch {
                 // A stored id can stop working: two known modules mint a session token at load
                 // time and embed it in every track id, so yesterday's id is meaningless today.
                 // Falling back to a fresh match is the correct response, not surfacing an error.
-                PerfLog.warning("Direct resolve failed for \(ref.sourceID)/\(ref.sourceTrackID): \(error.localizedDescription). Re-matching.")
+                PerfLog.error("Direct resolve failed for \(ref.sourceID)/\(ref.sourceTrackID): \(error). Re-matching.")
             }
         }
 
@@ -98,10 +104,34 @@ public final class PlaybackResolver {
             durationSeconds: ref.durationSeconds
         )
 
+        // Every failure here used to be discarded by `try?`, which is why this presented as a
+        // silent no-op rather than something diagnosable. Log the real cause and keep the last one
+        // so the thrown error can carry it.
+        var lastError: (any Error)?
+
         for source in sources.playable {
-            guard let match = try? await matcher.match(target, on: source),
-                  let stream = try? await source.stream(trackID: match.track.id, quality: selector.preferred)
-            else { continue }
+            let match: MatchResult?
+            do {
+                match = try await matcher.match(target, on: source)
+            } catch {
+                PerfLog.error("Match failed on \(source.id) for '\(ref.title)': \(error)")
+                lastError = error
+                continue
+            }
+            guard let match else { continue }
+
+            let streams: [SourceStream]
+            do {
+                streams = try await source.streamCandidates(
+                    trackID: match.track.id,
+                    quality: selector.preferred
+                )
+            } catch {
+                PerfLog.error("Stream resolve failed on \(source.id) for '\(ref.title)': \(error)")
+                lastError = error
+                continue
+            }
+            guard let stream = streams.first else { continue }
 
             // Persisted against the *playing* source, so the next play resolves straight from it.
             let playbackRef = PlayableRef(
@@ -114,10 +144,10 @@ public final class PlaybackResolver {
                 durationSeconds: ref.durationSeconds
             )
             persist?(playbackRef, match.track, stream)
-            return stream
+            return streams
         }
 
-        throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title)
+        throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title, underlying: lastError)
     }
 
     private func persistIfPossible(_ ref: PlayableRef, stream: SourceStream) {
@@ -133,16 +163,19 @@ public final class PlaybackResolver {
     }
 }
 
-public enum ResolutionError: Error, LocalizedError, Equatable {
+/// Not Equatable: it carries the underlying error, which is what made this failure
+/// diagnosable at all. Nothing compares these.
+public enum ResolutionError: Error, LocalizedError {
     case sourceUnavailable(String)
-    case noMatch(source: String, title: String)
+    case noMatch(source: String, title: String, underlying: (any Error)?)
 
     public var errorDescription: String? {
         switch self {
         case let .sourceUnavailable(id):
             "The source \(id) is not available. It may be disabled or failed to load."
-        case let .noMatch(source, title):
+        case let .noMatch(source, title, underlying):
             "Could not find \"\(title)\" on \(source)."
+                + (underlying.map { " (\($0))" } ?? "")
         }
     }
 }

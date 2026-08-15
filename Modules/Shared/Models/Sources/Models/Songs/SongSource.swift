@@ -64,6 +64,17 @@ public final class SongSource {
 
     public var cachedStreamMIMEType: String?
 
+    /// Headers the cached URL must be fetched with, as `name\tvalue` lines.
+    ///
+    /// Stored as a string because SwiftData will not persist `[String: String]` without a
+    /// transformer, and a two-field encoding is cheaper than adding one for a dictionary that
+    /// only ever holds a User-Agent.
+    ///
+    /// Without these a cached googlevideo URL fails exactly as an uncached one does: the CDN
+    /// checks the User-Agent the URL was signed for, rejects the mismatch, and AVFoundation
+    /// reports nothing but `CRABS ... ReadError`.
+    public var cachedStreamHeaderLines: String?
+
     /// Whether this service's URLs may be cached at all.
     ///
     /// Some modules declare `noStreamCache` because their URLs are single-use or session-bound.
@@ -127,19 +138,37 @@ public final class SongSource {
         url: URL,
         mimeType: String?,
         expiresAt: Date?,
+        headers: [String: String] = [:],
         defaultLifetime: TimeInterval = 3600,
         now: Date = .now
     ) {
         guard allowsStreamCaching else { return }
         cachedStreamURLString = url.absoluteString
         cachedStreamMIMEType = mimeType
+        cachedStreamHeaderLines = headers.isEmpty
+            ? nil
+            : headers.map { "\($0.key)\t\($0.value)" }.joined(separator: "\n")
         cachedStreamResolvedAt = now
         cachedStreamExpiresAt = expiresAt ?? now.addingTimeInterval(defaultLifetime)
         lastVerifiedAt = now
     }
 
+    /// The headers the cached URL must be fetched with.
+    public var cachedStreamHeaders: [String: String] {
+        guard let lines = cachedStreamHeaderLines else { return [:] }
+        return Dictionary(
+            lines.split(separator: "\n").compactMap { line in
+                let parts = line.split(separator: "\t", maxSplits: 1)
+                guard parts.count == 2 else { return nil }
+                return (String(parts[0]), String(parts[1]))
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
     /// Discards the cached URL after a playback failure, forcing a fresh resolve next time.
     public func invalidateStream() {
+        cachedStreamHeaderLines = nil
         cachedStreamURLString = nil
         cachedStreamResolvedAt = nil
         cachedStreamExpiresAt = nil

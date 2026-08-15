@@ -84,6 +84,7 @@ public final class SongSourceStore {
                 url: stream.url,
                 mimeType: stream.mimeType,
                 expiresAt: stream.expiresAt,
+                headers: stream.headers,
                 defaultLifetime: defaultStreamLifetime
             )
 
