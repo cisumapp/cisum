@@ -36,6 +36,10 @@ public final class PlayerViewModel: PlaybackCommands {
     // MARK: Components
 
     public let queue: PlaybackQueue
+
+    /// Whether the queue sheet is showing. Pure UI state, owned here because the player's own
+    /// chrome toggles it from more than one place.
+    public var isQueueVisible = false
     private let engine: PlaybackEngine
     private let resolver: PlaybackResolver
     private var nowPlayingCenter: NowPlayingCenter?

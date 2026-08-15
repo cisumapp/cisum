@@ -3,11 +3,8 @@ import Models
 import SwiftUI
 
 /// Picker for adding a track to one of the user's local playlists (or a brand-new one).
-///
-/// Driven entirely by the `\.savedLibrary` protocol and `Models` types — it references nothing
-/// from Player at all. It lives here because that is where its one consumer already imports from,
-/// which is a weak reason; the honest home is the Playlists feature. Left in place for now because
-/// moving it is unrelated to the architecture reset.
+/// Driven entirely by the `\.savedLibrary` protocol so it can live in Player and be reused by
+/// any module that imports Player (Playlists rows, search, etc.) without a Playlists dependency.
 public struct AddToPlaylistSheet: View {
     let track: SavableTrack
 

@@ -59,24 +59,26 @@ public final class PlayerModule {
 
     // MARK: - Views
 
+    // Both hand out the real views and inject what they read. `viewModel` covers the 25 members
+    // the UI binds to; `progress` is injected alongside so views that display a moving clock can
+    // observe it directly rather than through the view model.
+
     /// The collapsed player strip.
-    public func miniPlayer(isExpanded _: Binding<Bool>, namespace _: Namespace.ID) -> some View {
-        DynamicPlayerIsland(commands: viewModel)
-            .environment(viewModel.nowPlaying)
-            .environment(viewModel.transport)
+    public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> some View {
+        DynamicPlayerIsland(isPlayerExpanded: isExpanded, namespace: namespace)
+            .environment(viewModel)
+            .environment(viewModel.progress)
     }
 
     /// The full-screen player.
     public func expandablePlayer(
-        show _: Binding<Bool>,
-        isExpanded _: Binding<Bool>,
-        collapsedFrame _: CGRect
+        show: Binding<Bool>,
+        isExpanded: Binding<Bool>,
+        collapsedFrame: CGRect
     ) -> some View {
-        ExpandablePlayer(commands: viewModel)
-            .environment(viewModel.nowPlaying)
-            .environment(viewModel.transport)
+        ExpandablePlayer(show: show, isPlayerExpanded: isExpanded, collapsedFrame: collapsedFrame)
+            .environment(viewModel)
             .environment(viewModel.progress)
-            .environment(viewModel.lyrics)
     }
 
     // MARK: - Lifecycle

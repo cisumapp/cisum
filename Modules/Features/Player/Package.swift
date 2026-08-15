@@ -24,12 +24,17 @@ let package = Package(
         .library(name: "Player", targets: ["Player"]),
     ],
     dependencies: [
-        // Aesthetics is not here yet. The views below use plain SwiftUI and AsyncImage, which is
-        // enough for a working player and keeps this package buildable from the command line.
-        // Adding it back (for Vinyl, PlayerExpansionState, StretchySlider) pulls in Kingfisher and
-        // makes this package Xcode-only — which is exactly why the playback logic already lives in
-        // the separate PlaybackCore package, where it stays testable regardless.
+        // The player UI needs these: Aesthetics for Vinyl / PlayerExpansionState / StretchySlider,
+        // Kingfisher for artwork, Tracks for TrackListItem, YouTubeSDK for the media ref types the
+        // views still name. Kingfisher does not build for a macOS command-line `swift build`, so
+        // this package is Xcode-only — which is precisely why the playback logic lives in the
+        // separate PlaybackCore package, where `swift test` still runs in milliseconds.
         .package(path: "../PlaybackCore"),
+        .package(path: "../../Shared/Aesthetics"),
+        .package(path: "../../Shared/Caching"),
+        .package(path: "../Tracks"),
+        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
+        .package(url: "https://github.com/onevcat/Kingfisher.git", .upToNextMajor(from: "8.9.0")),
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
         .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
@@ -42,6 +47,11 @@ let package = Package(
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
                 .product(name: "ProviderSDK", package: "ProviderSDK"),
+                .product(name: "Aesthetics", package: "Aesthetics"),
+                .product(name: "Caching", package: "Caching"),
+                .product(name: "Tracks", package: "Tracks"),
+                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
+                .product(name: "Kingfisher", package: "Kingfisher"),
             ]
         ),
     ],
