@@ -20,10 +20,28 @@ DerivedData/
 # Optional: logs
 *.log
 /.agents
-/scripts
+# Ignore scripts/ contents rather than the directory itself, so specific scripts
+# can be re-included below. (A negation cannot rescue a file inside an excluded
+# directory — git never descends into it.)
+/scripts/*
+# The architecture-reset boundary gate is a build requirement for every task,
+# not a local convenience script, so it is tracked.
+!/scripts/check-boundaries.sh
 /migration
 /Launch_cisum.app_2026-05-31_16.00.17_B25DCF6F.trace
 /Skills
 /.vscode
 PERFORMANCE_LOGGING_GUIDE.md
 SKILL.md
+
+# parked pre-reset sources (architecture reset, 2026-08-15)
+.reset-reference/
+
+# pre-reset backup archives (contain .build/, 1.6GB combined — never commit)
+# NOTE: ProviderSDK.zip lives inside the StreamingKit submodule; it is ignored there.
+Modules/Features/Player.zip
+Modules/Features/Plugins.zip
+
+# gitingest/repomix context dumps — regenerable, huge, zero unique information
+digest.txt
+providersdk.txt
