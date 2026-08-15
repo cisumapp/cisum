@@ -207,6 +207,7 @@ public final class cisumModule {
         PluginsView()
             .environment(container)
             .environment(container.playbackServices.streamingProviderSettings)
+            .environment(PlayerThemeSettings.shared)
             .environment(container.providerServices.pluginStore)
     }
 
@@ -357,6 +358,7 @@ public final class cisumModule {
             .environment(container.playbackServices.lastFMSettings)
             .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
             .environment(container.playbackServices.streamingProviderSettings)
+            .environment(PlayerThemeSettings.shared)
             .modelContainer(modelContainer)
     }
 
