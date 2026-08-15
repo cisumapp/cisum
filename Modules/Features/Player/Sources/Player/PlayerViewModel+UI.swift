@@ -84,11 +84,6 @@ public extension PlayerViewModel {
 
     // MARK: - Lyrics
 
-    var isLyricsVisible: Bool {
-        get { lyrics.isVisible }
-        set { lyrics.isVisible = newValue }
-    }
-
     var lyricsState: LyricsState {
         lyrics.state
     }

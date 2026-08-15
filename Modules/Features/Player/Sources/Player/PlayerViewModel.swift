@@ -37,9 +37,11 @@ public final class PlayerViewModel: PlaybackCommands {
 
     public let queue: PlaybackQueue
 
-    /// Whether the queue sheet is showing. Pure UI state, owned here because the player's own
-    /// chrome toggles it from more than one place.
-    public var isQueueVisible = false
+    /// What the expanded player is showing: artwork, lyrics, or the queue.
+    ///
+    /// Pure presentation state, owned here because the player's chrome toggles it from more than
+    /// one place. A single case makes the three states mutually exclusive by construction.
+    public var nowPlayingMode: NowPlayingMode = .artwork
     private let engine: PlaybackEngine
     private let resolver: PlaybackResolver
     private var nowPlayingCenter: NowPlayingCenter?
