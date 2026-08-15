@@ -97,8 +97,9 @@ public final class LyricsPresentation {
     public var plainText: String?
     public var attribution: String?
 
-    /// Whether the user has lyrics showing. The only member the UI writes.
-    public var isVisible: Bool = false
+    // Lyrics visibility is NOT tracked here. `PlayerViewModel.nowPlayingMode` owns it, because
+    // showing lyrics, the queue, or artwork are three mutually-exclusive states of one stage —
+    // a boolean here could disagree with the mode and there would be no right answer.
 
     public init() {}
 }

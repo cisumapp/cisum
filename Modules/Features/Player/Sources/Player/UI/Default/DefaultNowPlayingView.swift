@@ -1,17 +1,20 @@
-import Models
-
 //
-//  NowPlayingView.swift
-//  cisum
+//  DefaultNowPlayingView.swift
+//  Player
 //
-//  Created by Aarav Gupta on 05/12/25.
+//  cisum's own now-playing layout: the vinyl theme.
+//
+//  Renamed from NowPlayingView and moved here as the first player theme. Layout, spacing and
+//  every child view are unchanged — the differences from the original are that `import Models`
+//  no longer sits above the file header, the stage takes a single `NowPlayingMode` instead of two
+//  booleans, and a downcast of a value that was already the right type is gone.
 //
 
 #if os(iOS)
 import SwiftUI
 import Utilities
 
-public struct NowPlayingView: View {
+public struct DefaultNowPlayingView: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
 
     public var isPlayerExpanded: Bool
@@ -28,12 +31,7 @@ public struct NowPlayingView: View {
         VStack(spacing: 12) {
             header
 
-            NowPlayingArtwork(
-                size: size,
-                artworkURL: playerViewModel.currentImageURL,
-                isLyricsVisible: playerViewModel.isLyricsVisible,
-                isQueueVisible: (playerViewModel as? PlayerViewModel)?.isQueueVisible ?? false
-            )
+            NowPlayingArtwork(mode: playerViewModel.nowPlayingMode)
 
             NowPlayingSongInfo(
                 title: playerViewModel.currentTitle,
@@ -52,7 +50,7 @@ public struct NowPlayingView: View {
     }
 }
 
-fileprivate extension NowPlayingView {
+private extension DefaultNowPlayingView {
     var header: some View {
         Capsule()
             .fill(.secondary.opacity(0.55))

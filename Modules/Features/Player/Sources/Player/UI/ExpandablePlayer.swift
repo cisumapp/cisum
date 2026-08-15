@@ -270,7 +270,7 @@ private extension ExpandablePlayerInner {
                 .opacity(isPlayerExpanded ? 0 : 1)
             }
 
-            NowPlayingView(
+            DefaultNowPlayingView(
                 isPlayerExpanded: isPlayerExpanded,
                 size: size,
                 namespace: namespace
