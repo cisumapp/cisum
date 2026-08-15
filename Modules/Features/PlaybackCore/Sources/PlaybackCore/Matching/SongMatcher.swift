@@ -103,7 +103,8 @@ public struct SongMatcher: Sendable {
     public func best(from candidates: [SourceTrack], for target: MatchTarget) -> MatchResult? {
         // An ISRC agreement is identity, not evidence — no scoring needed.
         if let isrc = target.isrc?.uppercased(), !isrc.isEmpty,
-           let exact = candidates.first(where: { $0.isrc?.uppercased() == isrc }) {
+           let exact = candidates.first(where: { $0.isrc?.uppercased() == isrc })
+        {
             return MatchResult(
                 track: exact,
                 score: 1,
@@ -165,7 +166,8 @@ public struct SongMatcher: Sendable {
         // Duration is strong corroboration when both sides report it — two recordings of the same
         // work by the same artist within a few seconds are almost certainly the same master.
         if let expected = target.durationSeconds, let actual = candidate.durationSeconds,
-           expected > 0, actual > 0 {
+           expected > 0, actual > 0
+        {
             let delta = abs(expected - actual)
             let durationScore = delta <= 2 ? 1.0 : delta <= 5 ? 0.7 : delta <= 15 ? 0.3 : 0.0
             total += durationScore * 0.20
@@ -175,7 +177,8 @@ public struct SongMatcher: Sendable {
         }
 
         if let expectedAlbum = target.album, let actualAlbum = candidate.album,
-           !expectedAlbum.isEmpty, !actualAlbum.isEmpty {
+           !expectedAlbum.isEmpty, !actualAlbum.isEmpty
+        {
             total += TextNormalizer.similarity(expectedAlbum, actualAlbum) * 0.05
         }
 

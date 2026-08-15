@@ -30,6 +30,7 @@ public final class Song {
     public var isrc: String?
 
     // MARK: Provenance
+
     //
     // cisum picks the best source per FIELD, not one authoritative provider per song. Spotify may
     // win on ISRC and title while artwork comes from elsewhere and playback from somewhere else
@@ -159,8 +160,30 @@ public final class Song {
 
     /// A `PlayableRef` for this song on a given service, if it has a representation there.
     public func playableRef(on sourceID: String) -> PlayableRef? {
-        guard let source = source(sourceID) else { return nil }
-        return PlayableRef(
+        source(sourceID).map(ref(from:))
+    }
+
+    /// A `PlayableRef` using the best available service.
+    ///
+    /// - Parameter preferring: Source ids in preference order, best first — usually the user's
+    ///   plugin ordering, from `\.preferredSourceIDs`.
+    /// - Returns: `nil` only when the song has no representation on any service at all, which
+    ///   means it has never been matched and cannot be played without searching first.
+    ///
+    /// This is what replaced the old per-provider column ladder at call sites — the
+    /// `if spotify … else if youtube … else return nil` block that had to be repeated, slightly
+    /// differently, everywhere a list of songs could be played.
+    public func playableRef(preferring preferred: [String] = []) -> PlayableRef? {
+        for sourceID in preferred {
+            if let match = source(sourceID) {
+                return ref(from: match)
+            }
+        }
+        return sources.first.map(ref(from:))
+    }
+
+    private func ref(from source: SongSource) -> PlayableRef {
+        PlayableRef(
             songID: songID,
             sourceID: source.sourceID,
             sourceTrackID: source.sourceTrackID,

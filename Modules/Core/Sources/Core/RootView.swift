@@ -121,7 +121,11 @@ public struct RootView: View {
             deepLink.pendingPlaylist.map { "Add “\($0.playlist.displayName)” to your library?" } ?? "",
             isPresented: Binding(
                 get: { deepLink.pendingPlaylist != nil },
-                set: { if !$0 { deepLink.pendingPlaylist = nil } }
+                set: {
+                    if !$0 {
+                        deepLink.pendingPlaylist = nil
+                    }
+                }
             ),
             presenting: deepLink.pendingPlaylist
         ) { pending in
@@ -142,7 +146,9 @@ public struct RootView: View {
         }
         .alert("Update Available", isPresented: $updateChecker.updateAvailable) {
             Button("Download") {
-                if let url = updateChecker.downloadURL { openURL(url) }
+                if let url = updateChecker.downloadURL {
+                    openURL(url)
+                }
             }
             // ponytail: forced = drop "Later" (only escape is Download → TestFlight); re-prompts next launch.
             if !updateChecker.forced {

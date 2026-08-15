@@ -127,7 +127,9 @@ public actor ImageColorExtractor {
               let palette = compute(image)
         else { return nil }
 
-        if let key = cacheKey { store(palette, key: key) }
+        if let key = cacheKey {
+            store(palette, key: key)
+        }
         return palette
     }
 
@@ -192,7 +194,9 @@ public actor ImageColorExtractor {
     }
 
     private func touchLRU(_ key: String) {
-        if let i = lruKeys.firstIndex(of: key) { lruKeys.remove(at: i) }
+        if let i = lruKeys.firstIndex(of: key) {
+            lruKeys.remove(at: i)
+        }
         lruKeys.insert(key, at: 0)
     }
 
@@ -302,7 +306,9 @@ public actor ImageColorExtractor {
                     break
                 }
             }
-            if !placed { buckets.append(Bucket(pixel: px)) }
+            if !placed {
+                buckets.append(Bucket(pixel: px))
+            }
         }
 
         if let f = filter {
@@ -318,7 +324,9 @@ public actor ImageColorExtractor {
         for b in buckets {
             guard results.count < n else { break }
             let m = b.mean
-            if let p = prev, yuvDistSq(m, p) < divSq { continue }
+            if let p = prev, yuvDistSq(m, p) < divSq {
+                continue
+            }
             results.append(m)
             prev = m
         }

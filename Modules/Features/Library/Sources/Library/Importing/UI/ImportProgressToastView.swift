@@ -48,8 +48,12 @@ public struct ImportProgressToastView: View {
         .task {
             for await event in manager.completions {
                 doneCount += 1
-                if event.state == .failed || event.state == .partialFailure { failedCount += 1 }
-                if facade.active.isEmpty { showSummary() } // last job left the set
+                if event.state == .failed || event.state == .partialFailure {
+                    failedCount += 1
+                }
+                if facade.active.isEmpty {
+                    showSummary()
+                } // last job left the set
             }
         }
     }
@@ -92,7 +96,9 @@ public struct ImportProgressToastView: View {
         clearTask?.cancel()
         clearTask = Task {
             try? await Task.sleep(for: .seconds(2.5))
-            if !Task.isCancelled { toast = nil }
+            if !Task.isCancelled {
+                toast = nil
+            }
         }
     }
 }

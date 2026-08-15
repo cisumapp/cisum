@@ -1,10 +1,10 @@
+import Authentication
 import Caching
 import Library
 import Models
 import Networking
 import Observation
 import Player
-import Plugins
 import ProviderSDK
 import SwiftUI
 import Utilities
@@ -43,7 +43,7 @@ public class SearchViewModel: SearchViewModelInterface {
     }
 
     private let youtube: YouTube
-    private let providerSDK: ProviderSDK?
+    private let sourceRegistry: SourceRegistry?
     private let settings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor
     private let historyStore: SearchHistoryStore
@@ -63,10 +63,10 @@ public class SearchViewModel: SearchViewModelInterface {
         centralMediaStore: CentralMediaStore? = nil,
         metadataCache: any VideoMetadataCaching,
         searchCache: any SearchResultsCaching,
-        providerSDK: ProviderSDK? = nil
+        sourceRegistry: SourceRegistry? = nil
     ) {
         self.youtube = youtube
-        self.providerSDK = providerSDK
+        self.sourceRegistry = sourceRegistry
         self.settings = settings
         self.networkMonitor = networkMonitor
         self.historyStore = historyStore
@@ -153,14 +153,18 @@ public class SearchViewModel: SearchViewModelInterface {
 
         suggestionTask = Task {
             try? await Task.sleep(for: .seconds(0.4))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
             await fetchSuggestionsForCurrentQuery()
         }
 
         searchTask = Task {
             // 3. Debounce (Wait 0.5s)
             try? await Task.sleep(for: .seconds(0.6))
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                return
+            }
 
             PerfLog.info("SearchViewModel: Debounce finished, executing search for '\(searchText)'")
             await executeSearch()
@@ -344,7 +348,9 @@ public class SearchViewModel: SearchViewModelInterface {
                         tokenOverlapScore(spotifyArtist, hiddenText)
                     )
                     // Artist gate: reject a same-title candidate that shares no artist token at all.
-                    if !spotifyArtist.isEmpty, artistSim == 0 { return nil }
+                    if !spotifyArtist.isEmpty, artistSim == 0 {
+                        return nil
+                    }
                     let priority = providerPriority(for: hiddenItem.service)
                     let serviceBonus = Double(3 - priority) * 0.02
                     return (hiddenItem, (0.5 * titleSim) + (0.5 * artistSim) + serviceBonus)
@@ -367,200 +373,17 @@ public class SearchViewModel: SearchViewModelInterface {
         federatedSections.first(where: { $0.service == service })?.state ?? .idle
     }
 
-    public func resolveExternalStream(for item: FederatedSearchItem) async throws -> ExternalStreamPayload? {
-        try await resolveExternalStream(for: item, spotifyItem: nil)
-    }
-
-    public func resolveExternalStream(for item: FederatedSearchItem, spotifyItem: FederatedSearchItem?) async throws -> ExternalStreamPayload? {
-        switch item.payload {
-        case let .youtube(ref):
-            try await resolveYouTubeExternalStream(
-                for: ref.videoID,
-                title: ref.title,
-                artist: ref.artist,
-                artworkURL: ref.artworkURL,
-                service: ref.isMusic ? .youtubeMusic : .youtube,
-                spotifyItem: spotifyItem
-            )
-
-        case .spotify:
-            try await resolveSpotifyViaHiddenFallback(for: item)
-
-        case .spotifyArtist, .spotifyPlaylist:
-            nil
-
-        case let .providerSDK(ref):
-            try await resolveProviderSDKExternalStream(for: ref, fallbackSpotifyItem: spotifyItem)
-        }
-    }
-
-    private func resolveYouTubeExternalStream(for videoID: String, title: String, artist: String, artworkURL: URL?, service: FederatedService, spotifyItem: FederatedSearchItem? = nil) async throws -> ExternalStreamPayload {
-        var representations: [TrackRepresentation] = []
-        let ytRep = TrackRepresentation(
-            providerID: service == .youtubeMusic ? "youtubeMusic" : "youtube",
-            providerTrackID: videoID,
-            title: title,
-            artist: artist,
-            artworkURL: artworkURL
-        )
-        representations.append(ytRep)
-
-        if let spotifyItem, let spotifyID = spotifyTrackID(from: spotifyItem) {
-            var isrc: String?
-            if case let .spotify(track) = spotifyItem.payload {
-                isrc = track.isrc
-            }
-
-            let spotifyRep = TrackRepresentation(
-                providerID: "spotify",
-                providerTrackID: spotifyID,
-                title: spotifyItem.title,
-                artist: primaryArtistName(from: spotifyItem.subtitle),
-                duration: spotifyItem.durationSeconds,
-                isrc: isrc,
-                artworkURL: spotifyItem.artworkURL
-            )
-            representations.append(spotifyRep)
-        }
-
-        let resolver = await PlaybackURLResolver.sharedInstance()
-        let candidates = try await resolver.resolve(mediaID: videoID, title: title, artist: artist, representations: representations, forceDecipher: false, duration: spotifyItem?.durationSeconds)
-        guard let url = candidates.first?.url else {
-            throw NSError(domain: "SearchViewModel", code: 404, userInfo: [NSLocalizedDescriptionKey: "No playback stream found"])
-        }
-
-        let ext = url.pathExtension.lowercased()
-        let codec = ext == "m3u8" ? "hls" : "mp4"
-        let quality = codec == "hls" ? "Adaptive" : "Standard"
-        return ExternalStreamPayload(
-            mediaID: videoID,
-            streamURL: url,
-            title: title,
-            artist: artist,
-            artworkURL: artworkURL,
-            service: .youtube,
-            qualityLabel: quality,
-            codecLabel: codec
-        )
-    }
-
-    /// Resolves a playable stream for a Spotify item by matching against hidden providers.
-    /// Resolution order: YouTube Music → YouTube.
-    private func resolveSpotifyViaHiddenFallback(for spotifyItem: FederatedSearchItem) async throws -> ExternalStreamPayload? {
-        var activeSpotifyItem = spotifyItem
-
-        // 0. Check CentralMediaStore for a cached provider ID
-        if let centralMediaStore,
-           let spotifyID = spotifyTrackID(from: activeSpotifyItem)
-        {
-            let cachedIDs = await centralMediaStore.cachedProviderIDs(forSpotifyTrackID: spotifyID)
-
-            if let ytMusicID = cachedIDs?.youtubeMusicVideoID {
-                return try await resolveYouTubeExternalStream(
-                    for: ytMusicID,
-                    title: activeSpotifyItem.title,
-                    artist: primaryArtistName(from: activeSpotifyItem.subtitle),
-                    artworkURL: activeSpotifyItem.artworkURL,
-                    service: .youtubeMusic,
-                    spotifyItem: activeSpotifyItem
-                )
-            } else if let ytID = cachedIDs?.youtubeVideoID {
-                return try await resolveYouTubeExternalStream(
-                    for: ytID,
-                    title: activeSpotifyItem.title,
-                    artist: primaryArtistName(from: activeSpotifyItem.subtitle),
-                    artworkURL: activeSpotifyItem.artworkURL,
-                    service: .youtube,
-                    spotifyItem: activeSpotifyItem
-                )
-            }
-            // Add other providers (tidal, qobuz) later if ProviderSDK resolution supports it directly here.
-        }
-
-        // 1. Ensure we have the ISRC for accurate matching — best-effort, 1.5s cap.
-        // ponytail: ISRC only sharpens matching; never block playback on Spotify's 429 (5s backoff).
-        if case let .spotify(track) = activeSpotifyItem.payload, track.isrc == nil {
-            let fullTrack: SpotifyTrack? = await withTaskGroup(of: SpotifyTrack?.self) { [weak self] group in
-                group.addTask { await self?.fetchFullSpotifyTrack(id: track.id) }
-                group.addTask { try? await Task.sleep(nanoseconds: 1_500_000_000); return nil }
-                let first = await group.next() ?? nil
-                group.cancelAll()
-                return first
-            }
-            if let fullTrack {
-                let updatedTrack = SpotifySearchTrack(
-                    id: track.id,
-                    title: fullTrack.name,
-                    artistName: track.artistName,
-                    albumName: track.albumName,
-                    artworkURL: track.artworkURL,
-                    durationSeconds: track.durationSeconds,
-                    previewURL: track.previewURL,
-                    isrc: fullTrack.externalIDs?["isrc"]
-                )
-
-                activeSpotifyItem = FederatedSearchItem(
-                    id: activeSpotifyItem.id,
-                    title: activeSpotifyItem.title,
-                    subtitle: activeSpotifyItem.subtitle,
-                    artworkURL: activeSpotifyItem.artworkURL,
-                    durationSeconds: activeSpotifyItem.durationSeconds,
-                    isPlayable: activeSpotifyItem.isPlayable,
-                    isExplicit: activeSpotifyItem.isExplicit,
-                    audioQualityLabel: activeSpotifyItem.audioQualityLabel,
-                    audioCodecLabel: activeSpotifyItem.audioCodecLabel,
-                    payload: .spotify(updatedTrack)
-                )
-
-                PerfLog.info("SearchViewModel: Hydrated Spotify track with ISRC: \(updatedTrack.isrc ?? "none")")
-            }
-        }
-
-        let spotifyTitle = activeSpotifyItem.title
-        let spotifyArtist = primaryArtistName(from: activeSpotifyItem.subtitle)
-        let spotifyDuration = activeSpotifyItem.durationSeconds
-        let spotifyISRC: String? = {
-            if case let .spotify(track) = activeSpotifyItem.payload { return track.isrc }
-            return nil
-        }()
-
-        // Try local visible results next (fast path)
-        let hiddenItems = SpotifyFallbackResolutionPolicy.order.flatMap { items(for: $0) }
-
-        // Use a structured task (not detached) so actor isolation is preserved
-        let bestLocal: SpotifyFallbackMatch? = await Task { [weak self] in
-            guard let self else { return nil }
-            return findBestSpotifyFallbackMatch(
-                for: spotifyTitle,
-                artist: spotifyArtist,
-                durationSeconds: spotifyDuration,
-                sourceISRC: spotifyISRC,
-                in: hiddenItems
-            )
-        }.value
-
-        if let bestLocal, bestLocal.score >= 0.72 {
-            if let payload = try await resolveExternalStream(for: bestLocal.item, spotifyItem: activeSpotifyItem) {
-                rememberSpotifyPlaybackTarget(for: activeSpotifyItem, payload: payload)
-                return payload
-            }
-        }
-
-        // 3. Try on-demand search (slow path)
-        if let onDemandFallback = await resolveSpotifyOnDemandYouTubeFallback(
-            spotifyItem: activeSpotifyItem,
-            title: spotifyTitle,
-            artist: spotifyArtist,
-            durationSeconds: spotifyDuration,
-            artworkURL: activeSpotifyItem.artworkURL
-        ) {
-            rememberSpotifyPlaybackTarget(for: activeSpotifyItem, payload: onDemandFallback)
-            return onDemandFallback
-        }
-
-        throw FederatedSearchError.noPlayableStream(
-            "No YouTube-backed stream could be found for \"\(spotifyTitle)\"."
-        )
+    /// - Warning: Always returns `nil`. Kept only to satisfy `SearchViewModelInterface`.
+    ///
+    /// Stream resolution moved to `PlaybackResolver` in PlaybackCore during the architecture
+    /// reset. Search's job is to produce identities — `FederatedSearchItem.playableRef` — and the
+    /// player resolves them, which is what lets the binding be cached so the work happens once.
+    ///
+    /// Resolving here also meant a Spotify result was matched against YouTube on *every* play,
+    /// with nothing persisted, because the result was handed over as a closure rather than an
+    /// identity. Remove this method from the protocol once no conformance needs it.
+    public func resolveExternalStream(for _: FederatedSearchItem) async throws -> ExternalStreamPayload? {
+        nil
     }
 
     private func fetchFullSpotifyTrack(id: String) async -> SpotifyTrack? {
@@ -577,93 +400,9 @@ public class SearchViewModel: SearchViewModelInterface {
         #endif
     }
 
-    private func rememberSpotifyPlaybackTarget(for spotifyItem: FederatedSearchItem, payload: ExternalStreamPayload) {
-        guard let spotifyTrackID = spotifyTrackID(from: spotifyItem) else { return }
-        guard let canonicalProvider = canonicalProvider(for: payload.service) else { return }
-
-        Task {
-            await centralMediaStore?.cacheSpotifyPlaybackTarget(
-                spotifyTrackID: spotifyTrackID,
-                mediaID: payload.mediaID,
-                provider: canonicalProvider
-            )
-        }
-    }
-
     private func spotifyTrackID(from item: FederatedSearchItem) -> String? {
         guard item.id.hasPrefix("spotify-") else { return nil }
         return String(item.id.dropFirst("spotify-".count))
-    }
-
-    private func canonicalProvider(for service: FederatedService) -> MediaProvider? {
-        switch service {
-        case .youtube:
-            .youtube
-        case .youtubeMusic:
-            .youtubeMusic
-        case .spotify:
-            .spotify
-        case .providerSDK:
-            nil // ProviderSDK may resolve via multiple providers; no single canonical mapping.
-        }
-    }
-
-    private func resolveSpotifyOnDemandYouTubeFallback(
-        spotifyItem: FederatedSearchItem,
-        title: String,
-        artist: String,
-        durationSeconds: TimeInterval?,
-        artworkURL _: URL?
-    ) async -> ExternalStreamPayload? {
-        let titleValue = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let artistValue = artist.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let query = [artistValue, titleValue].filter { !$0.isEmpty }.joined(separator: " ")
-        guard !query.isEmpty else { return nil }
-
-        // Extract source ISRC for exact-match scoring
-        let sourceISRC: String? = {
-            if case let .spotify(track) = spotifyItem.payload { return track.isrc }
-            return nil
-        }()
-
-        PerfLog.info("SearchViewModel: Resolving Spotify fallback in parallel for '\(query)'...")
-
-        return await withTaskGroup(of: ExternalStreamPayload?.self) { group in
-            // 1. YouTube Music Task
-            group.addTask {
-                guard !Task.isCancelled else { return nil }
-                let result = await self.fetchYouTubeMusicSectionItems(query: query, updateUI: false)
-                if case let .success(items) = result {
-                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, sourceISRC: sourceISRC, candidates: items) {
-                        return try? await self.resolveExternalStream(for: best.item, spotifyItem: spotifyItem)
-                    }
-                }
-                return nil
-            }
-
-            // 2. YouTube Video Task
-            group.addTask {
-                guard !Task.isCancelled else { return nil }
-                let videoQuery = self.effectiveSearchQuery(for: query, scope: Models.SearchScope.video)
-                let result = await self.fetchYouTubeSectionItems(query: videoQuery, updateUI: false)
-                if case let .success(items) = result {
-                    if let best = await self.performFallbackMatch(title: titleValue, artist: artistValue, duration: durationSeconds, sourceISRC: sourceISRC, candidates: items) {
-                        return try? await self.resolveExternalStream(for: best.item, spotifyItem: spotifyItem)
-                    }
-                }
-                return nil
-            }
-
-            for await payload in group {
-                if Task.isCancelled { break }
-                if let payload {
-                    group.cancelAll()
-                    return payload
-                }
-            }
-            return nil
-        }
     }
 
     private func resetFederatedSections(state: FederatedSectionState) {
@@ -947,19 +686,31 @@ public class SearchViewModel: SearchViewModelInterface {
 
         switch service {
         case .youtubeMusic:
-            if alignment >= 0.75 { return 0.08 }
-            if alignment >= 0.45 { return 0.04 }
+            if alignment >= 0.75 {
+                return 0.08
+            }
+            if alignment >= 0.45 {
+                return 0.04
+            }
             return 0
         case .youtube:
-            if alignment >= 0.75 { return 0.06 }
-            if alignment >= 0.45 { return 0.03 }
+            if alignment >= 0.75 {
+                return 0.06
+            }
+            if alignment >= 0.45 {
+                return 0.03
+            }
             return 0
         case .spotify:
             return 0
         case .providerSDK:
             // ProviderSDK has exact metadata from the native provider; trust it highly.
-            if alignment >= 0.75 { return 0.09 }
-            if alignment >= 0.45 { return 0.05 }
+            if alignment >= 0.75 {
+                return 0.09
+            }
+            if alignment >= 0.45 {
+                return 0.05
+            }
             return 0
         }
     }
@@ -1049,18 +800,30 @@ public class SearchViewModel: SearchViewModelInterface {
             let numericPart = compact.replacingOccurrences(of: "[^0-9.]", with: "", options: .regularExpression)
             guard let number = Double(numericPart) else { return 0 }
 
-            if compact.contains("b") { return number * 1_000_000_000 }
-            if compact.contains("m") { return number * 1_000_000 }
-            if compact.contains("k") { return number * 1000 }
+            if compact.contains("b") {
+                return number * 1_000_000_000
+            }
+            if compact.contains("m") {
+                return number * 1_000_000
+            }
+            if compact.contains("k") {
+                return number * 1000
+            }
             return number
         }
 
         if let numberRange = lowercased.range(of: "[0-9]+(?:\\.[0-9]+)?", options: .regularExpression),
            let number = Double(lowercased[numberRange])
         {
-            if lowercased.contains("billion") { return number * 1_000_000_000 }
-            if lowercased.contains("million") { return number * 1_000_000 }
-            if lowercased.contains("thousand") { return number * 1000 }
+            if lowercased.contains("billion") {
+                return number * 1_000_000_000
+            }
+            if lowercased.contains("million") {
+                return number * 1_000_000
+            }
+            if lowercased.contains("thousand") {
+                return number * 1000
+            }
             return number
         }
 
@@ -1243,12 +1006,16 @@ public class SearchViewModel: SearchViewModelInterface {
                 await searchCacheHintStore.recordVideoResults(query: query, results: videoResults)
 
                 topVideos = Array(videoResults.compactMap { item -> YouTubeVideo? in
-                    if case let .video(video) = item { return video }
+                    if case let .video(video) = item {
+                        return video
+                    }
                     return nil
                 }.prefix(5))
             } else {
                 topVideos = Array(continuation.items.compactMap { item -> YouTubeVideo? in
-                    if case let .video(video) = item { return video }
+                    if case let .video(video) = item {
+                        return video
+                    }
                     return nil
                 }.prefix(5))
             }
@@ -1294,12 +1061,16 @@ public class SearchViewModel: SearchViewModelInterface {
                     }
 
                     topVideos = Array(videoResults.compactMap { item -> YouTubeVideo? in
-                        if case let .video(video) = item { return video }
+                        if case let .video(video) = item {
+                            return video
+                        }
                         return nil
                     }.prefix(5))
                 } else {
                     topVideos = Array(continuation.items.compactMap { item -> YouTubeVideo? in
-                        if case let .video(video) = item { return video }
+                        if case let .video(video) = item {
+                            return video
+                        }
                         return nil
                     }.prefix(5))
                 }
@@ -1335,70 +1106,70 @@ public class SearchViewModel: SearchViewModelInterface {
     /// yields deduplicated batches via an `AsyncThrowingStream`. We collect all batches,
     /// using the C-3 fix (append not overwrite) so partial results are preserved on error.
     private nonisolated func fetchProviderSDKSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
-        guard let sdk = await MainActor.run(resultType: ProviderSDK?.self, body: { self.providerSDK }) else {
-            return .success([]) // No SDK injected — silently skip (backward-compat)
+        guard let sources = await MainActor.run(resultType: [any MusicSource]?.self, body: {
+            self.sourceRegistry?.sources.filter { $0.capabilities.contains(.search) }
+        }), !sources.isEmpty else {
+            return .success([])
         }
 
-        let stream = await sdk.searchTracks(query: query, limit: 10)
-        var allTracks: [Track] = []
-
-        do {
-            for try await batch in stream {
-                PerfLog.info("SearchViewModel: ProviderSDK received batch of \(batch.count) tracks")
-                allTracks.append(contentsOf: batch)
+        // Fan-out lives here, in the Search feature, rather than in ProviderSDK. That is the
+        // boundary the reset draws: the SDK talks to one service at a time and returns what it
+        // said; deciding to ask several at once, and how to rank the answers, is the application's
+        // job. A source that fails is skipped so one broken plugin cannot empty the results.
+        let collected = await withTaskGroup(of: [(String, SourceTrack)].self) { group in
+            for source in sources {
+                group.addTask {
+                    guard let tracks = try? await source.searchTracks(query: query, limit: 10) else {
+                        PerfLog.info("SearchViewModel: source \(source.id) returned no results")
+                        return []
+                    }
+                    return tracks.map { (source.id, $0) }
+                }
             }
-        } catch {
-            // Non-fatal — use whatever was accumulated before the stream error.
-            PerfLog.info("SearchViewModel: ProviderSDK search stream error (partial results kept): \(error.localizedDescription)")
+
+            var all: [(String, SourceTrack)] = []
+            for await batch in group {
+                all.append(contentsOf: batch)
+            }
+            return all
         }
 
-        PerfLog.info("SearchViewModel: ProviderSDK search completed with \(allTracks.count) tracks")
+        guard !collected.isEmpty else { return .success([]) }
 
-        guard !allTracks.isEmpty else { return .success([]) }
-
-        let items = allTracks.prefix(10).map { track -> FederatedSearchItem in
-            let artistName = track.artists.first?.name ?? ""
-            let albumTitle = track.album.title
-            let subtitle = artistName.isEmpty
-                ? albumTitle
-                : "\(artistName) • \(albumTitle)"
-
-            // Prefer album cover art; fall back to the first representation that has artwork.
-            let artworkURL = track.album.coverArtURL
-                ?? track.representations.compactMap(\.artworkURL).first
-
-            let (qualityLabel, codecLabel) = providerSDKQualityBadge(for: track)
+        let items = collected.prefix(10).map { sourceID, track -> FederatedSearchItem in
+            let subtitle = track.album.map { "\(track.artist) • \($0)" } ?? track.artist
+            let (qualityLabel, codecLabel) = qualityBadge(for: track)
 
             return FederatedSearchItem(
-                id: "pdk-\(track.id.value)",
+                id: "pdk-\(sourceID)-\(track.id)",
                 title: track.title,
                 subtitle: subtitle,
-                artworkURL: artworkURL,
-                durationSeconds: track.duration,
+                artworkURL: track.artworkURL,
+                durationSeconds: track.durationSeconds,
                 isPlayable: true,
-                isExplicit: track.isExplicit,
+                isExplicit: track.isExplicit ?? false,
                 audioQualityLabel: qualityLabel,
                 audioCodecLabel: codecLabel,
                 payload: .providerSDK(
                     ProviderMediaRef(
-                        canonicalID: track.id.value,
+                        canonicalID: track.id,
                         title: track.title,
-                        artist: artistName,
-                        album: albumTitle,
-                        artworkURL: artworkURL,
-                        durationSeconds: track.duration,
-                        representations: track.representations.map { rep in
+                        artist: track.artist,
+                        album: track.album,
+                        artworkURL: track.artworkURL,
+                        durationSeconds: track.durationSeconds,
+                        representations: [
                             MediaRepresentation(
-                                providerID: rep.providerID,
-                                providerTrackID: rep.providerTrackID,
-                                title: rep.title,
-                                artist: rep.artist,
-                                album: rep.album,
-                                durationSeconds: rep.duration,
-                                isrc: rep.isrc,
-                                artworkURL: rep.artworkURL
-                            )
-                        }
+                                providerID: sourceID,
+                                providerTrackID: track.id,
+                                title: track.title,
+                                artist: track.artist,
+                                album: track.album,
+                                durationSeconds: track.durationSeconds,
+                                isrc: track.isrc,
+                                artworkURL: track.artworkURL
+                            ),
+                        ]
                     )
                 )
             )
@@ -1411,97 +1182,32 @@ public class SearchViewModel: SearchViewModelInterface {
     /// it carries from its source provider.
     ///
     /// Returns `(qualityLabel, codecLabel)` — e.g. `("Hi-Res", "FLAC")`.
-    private nonisolated func providerSDKQualityBadge(for track: Track) -> (String, String) {
-        // Prefer the representation with the highest-known audioQuality value.
-        let bestQuality = track.representations
-            .compactMap(\.audioQuality)
-            .max(by: { $0.priority < $1.priority })
-
-        switch bestQuality {
-        case .hiResLossless:
-            return ("Hi-Res", "FLAC")
-        case .lossless:
-            // Distinguish CD-quality (44.1 kHz) from general lossless
-            let isCDQuality = track.representations.contains { rep in
-                rep.providerID == "tidal" || rep.providerID == "qobuz" || rep.providerID == "deezer"
-            }
-            return isCDQuality ? ("CD", "FLAC") : ("Lossless", "FLAC")
-        case .high:
-            return ("High", "AAC")
-        case .standard:
-            return ("Standard", "MP3")
-        case .low:
-            return ("Standard", "MP3")
-        case nil:
-            // SoundCloud and unknown providers default to standard quality
+    /// A coarse display badge for a search result.
+    ///
+    /// Derived from the provider's own quality string, which is **display text with no shared
+    /// vocabulary** — the same tier appears as "FLAC 16-bit / 44.1 kHz", "LOSSLESS", "320kbps",
+    /// and "DOLBY ATMOS" depending on who answered. So this does prefix matching for a badge and
+    /// nothing more. Actual playback quality decisions use SourceStream's structured fields; see
+    /// StreamSelector.
+    private nonisolated func qualityBadge(for track: SourceTrack) -> (String, String) {
+        guard let label = track.audioQualityLabel?.uppercased() else {
             return ("Standard", "MP3")
         }
+
+        if label.contains("HI-RES") || label.contains("24-BIT") || label.contains("96") {
+            return ("Hi-Res", "FLAC")
+        }
+        if label.contains("FLAC") || label.contains("LOSSLESS") || label.contains("ALAC") {
+            return ("Lossless", "FLAC")
+        }
+        if label.contains("320") || label.contains("HIGH") {
+            return ("High", "AAC")
+        }
+        return ("Standard", "MP3")
     }
 
     /// Resolves a ProviderSDK `Track` directly to a playable `ExternalStreamPayload`
     /// without going through the YouTube fallback chain.
-    private func resolveProviderSDKExternalStream(
-        for ref: ProviderMediaRef,
-        fallbackSpotifyItem _: FederatedSearchItem?
-    ) async throws -> ExternalStreamPayload? {
-        let title = ref.title
-        let artist = ref.artist
-        // Prefer the ref artwork; fall back to the first representation that has artwork.
-        let artworkURL = ref.artworkURL
-            ?? ref.representations.compactMap(\.artworkURL).first
-
-        // Use ProviderSDKStreamResolver directly — it handles ISRC-first lookup,
-        // federated search fallback, and AudioStream → PlaybackCandidate mapping.
-        let resolver = await PlaybackURLResolver.sharedInstance()
-        let representations = ref.representations.map { rep in
-            TrackRepresentation(
-                providerID: rep.providerID,
-                providerTrackID: rep.providerTrackID,
-                title: rep.title,
-                artist: rep.artist,
-                duration: rep.durationSeconds,
-                isrc: rep.isrc,
-                artworkURL: rep.artworkURL
-            )
-        }
-
-        let candidates = try await resolver.resolve(
-            mediaID: ref.canonicalID,
-            title: title,
-            artist: artist,
-            representations: representations,
-            forceDecipher: false,
-            duration: ref.durationSeconds
-        )
-
-        guard let best = candidates.first, let url = Optional(best.url) else {
-            throw FederatedSearchError.noPlayableStream("No stream found for \"\(title)\" via ProviderSDK.")
-        }
-
-        // Derive quality label from the resolved candidate's MIME type.
-        let mime = best.mimeType?.lowercased() ?? ""
-        let qualityLabel: String
-        let codecLabel: String
-        if mime.contains("flac") || mime.contains("alac") {
-            qualityLabel = "Lossless"; codecLabel = "FLAC"
-        } else if mime.contains("aac") {
-            qualityLabel = "High"; codecLabel = "AAC"
-        } else {
-            qualityLabel = "Standard"; codecLabel = "MP3"
-        }
-
-        return ExternalStreamPayload(
-            mediaID: ref.canonicalID,
-            streamURL: url,
-            title: title,
-            artist: artist,
-            artworkURL: artworkURL,
-            service: .providerSDK,
-            qualityLabel: qualityLabel,
-            codecLabel: codecLabel
-        )
-    }
-
     /// Result type carrying all three Spotify visible sections
     public struct SpotifySearchItems {
         let tracks: [FederatedSearchItem]
@@ -1623,10 +1329,18 @@ public class SearchViewModel: SearchViewModelInterface {
 
     private func inferCodecLabel(from url: URL) -> String {
         let ext = url.pathExtension.lowercased()
-        if ext == "flac" { return "FLAC" }
-        if ext == "m3u8" { return "HLS" }
-        if ext == "aac" || ext == "m4a" || ext == "mp4" { return "AAC" }
-        if ext == "mp3" { return "MP3" }
+        if ext == "flac" {
+            return "FLAC"
+        }
+        if ext == "m3u8" {
+            return "HLS"
+        }
+        if ext == "aac" || ext == "m4a" || ext == "mp4" {
+            return "AAC"
+        }
+        if ext == "mp3" {
+            return "MP3"
+        }
         return "Unknown"
     }
 
@@ -1689,9 +1403,9 @@ public class SearchViewModel: SearchViewModelInterface {
             ) { id in
                 try await youtube.main.video(id: id)
             }
-            // Also prewarm quick-playback URLs (HLS preferred) so the player can start immediately.
-            let resolver = await PlaybackURLResolver.sharedInstance()
-            await resolver.prewarm(ids)
+            // Stream-URL prewarming is gone with PlaybackURLResolver. PlaybackResolver caches a
+            // URL on first play and persists it, so the second play of anything is already fast
+            // without search speculatively resolving tracks the user may never open.
         }
     }
 
@@ -1728,10 +1442,6 @@ public class SearchViewModel: SearchViewModelInterface {
             ) { key in
                 try await youtube.main.video(id: key)
             }
-
-            // Warm quick-playback URLs for these inline-prefetch IDs as well.
-            let resolver = await PlaybackURLResolver.sharedInstance()
-            await resolver.prewarm(ids)
 
             inlinePrefetchDrainTask = nil
             if !inlinePrefetchPendingIDs.isEmpty {
@@ -1859,7 +1569,9 @@ public class SearchViewModel: SearchViewModelInterface {
                     results = mapped
                 }
                 ids = Array(results.compactMap { item -> String? in
-                    if case let .video(v) = item { return v.id }
+                    if case let .video(v) = item {
+                        return v.id
+                    }
                     return nil
                 }.prefix(3))
             }

@@ -56,7 +56,9 @@ public actor RegistryClient {
             }
 
             var collected: [RegistryEntry] = []
-            for await rows in group { collected.append(contentsOf: rows) }
+            for await rows in group {
+                collected.append(contentsOf: rows)
+            }
             return collected
         }
 

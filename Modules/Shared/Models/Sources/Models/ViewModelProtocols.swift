@@ -18,68 +18,6 @@ public enum PlaybackMode: String, Sendable, CaseIterable {
     case repeatOne
 }
 
-/// - Warning: Superseded by the frequency-split state objects in `PlayerState.swift`
-///   (`NowPlayingState`, `TransportState`, `ProgressState`, `LyricsPresentation`) plus the
-///   `PlaybackCommands` protocol.
-///
-/// Kept temporarily so call sites can migrate one at a time instead of all 23 at once. Two
-/// specific problems make it unsuitable going forward:
-///
-/// 1. **One observable, four update frequencies.** `currentTime` ticks ~30x/second and invalidates
-///    every view reading any member — mini player, expanded player, lyrics, queue, artwork.
-/// 2. **`ExternalQueueTrack` carries a resolver closure instead of an identity**, so nothing can
-///    be cached, persisted, or compared, and every play re-searches.
-///
-/// Do not add members here. New work targets the split types.
-@available(*, deprecated, message: "Use NowPlayingState / TransportState / ProgressState / LyricsPresentation + PlaybackCommands")
-@MainActor
-public protocol PlayerViewModelInterface: AnyObject, Observable {
-    // Basic Track Info
-    var currentTitle: String { get }
-    var currentArtist: String { get }
-    var currentImageURL: URL? { get }
-    var currentAccentColor: Color { get }
-    var isExplicit: Bool { get }
-    var currentVideoId: String? { get }
-
-    // Playback State
-    var isPlaying: Bool { get }
-    var duration: Double { get }
-    var currentTime: Double { get }
-    var canSkipForward: Bool { get }
-    var canSkipBackward: Bool { get }
-
-    // Lyrics State
-    var isLyricsVisible: Bool { get set }
-    var lyricsState: LyricsState { get }
-    var syncedLyricsLines: [TimedLyricLine] { get }
-    var currentSyncedLyricIndex: Int? { get }
-    var plainLyricsText: String? { get }
-
-    // Playback Actions
-    func togglePlayPause()
-    func skipToNext()
-    func skipToPrevious()
-    func seek(to timestamp: Double)
-    func load(youtube ref: YouTubeMediaRef, preserveQueue: Bool)
-    func load(external track: ExternalQueueTrack, preserveQueue: Bool)
-    func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int)
-    func setQueue(_ tracks: [ExternalQueueTrack], startIndex: Int, shuffled: Bool)
-
-    // Shuffle / Repeat
-    var playbackMode: PlaybackMode { get }
-    func cyclePlaybackMode()
-
-    // Artwork Video
-    var artworkVideoStatus: ArtworkVideoProcessingStatus { get }
-    var animatedArtworkVideoURL: URL? { get }
-    var artworkVideoProgress: Double? { get }
-    var artworkVideoError: String? { get }
-
-    /// Additional Info
-    var lyricsAttribution: String? { get }
-}
-
 @MainActor
 public protocol SearchViewModelInterface: AnyObject, Observable {
     var searchText: String { get set }
@@ -123,39 +61,4 @@ public enum SearchState: Equatable, Sendable {
     case loading
     case error(String)
     case success
-}
-
-// MARK: - External Track Support
-
-public struct ExternalQueueTrack: Sendable, Equatable {
-    public static func == (lhs: ExternalQueueTrack, rhs: ExternalQueueTrack) -> Bool {
-        lhs.mediaID == rhs.mediaID &&
-            lhs.title == rhs.title &&
-            lhs.artist == rhs.artist &&
-            lhs.artworkURL == rhs.artworkURL &&
-            lhs.service == rhs.service &&
-            lhs.isExplicit == rhs.isExplicit
-    }
-
-    public let mediaID: String
-    public let title: String
-    public let artist: String
-    public let artworkURL: URL?
-    public let service: FederatedService
-    public let isExplicit: Bool
-    public let qualityLabelHint: String?
-    public let codecLabelHint: String?
-    public let resolvePayload: @Sendable @MainActor () async throws -> ExternalStreamPayload
-
-    public init(mediaID: String, title: String, artist: String, artworkURL: URL?, service: FederatedService, isExplicit: Bool, qualityLabelHint: String?, codecLabelHint: String?, resolvePayload: @escaping @Sendable @MainActor () async throws -> ExternalStreamPayload) {
-        self.mediaID = mediaID
-        self.title = title
-        self.artist = artist
-        self.artworkURL = artworkURL
-        self.service = service
-        self.isExplicit = isExplicit
-        self.qualityLabelHint = qualityLabelHint
-        self.codecLabelHint = codecLabelHint
-        self.resolvePayload = resolvePayload
-    }
 }

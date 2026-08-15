@@ -13,6 +13,7 @@ let package = Package(
     dependencies: [
         .package(path: "../Shared/Aesthetics"),
         .package(path: "../Shared/Models"),
+        .package(path: "../../Packages/StreamingKit/ProviderSDK"),
         .package(path: "../Shared/Networking"),
         .package(path: "../Shared/Caching"),
         .package(path: "../Shared/Utilities"),
@@ -38,6 +39,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Aesthetics", package: "Aesthetics"),
                 .product(name: "Models", package: "Models"),
+                .product(name: "ProviderSDK", package: "ProviderSDK"),
                 .product(name: "Networking", package: "Networking"),
                 .product(name: "Utilities", package: "Utilities"),
                 .product(name: "Caching", package: "Caching"),

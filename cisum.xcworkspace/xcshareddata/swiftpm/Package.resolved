@@ -1,5 +1,5 @@
 {
-  "originHash" : "21fb93fd6f836a36c803c252cb1c428cb3cb00f69a329d97aa74472be190f8c4",
+  "originHash" : "5e390ca22293d7a43f75eb966852efe6c691c7ddaacc7f4451466c5ad9312119",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
         "version" : "5.1.2"
-      }
-    },
-    {
-      "identity" : "javascriptkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftwasm/JavaScriptKit.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "fba3be0d4647583b139a8a0af0e187ab97855713"
       }
     },
     {
@@ -125,15 +116,6 @@
       "state" : {
         "revision" : "b440a0be98381550cf189c903782e817619ffa05",
         "version" : "0.5.1"
-      }
-    },
-    {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax",
-      "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
       }
     },
     {

@@ -6,9 +6,8 @@
 //
 
 import Foundation
-import Testing
-
 @testable import Plugins
+import Testing
 
 @Suite("Registry index decoding")
 struct RegistryDecodingTests {

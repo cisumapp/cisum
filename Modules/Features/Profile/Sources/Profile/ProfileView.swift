@@ -13,7 +13,6 @@ import SwiftUI
 import Utilities
 import YouTubeSDK
 #if canImport(SpotifySDK)
-import Plugins
 import SpotifySDK
 #endif
 
@@ -21,7 +20,6 @@ public struct ProfileView: View {
     public init() {}
 
     private let youtube = YouTube.shared
-    @Environment(\.playerViewModel) private var playerViewModel
     @Environment(AuthService.self) private var authService
     @Environment(SpotifySessionCoordinator.self) private var spotifyCoordinator
     @Environment(AnalyticsService.self) private var analyticsService

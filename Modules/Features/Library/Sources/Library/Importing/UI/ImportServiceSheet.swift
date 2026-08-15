@@ -121,7 +121,9 @@ public struct ImportServiceSheet: View {
                             }
                         }
                         Spacer()
-                        if let n = ref.trackCount { Text("\(n)").font(.caption).foregroundStyle(.secondary) }
+                        if let n = ref.trackCount {
+                            Text("\(n)").font(.caption).foregroundStyle(.secondary)
+                        }
                         Image(systemName: selected.contains(ref.id) ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(selected.contains(ref.id) ? Color.accentColor : Color.secondary)
                     }
@@ -161,7 +163,11 @@ public struct ImportServiceSheet: View {
                 Button {
                     Task { await importLink() }
                 } label: {
-                    HStack { Text("Import"); if isSubmitting { Spacer(); ProgressView() } }
+                    HStack {
+                        Text("Import"); if isSubmitting {
+                            Spacer(); ProgressView()
+                        }
+                    }
                 }
                 .disabled(linkText.trimmingCharacters(in: .whitespaces).isEmpty || isSubmitting)
             }
@@ -202,7 +208,9 @@ public struct ImportServiceSheet: View {
             case .appleMusic:
                 var ok = await svc.isAuthorized()
                 #if canImport(MusicKit)
-                if !ok, let am = svc as? AppleMusicImportService { ok = await am.requestAuthorization() }
+                if !ok, let am = svc as? AppleMusicImportService {
+                    ok = await am.requestAuthorization()
+                }
                 #endif
                 if ok {
                     await loadPlaylists(svc)
@@ -232,7 +240,9 @@ public struct ImportServiceSheet: View {
         await withTaskGroup(of: (Int, Int?).self) { group in
             var active = 0
             for (i, ref) in targets {
-                if active >= 6 { _ = await group.next(); active -= 1 } // ponytail: 6-wide cap; raise if too slow
+                if active >= 6 {
+                    _ = await group.next(); active -= 1
+                } // ponytail: 6-wide cap; raise if too slow
                 active += 1
                 group.addTask {
                     let count = try? await svc.fetchMetadata(playlistID: ref.id).totalTrackCount
@@ -255,7 +265,11 @@ public struct ImportServiceSheet: View {
     }
 
     private func toggle(_ id: String) {
-        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+        if selected.contains(id) {
+            selected.remove(id)
+        } else {
+            selected.insert(id)
+        }
     }
 
     private func confirmSelected() async {
@@ -308,7 +322,11 @@ public struct ImportServiceSheet: View {
     }
 
     private var errorBinding: Binding<Bool> {
-        Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })
+        Binding(get: { errorText != nil }, set: {
+            if !$0 {
+                errorText = nil
+            }
+        })
     }
 
     private static func displayName(_ p: ImportProvider) -> String {

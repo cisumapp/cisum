@@ -32,7 +32,11 @@ public final class LocalFileImportService: ImportService {
         PerfLog.info("LocalFileImportService: register \(urls.count) file(s)")
         let bookmarks: [Data] = urls.compactMap { url in
             let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            defer {
+                if scoped {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
             return try? url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
         }
         let playlistID = "local:" + UUID().uuidString
@@ -73,7 +77,11 @@ public final class LocalFileImportService: ImportService {
             return nil
         }
         let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        defer {
+            if scoped {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
 
         let asset = AVURLAsset(url: url)
         let metadata = await (try? asset.load(.metadata)) ?? []
@@ -86,7 +94,9 @@ public final class LocalFileImportService: ImportService {
         var duration: Double?
         if let cm = try? await asset.load(.duration) {
             let seconds = CMTimeGetSeconds(cm)
-            if seconds.isFinite, seconds > 0 { duration = seconds }
+            if seconds.isFinite, seconds > 0 {
+                duration = seconds
+            }
         }
 
         return IncomingTrack(

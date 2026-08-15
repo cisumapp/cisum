@@ -48,7 +48,7 @@ public struct StreamSelector: Sendable {
             total += bitDepth >= 24 ? 40 : 25
         }
         if let sampleRate = stream.sampleRate {
-            total += sampleRate > 48_000 ? 20 : 10
+            total += sampleRate > 48000 ? 20 : 10
         }
 
         // Codec, from the MIME type only — a container/codec identifier, not a quality string.
@@ -66,7 +66,7 @@ public struct StreamSelector: Sendable {
 
         // Bitrate, when reported, scaled so it refines rather than dominates.
         if let bitrate = stream.bitrate {
-            total += min(Double(bitrate) / 32_000, 20)
+            total += min(Double(bitrate) / 32000, 20)
         }
 
         // A progressive file seeks reliably and starts faster than an adaptive manifest, so it

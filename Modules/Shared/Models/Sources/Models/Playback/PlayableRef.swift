@@ -38,6 +38,7 @@ public struct PlayableRef: Sendable, Hashable, Codable {
     public let sourceTrackID: String
 
     // MARK: Display
+
     //
     // Carried so the player can render immediately, before any network work. These are a snapshot
     // for painting the UI, never the source of truth — the canonical Song owns that.
@@ -63,6 +64,26 @@ public struct PlayableRef: Sendable, Hashable, Codable {
         self.artist = artist
         self.artworkURL = artworkURL
         self.durationSeconds = durationSeconds
+    }
+
+    /// A ref for a YouTube result the user tapped directly.
+    ///
+    /// `songID` is `nil` because nothing has been matched or saved yet — this is an ad-hoc play of
+    /// a search result. It plays fine, but nothing is persisted, so a second play resolves again.
+    /// Adding the track to the library is what makes it cheap; see `PlayableRef`'s doc comment.
+    ///
+    /// - Note: `sourceID` distinguishes YouTube Music from plain YouTube, because the two index
+    ///   different catalogues and a video id from one is not reliably valid in the other.
+    public init(youtube ref: YouTubeMediaRef) {
+        self.init(
+            songID: nil,
+            sourceID: ref.isMusic ? "youtube_music" : "youtube",
+            sourceTrackID: ref.videoID,
+            title: ref.title,
+            artist: ref.artist,
+            artworkURL: ref.artworkURL,
+            durationSeconds: ref.durationSeconds
+        )
     }
 
     /// Identity is the (source, track) pair.

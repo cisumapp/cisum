@@ -43,15 +43,24 @@ public final class PlaybackQueue {
         return entries[position]
     }
 
-    public var count: Int { entries.count }
-    public var isEmpty: Bool { entries.isEmpty }
+    public var count: Int {
+        entries.count
+    }
+
+    public var isEmpty: Bool {
+        entries.isEmpty
+    }
 
     /// What plays after the current entry, accounting for repeat mode.
     public var upcoming: PlayableRef? {
         guard let position else { return nil }
-        if mode == .repeatOne { return entries[position] }
+        if mode == .repeatOne {
+            return entries[position]
+        }
         let next = position + 1
-        if entries.indices.contains(next) { return entries[next] }
+        if entries.indices.contains(next) {
+            return entries[next]
+        }
         return mode == .repeatAll ? entries.first : nil
     }
 
@@ -71,7 +80,9 @@ public final class PlaybackQueue {
     ///
     /// Previous restarts the current track when it is the first entry, which is the behaviour
     /// every music player has and users expect.
-    public var canSkipBackward: Bool { position != nil }
+    public var canSkipBackward: Bool {
+        position != nil
+    }
 
     // MARK: - Mutating
 
@@ -122,7 +133,9 @@ public final class PlaybackQueue {
     public func append(_ refs: [PlayableRef]) {
         entries.append(contentsOf: refs)
         unshuffled.append(contentsOf: refs)
-        if position == nil, !entries.isEmpty { position = 0 }
+        if position == nil, !entries.isEmpty {
+            position = 0
+        }
     }
 
     /// Advances. Returns the new entry, or `nil` when the queue has finished.
@@ -130,7 +143,9 @@ public final class PlaybackQueue {
     public func advance() -> PlayableRef? {
         guard let position else { return nil }
 
-        if mode == .repeatOne { return entries[position] }
+        if mode == .repeatOne {
+            return entries[position]
+        }
 
         let next = position + 1
         if entries.indices.contains(next) {

@@ -314,7 +314,9 @@ public enum CisumLink: Equatable, Sendable {
         items += optional("art", song.artworkURL?.absoluteString)
         items += optional("dur", song.durationSeconds.map { String($0) })
         items += optional("isrc", song.isrc)
-        if song.isExplicit { items.append(URLQueryItem(name: "explicit", value: "1")) }
+        if song.isExplicit {
+            items.append(URLQueryItem(name: "explicit", value: "1"))
+        }
         return items
     }
 

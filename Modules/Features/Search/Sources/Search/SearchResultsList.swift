@@ -1,4 +1,5 @@
 import Aesthetics
+import Authentication
 import Kingfisher
 import Library
 import Models
@@ -10,7 +11,6 @@ import Tracks
 
 struct SearchResultsList: View {
     let searchViewModel: any SearchViewModelInterface
-    let playerViewModel: any PlayerViewModelInterface
     @Binding var isImportingSpotifyPlaylistID: String?
     @Binding var showNonPlayableAlert: Bool
     @Binding var nonPlayableMessage: String

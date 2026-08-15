@@ -1,6 +1,6 @@
+import Authentication
 import SwiftUI
 #if canImport(SpotifySDK)
-import Plugins
 import SpotifySDK
 
 public struct SpotifyLoginView: View {

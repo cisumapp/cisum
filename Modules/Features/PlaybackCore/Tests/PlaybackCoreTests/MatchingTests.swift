@@ -7,10 +7,9 @@
 
 import Foundation
 import Models
+@testable import PlaybackCore
 import ProviderSDK
 import Testing
-
-@testable import Player
 
 private func track(
     _ id: String,
@@ -246,7 +245,7 @@ struct StreamSelectionTests {
     func losslessWins() throws {
         let best = try #require(selector.best(from: [
             stream("audio/mp4", bitrate: 256_000),
-            stream("audio/flac", bitDepth: 16, sampleRate: 44_100),
+            stream("audio/flac", bitDepth: 16, sampleRate: 44100),
         ]))
         #expect(best.mimeType == "audio/flac")
     }
@@ -254,8 +253,8 @@ struct StreamSelectionTests {
     @Test("hi-res beats CD-quality lossless")
     func hiResWins() throws {
         let best = try #require(selector.best(from: [
-            stream("audio/flac", bitDepth: 16, sampleRate: 44_100),
-            stream("audio/flac", bitDepth: 24, sampleRate: 96_000),
+            stream("audio/flac", bitDepth: 16, sampleRate: 44100),
+            stream("audio/flac", bitDepth: 24, sampleRate: 96000),
         ]))
         #expect(best.bitDepth == 24)
     }
@@ -275,7 +274,7 @@ struct StreamSelectionTests {
     func labelIgnored() throws {
         let best = try #require(selector.best(from: [
             stream("audio/mpeg", bitrate: 128_000, label: "LOSSLESS HI-RES 24-bit"),
-            stream("audio/flac", bitDepth: 24, sampleRate: 96_000, label: "low"),
+            stream("audio/flac", bitDepth: 24, sampleRate: 96000, label: "low"),
         ]))
         #expect(best.mimeType == "audio/flac")
     }

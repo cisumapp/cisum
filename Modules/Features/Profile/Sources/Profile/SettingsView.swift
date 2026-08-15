@@ -3,7 +3,6 @@ import Caching
 import Models
 import Networking
 import Player
-import Plugins
 import SwiftUI
 
 public struct SettingsView: View {
@@ -13,7 +12,6 @@ public struct SettingsView: View {
     @Environment(NetworkPathMonitor.self) private var networkMonitor
     @Environment(PlaybackControlSettings.self) private var playbackControlSettings
     @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
-    @Environment(\.playerViewModel) private var playerViewModel
     @Environment(AuthService.self) private var authService
 
     @State private var snapshot = PlaybackMetricsStore.Snapshot(

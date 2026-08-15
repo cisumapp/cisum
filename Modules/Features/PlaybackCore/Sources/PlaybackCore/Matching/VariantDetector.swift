@@ -79,7 +79,8 @@ public enum VariantDetector {
         // Order matters: a "Live (Karaoke Version)" is a karaoke track first and foremost.
         for candidate in [RecordingVariant.karaoke, .instrumental, .cover, .nightcore,
                           .spedUp, .slowed, .remix, .live, .acoustic, .demo,
-                          .extended, .radioEdit, .remastered] where found.contains(candidate) {
+                          .extended, .radioEdit, .remastered] where found.contains(candidate)
+        {
             return candidate
         }
         return .original

@@ -5,9 +5,8 @@
 
 import Foundation
 import Models
+@testable import PlaybackCore
 import Testing
-
-@testable import Player
 
 private func ref(_ id: String) -> PlayableRef {
     PlayableRef(
@@ -51,8 +50,8 @@ struct PlaybackQueueTests {
         queue.replace(with: [a, b])
 
         #expect(queue.advance() == b)
-        #expect(queue.advance() == nil)   // finished
-        #expect(queue.current == b)       // and stays put
+        #expect(queue.advance() == nil) // finished
+        #expect(queue.current == b) // and stays put
     }
 
     @Test("repeatAll wraps around")
@@ -200,12 +199,27 @@ struct PlaybackQueueTests {
     /// services for the same recording.
     @Test("refs compare by source and track id only")
     func refIdentity() {
-        let one = PlayableRef(songID: "s1", sourceID: "tidal", sourceTrackID: "42",
-                              title: "Ivy", artist: "Frank Ocean")
-        let two = PlayableRef(songID: nil, sourceID: "tidal", sourceTrackID: "42",
-                              title: "IVY (Album Version)", artist: "F. Ocean")
-        let other = PlayableRef(songID: "s1", sourceID: "qobuz", sourceTrackID: "42",
-                                title: "Ivy", artist: "Frank Ocean")
+        let one = PlayableRef(
+            songID: "s1",
+            sourceID: "tidal",
+            sourceTrackID: "42",
+            title: "Ivy",
+            artist: "Frank Ocean"
+        )
+        let two = PlayableRef(
+            songID: nil,
+            sourceID: "tidal",
+            sourceTrackID: "42",
+            title: "IVY (Album Version)",
+            artist: "F. Ocean"
+        )
+        let other = PlayableRef(
+            songID: "s1",
+            sourceID: "qobuz",
+            sourceTrackID: "42",
+            title: "Ivy",
+            artist: "Frank Ocean"
+        )
 
         #expect(one == two)
         #expect(one != other)
