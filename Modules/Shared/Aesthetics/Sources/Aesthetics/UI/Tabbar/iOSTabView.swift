@@ -100,7 +100,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
                         .tabViewBottomAccessory {
                             miniPlayerContent
                                 .measureTabAccessoryGeometry()
-                                .matchedTransitionSource(id: PlayerZoomID.miniPlayer, in: playerAnimationNamespace)
                                 .contentShape(.rect)
                                 .highPriorityGesture(TapGesture().onEnded { isCoverPresented.toggle() })
                         }
@@ -109,7 +108,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
                 NativeTabView
                     .tabViewBottomAccessory {
                         miniPlayerContent
-                            .matchedTransitionSource(id: PlayerZoomID.miniPlayer, in: playerAnimationNamespace)
                             .contentShape(.rect)
                             .highPriorityGesture(TapGesture().onEnded {
                                 isCoverPresented.toggle()
