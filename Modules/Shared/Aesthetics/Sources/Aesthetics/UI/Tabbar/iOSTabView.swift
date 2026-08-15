@@ -18,7 +18,7 @@ public enum iOSTabViewDebug {
 }
 #endif
 
-public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPlayerContent: View>: View {
+public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlayerContent: View, ZoomedPlayerContent: View>: View {
     @Environment(\.tabBarVisibility) private var tabBarVisibility
     @Environment(\.tabBarBottomAccessory) private var tabBarBottomAccessory
     @Environment(\.colorScheme) private var colorScheme
@@ -32,16 +32,23 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
     @State private var showMiniPlayer: Bool = false
     @State private var isSearchExpanded: Bool = false
     @Binding var expandMiniPlayer: Bool
+    /// Local state for the iOS 26 zoom cover presentation.  Using a local
+    /// `@State` instead of the `expandMiniPlayer` binding avoids triggering
+    /// `RootView.body` re-evaluation on tap, which would destroy the accessory
+    /// view identity and break the `matchedTransitionSource` pairing.
+    @State private var isCoverPresented = false
     var playerAnimationNamespace: Namespace.ID
 
     var searchText: Binding<String>
     var onSearchSubmit: () -> Void
     let playerContent: PlayerContent
 
+    /// The mini player view, passed as a concrete type so SwiftUI can track it
+    /// as the zoom transition source. (Reading from `tabBarBottomAccessory`
+    /// environment yields `AnyView?` which breaks the matched-geometry pairing.)
+    let miniPlayerContent: MiniPlayerContent
+
     /// The player presented in the iOS 26 zoom cover.
-    ///
-    /// Separate from `playerContent` because the overlay and the cover need different things: the
-    /// overlay hosts a view that manages its own expansion, the cover hosts one that does not.
     let zoomedPlayerContent: ZoomedPlayerContent
     let popupItemID: String
     let accentColor: Color
@@ -52,6 +59,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
         playerAnimationNamespace: Namespace.ID,
         searchText: Binding<String> = .constant(""),
         playerContent: PlayerContent,
+        miniPlayerContent: MiniPlayerContent,
         zoomedPlayerContent: ZoomedPlayerContent,
         popupItemID: String = "cisum-now-playing",
         accentColor: Color = .blue,
@@ -65,6 +73,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
         self.searchText = searchText
         self.onSearchSubmit = onSearchSubmit
         self.playerContent = playerContent
+        self.miniPlayerContent = miniPlayerContent
         self.zoomedPlayerContent = zoomedPlayerContent
         self.popupItemID = popupItemID
         self.accentColor = accentColor
@@ -75,15 +84,12 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
             if #available(iOS 26.0, *) {
                 #if DEBUG
                 if iOSTabViewDebug.showBothTabBars {
-                    // Side-by-side debug: native bar underneath, custom bar on top (non-interactive)
                     ZStack {
                         NativeTabView
                             .tabViewBottomAccessory {
-                                if let accessory = tabBarBottomAccessory {
-                                    accessory
-                                        .contentShape(.rect)
-                                        .onTapGesture { expandMiniPlayer.toggle() }
-                                }
+                                miniPlayerContent
+                                    .contentShape(.rect)
+                                    .onTapGesture { isCoverPresented.toggle() }
                             }
                         iOS26TabView
                             .allowsHitTesting(false)
@@ -92,26 +98,22 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
                 } else {
                     NativeTabView
                         .tabViewBottomAccessory {
-                            if let accessory = tabBarBottomAccessory {
-                                accessory
-                                    .measureTabAccessoryGeometry()
-                                    .playerZoomSource(in: playerAnimationNamespace)
-                                    .contentShape(.rect)
-                                    .onTapGesture { expandMiniPlayer.toggle() }
-                            }
+                            miniPlayerContent
+                                .measureTabAccessoryGeometry()
+                                .matchedTransitionSource(id: PlayerZoomID.miniPlayer, in: playerAnimationNamespace)
+                                .contentShape(.rect)
+                                .highPriorityGesture(TapGesture().onEnded { isCoverPresented.toggle() })
                         }
                 }
                 #else
                 NativeTabView
                     .tabViewBottomAccessory {
-                        if let accessory = tabBarBottomAccessory {
-                            accessory
-                                .playerZoomSource(in: playerAnimationNamespace)
-                                .contentShape(.rect)
-                                .onTapGesture {
-                                    expandMiniPlayer.toggle()
-                                }
-                        }
+                        miniPlayerContent
+                            .matchedTransitionSource(id: PlayerZoomID.miniPlayer, in: playerAnimationNamespace)
+                            .contentShape(.rect)
+                            .highPriorityGesture(TapGesture().onEnded {
+                                isCoverPresented.toggle()
+                            })
                     }
                 #endif
             } else {
@@ -129,14 +131,19 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPl
         // as a cover that zooms out of it. No overlay window, no pan gesture, no window stacking —
         // the system provides the transition and its interactive swipe-down dismiss.
         //
-        // `playerContent` is the same view the overlay hosts on iOS 17/18, so the player looks
-        // identical on both paths; only how it arrives on screen differs.
-        .playerZoomCover(isPresented: $expandMiniPlayer, in: playerAnimationNamespace) {
-            zoomedPlayerContent
+        // Applied directly (not through a @ViewBuilder wrapper) so SwiftUI can track the
+        // _ConditionalContent type for the zoom transition pairing.
+        .fullScreenCover(isPresented: $isCoverPresented) {
+            Group {
+                if #available(iOS 18.0, *) {
+                    zoomedPlayerContent
+                        .navigationTransition(.zoom(sourceID: PlayerZoomID.miniPlayer, in: playerAnimationNamespace))
+                } else {
+                    zoomedPlayerContent
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        #if DEBUG
-        .tabBarGeometryHUD()
-        #endif
         .environment(\.isSearchExpanded, $isSearchExpanded)
         // Single publisher for both OS paths. Keyed so rotation, search, tab-bar
         // visibility and width changes each republish — the previous .onAppear seed

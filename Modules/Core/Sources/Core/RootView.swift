@@ -62,6 +62,10 @@ public struct RootView: View {
                 isExpanded: $presentation.isExpanded,
                 collapsedFrame: .zero
             )),
+            miniPlayerContent: cisum.applyEnvironment(to: cisum.miniPlayer(
+                isExpanded: $presentation.isExpanded,
+                namespace: playerAnimationNamespace
+            )),
             // iOS 26 presents this in a zoom cover instead of the overlay. Same theme content,
             // without the expansion machinery the system replaces.
             zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
