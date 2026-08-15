@@ -39,16 +39,32 @@ struct AppleMusicCompactPlayer: View {
         .padding(.horizontal, 12)
         .frame(height: AppConstants.dynamicPlayerIslandHeight)
         .contentShape(.rect)
-        .onTapGesture { isPlayerExpanded = true }
+        .onTapGesture {
+            // Same animation the default theme's pill uses, so expansion feels identical whichever
+            // theme is selected — the flow is deliberately theme-independent.
+            withAnimation(.playerExpandAnimation) {
+                isPlayerExpanded = true
+            }
+        }
     }
 
+    /// The artwork that flies up into the expanded player.
+    ///
+    /// Removed from the tree entirely once expanded, rather than hidden. `matchedGeometryEffect`
+    /// pairs by `(id, namespace)` and tolerates only one source at a time; leaving this in place
+    /// with `.opacity(0)` would give SwiftUI two and it would pick one arbitrarily, which shows up
+    /// as the artwork jumping instead of flying.
+    @ViewBuilder
     private var artwork: some View {
-        KFImage.url(player.currentImageURL)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: 40, height: 40)
-            .background(Color.black.opacity(0.35))
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        if !isPlayerExpanded {
+            KFImage.url(player.currentImageURL)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: 40, height: 40)
+                .background(Color.black.opacity(0.35))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .matchedGeometryEffect(id: PlayerMatchedGeometry.artwork, in: namespace)
+        }
     }
 }
 
