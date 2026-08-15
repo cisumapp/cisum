@@ -315,6 +315,11 @@ public final class cisumModule {
         player.expandablePlayer(show: show, isExpanded: isExpanded, collapsedFrame: collapsedFrame)
     }
 
+    /// The full player for the iOS 26 zoom cover.
+    public func zoomedPlayer() -> some View {
+        player.zoomedPlayer()
+    }
+
     #if os(iOS) || os(macOS)
     public var systemVolumeController: SystemVolumeController {
         SystemVolumeController.shared

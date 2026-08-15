@@ -18,7 +18,7 @@ public enum iOSTabViewDebug {
 }
 #endif
 
-public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
+public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, ZoomedPlayerContent: View>: View {
     @Environment(\.tabBarVisibility) private var tabBarVisibility
     @Environment(\.tabBarBottomAccessory) private var tabBarBottomAccessory
     @Environment(\.colorScheme) private var colorScheme
@@ -37,6 +37,12 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
     var searchText: Binding<String>
     var onSearchSubmit: () -> Void
     let playerContent: PlayerContent
+
+    /// The player presented in the iOS 26 zoom cover.
+    ///
+    /// Separate from `playerContent` because the overlay and the cover need different things: the
+    /// overlay hosts a view that manages its own expansion, the cover hosts one that does not.
+    let zoomedPlayerContent: ZoomedPlayerContent
     let popupItemID: String
     let accentColor: Color
 
@@ -46,6 +52,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         playerAnimationNamespace: Namespace.ID,
         searchText: Binding<String> = .constant(""),
         playerContent: PlayerContent,
+        zoomedPlayerContent: ZoomedPlayerContent,
         popupItemID: String = "cisum-now-playing",
         accentColor: Color = .blue,
         @TabViewBuilder<SelectionValue> content: () -> [TabViewData<SelectionValue>],
@@ -58,6 +65,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
         self.searchText = searchText
         self.onSearchSubmit = onSearchSubmit
         self.playerContent = playerContent
+        self.zoomedPlayerContent = zoomedPlayerContent
         self.popupItemID = popupItemID
         self.accentColor = accentColor
     }
@@ -87,6 +95,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                             if let accessory = tabBarBottomAccessory {
                                 accessory
                                     .measureTabAccessoryGeometry()
+                                    .playerZoomSource(in: playerAnimationNamespace)
                                     .contentShape(.rect)
                                     .onTapGesture { expandMiniPlayer.toggle() }
                             }
@@ -97,6 +106,7 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                     .tabViewBottomAccessory {
                         if let accessory = tabBarBottomAccessory {
                             accessory
+                                .playerZoomSource(in: playerAnimationNamespace)
                                 .contentShape(.rect)
                                 .onTapGesture {
                                     expandMiniPlayer.toggle()
@@ -105,12 +115,24 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View>: View {
                     }
                 #endif
             } else {
+                // iOS 17/18: the custom bar, with the player hosted in the detached overlay
+                // window. The overlay used to wrap the whole Group, so it ran on iOS 26 too and
+                // the player was presented twice over — once here and once by the accessory.
                 iOS26TabView
+                    .universalOverlay(show: .constant(true)) {
+                        playerContent
+                            .ignoresSafeArea(.keyboard)
+                    }
             }
         }
-        .universalOverlay(show: .constant(true)) {
-            playerContent
-                .ignoresSafeArea(.keyboard)
+        // iOS 26: the accessory IS the collapsed player, so tapping it presents the expanded one
+        // as a cover that zooms out of it. No overlay window, no pan gesture, no window stacking —
+        // the system provides the transition and its interactive swipe-down dismiss.
+        //
+        // `playerContent` is the same view the overlay hosts on iOS 17/18, so the player looks
+        // identical on both paths; only how it arrives on screen differs.
+        .playerZoomCover(isPresented: $expandMiniPlayer, in: playerAnimationNamespace) {
+            zoomedPlayerContent
         }
         #if DEBUG
         .tabBarGeometryHUD()

@@ -83,6 +83,17 @@ public final class PlayerModule {
             .environment(PlayerThemeSettings.shared)
     }
 
+    /// The full player for the iOS 26 zoom cover.
+    ///
+    /// Distinct from `expandablePlayer` because that one carries the hand-rolled expansion — pan
+    /// gesture, window stacking, collapsed geometry — which the system provides on the cover path.
+    public func zoomedPlayer() -> some View {
+        ZoomedPlayerView()
+            .environment(viewModel)
+            .environment(viewModel.progress)
+            .environment(PlayerThemeSettings.shared)
+    }
+
     // MARK: - Lifecycle
 
     public func handleScenePhaseChange(_ phase: ScenePhase) {

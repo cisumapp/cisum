@@ -62,6 +62,9 @@ public struct RootView: View {
                 isExpanded: $presentation.isExpanded,
                 collapsedFrame: .zero
             )),
+            // iOS 26 presents this in a zoom cover instead of the overlay. Same theme content,
+            // without the expansion machinery the system replaces.
+            zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
             accentColor: cisum.playerAccentColor
         ) {
             Tab("Home", systemImage: "house.fill", value: TabItem.home) {
