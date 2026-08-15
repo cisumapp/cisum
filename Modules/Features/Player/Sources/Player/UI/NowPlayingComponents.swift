@@ -179,11 +179,15 @@ struct NowPlayingSongInfo: View, Equatable {
 
 struct NowPlayingProgressSection: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
+    /// The playback clock, read from its own observable so the ~30Hz tick invalidates this view
+    /// and nothing else. This view was already isolated for exactly that reason; the isolation
+    /// only actually holds now that `currentTime` no longer arrives via the shared view model.
+    @Environment(ProgressState.self) private var progress
 
     var body: some View {
         MusicProgressScrubber(
             mediaID: playerViewModel.currentVideoId,
-            currentTime: playerViewModel.currentTime,
+            currentTime: progress.currentTime,
             duration: playerViewModel.duration,
             onSeek: { newTime in
                 playerViewModel.seek(to: newTime)
@@ -397,13 +401,16 @@ struct LyricLineView: View {
     let isActive: Bool
     let distance: Int
     @Environment(PlayerViewModel.self) private var playerViewModel
+    /// The playback clock. Only the active line reads it (see the guard in `body`), so a tick
+    /// redraws that one line rather than every line in the `ForEach`.
+    @Environment(ProgressState.self) private var progress
 
     var body: some View {
         Group {
             // ponytail: read currentTime only when active — keeps the per-tick
             // re-render scoped to this one line instead of the whole ForEach.
             if isActive, let syllables = line.syllables, !syllables.isEmpty {
-                syllablesText(currentTime: playerViewModel.currentTime)
+                syllablesText(currentTime: progress.currentTime)
             } else {
                 Text(line.text)
                     .foregroundStyle(.primary.opacity(isActive ? 1.0 : opacityForDistance))

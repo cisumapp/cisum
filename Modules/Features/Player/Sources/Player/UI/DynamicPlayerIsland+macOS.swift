@@ -7,6 +7,7 @@
 
 import Aesthetics
 import Kingfisher
+import Models
 import SwiftUI
 
 #if os(macOS)
@@ -221,14 +222,10 @@ fileprivate extension DynamicPlayerIsland {
     }
 
     var playbackProgress: some View {
-        MusicProgressScrubber(
-            mediaID: playerViewModel.currentVideoId,
-            currentTime: playerViewModel.currentTime,
-            duration: playerViewModel.duration,
-            onSeek: { newTime in
-                playerViewModel.seek(to: newTime)
-            }
-        )
+        // A real view, not a computed property. A computed `some View` on the parent has no
+        // invalidation scope of its own, so reading the ~30Hz clock here redrew the whole island.
+        // As a separate struct, only this redraws.
+        MacPlaybackProgress()
     }
 
     var playbackControls: some View {
@@ -374,6 +371,23 @@ fileprivate extension DynamicPlayerIsland {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Audio")
+    }
+}
+
+/// The scrubber, isolated so the position clock does not invalidate the island around it.
+private struct MacPlaybackProgress: View {
+    @Environment(PlayerViewModel.self) private var playerViewModel
+    @Environment(ProgressState.self) private var progress
+
+    var body: some View {
+        MusicProgressScrubber(
+            mediaID: playerViewModel.currentVideoId,
+            currentTime: progress.currentTime,
+            duration: playerViewModel.duration,
+            onSeek: { newTime in
+                playerViewModel.seek(to: newTime)
+            }
+        )
     }
 }
 #endif
