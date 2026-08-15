@@ -1,8 +1,13 @@
 // swift-tools-version: 6.3
-// The swift-tools-version declares the minimum version of Swift required to build this package.
-
 import PackageDescription
 
+// Plugins manages the plugin catalog: browse the registry, download a module, store it,
+// enable/disable it, keep its settings, check for updates.
+//
+// It does NOT execute plugins and does NOT know what a MusicSource is. It vends its own
+// InstalledPlugin value type; the composition root adapts that to ProviderSDK's PluginBundle.
+// That is why ProviderSDK and YouTubeSDK and SpotifySDK and Player are all absent below, and
+// scripts/check-boundaries.sh fails the build if any of them reappear.
 let package = Package(
     name: "Plugins",
     platforms: [
@@ -16,31 +21,18 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
-        .package(path: "../../Shared/Models"),
-        .package(path: "../../Shared/Networking"),
-        .package(path: "../Authentication"),
-        .package(path: "../../Shared/Caching"),
-        .package(path: "../Player"),
+        .package(path: "../../Shared/Utilities"),
     ],
     targets: [
         .target(
             name: "Plugins",
             dependencies: [
-                .product(name: "ProviderSDK", package: "ProviderSDK"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-                .product(name: "SpotifySDK", package: "SpotifySDK"),
-                .product(name: "Models", package: "Models"),
-                .product(name: "Networking", package: "Networking"),
-                .product(name: "Authentication", package: "Authentication"),
-                .product(name: "Caching", package: "Caching"),
-                .product(name: "Player", package: "Player"),
-            ],
-            resources: [
-                .process("Resources"),
+                .product(name: "Utilities", package: "Utilities"),
             ]
+        ),
+        .testTarget(
+            name: "PluginsTests",
+            dependencies: ["Plugins"]
         ),
     ],
     swiftLanguageModes: [.v6]
