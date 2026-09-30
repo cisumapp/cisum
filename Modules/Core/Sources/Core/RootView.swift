@@ -48,7 +48,6 @@ public struct RootView: View {
 
     @Environment(\.isDynamicPlayerExpanded) private var isDynamicPlayerExpanded
     #endif
-
     public init(module: cisumModule) {
         self.cisum = module
         self.navigationState = module.navigationState
@@ -245,33 +244,99 @@ public struct RootView: View {
             Text(updateChecker.message)
         }
         #else
-        // The system split, doing the system's job.
+        // A native sidebar next to the content, with no strip across the top of the window.
         //
-        // Every earlier attempt hand-rolled this column and it never looked native: rows,
-        // selection pill, spacing, hover and the floating panel itself were all ours to get
-        // wrong. `NavigationSplitView` with a `.sidebar` list style hands all of that to
-        // AppKit, which is the only way it reads as a Mac app.
-        NavigationSplitView {
-            List(selection: selectedTabBinding) {
-                ForEach(TabItem.allCases, id: \.self) { tab in
-                    Label(tab.title, systemImage: tab.icon)
-                        .tag(tab)
-                }
-            }
-            .listStyle(.sidebar)
-        } detail: {
-            detailColumn
-        }
-        .navigationSplitViewStyle(.balanced)
+        // `MacSplitView` is `NSSplitViewController` hosted directly rather than SwiftUI's
+        // `NavigationSplitView`, so the columns start at the window's true top edge. The list
+        // is still native — `.listStyle(.sidebar)` draws the rows, selection and material —
+        // and the divider is AppKit's, so the sidebar resizes the way a Mac sidebar does.
+        //
+        // The window itself stays titled. That is what keeps keyboard focus, the system
+        // corner radius and the native resize edges, none of which a borderless window has.
+        MacSplitView(
+            sidebar: sidebarColumn,
+            detail: detailColumn,
+            detailKey: navigationState.selectedTab.index
+        )
+        // The window is created with `fullSizeContentView`, so its content view spans the
+        // full window — but AppKit still lays views out against the window's *content layout
+        // rect*, which excludes the title bar. That inset is what draws a strip above the
+        // sidebar and the record band, and it is applied by the layout guide above this view,
+        // so no `.toolbar` modifier can reach it.
+        //
+        // `.all` is required: `.container` resolves to the nearest container (the hosting
+        // view) rather than the window, which is why earlier attempts with `.container` had
+        // no effect. This matches how the Ora browser does it.
+        .ignoresSafeArea(.all)
         #endif
     }
 
     #if !os(iOS)
-    /// The content side: the floating search field, the selected tab, and the transport
-    /// pinned to the bottom of the window.
+    /// The navigation column: a native sidebar list with the window's traffic lights
+    /// drawn inside it.
+    private var sidebarColumn: some View {
+        List(selection: selectedTabBinding) {
+            ForEach(TabItem.allCases, id: \.self) { tab in
+                Label(tab.title, systemImage: tab.icon)
+                    .tag(tab)
+            }
+        }
+        .listStyle(.sidebar)
+        // Reserves the strip the traffic lights occupy. The controls are an overlay, and
+        // without this they would land on top of the first row. A `safeAreaInset` is used
+        // rather than padding so the row's own metrics and selection stay intact.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear.frame(height: 34)
+        }
+        .overlay(alignment: .topLeading) {
+            WindowControls()
+                .padding(.leading, 14)
+                .padding(.top, 14)
+        }
+        // The window can only be dragged from this strip.
+        //
+        // `isMovableByWindowBackground` would make all of it work, but that also makes every
+        // empty pixel draggable — including the sliver beside the resize handle, so grabbing
+        // it to resize the column drags the window instead. `mouseDownCanMoveWindow` limits
+        // dragging to this header, which is where a title bar's drag area normally lives.
+        .overlay(alignment: .top) {
+            WindowDragRegion()
+                .frame(height: 34)
+        }
+    }
+    #endif
+
+    #if !os(iOS)
+    /// The shell every macOS tab sits in: a record band with the transport floating over
+    /// it, and the tab's content permanently underneath.
+    ///
+    /// Living here rather than in each tab is the point — the band and the bar are chrome,
+    /// not content, so Home, Discover, Library and Search all get the same structure without
+    /// any of them knowing about it.
     private var detailColumn: some View {
         GeometryReader { proxy in
             VStack(spacing: 0) {
+                // ── The record band ──────────────────────────────────────────
+                // The disc is only ever visible in this strip. The transport floats inside
+                // it, near its bottom edge; everything below is opaque content, so the
+                // record reads as peeking out from behind the interface rather than as
+                // wallpaper behind it.
+                ZStack {
+                    cisum.vinylBackdrop()
+
+                    VStack {
+                        Spacer(minLength: 0)
+                        cisum.playerBar()
+                    }
+                    .padding(.top, 12)
+                    .padding(.bottom, 14)
+                }
+                .frame(height: Self.vinylBandHeight(for: proxy.size.height))
+                .clipped()
+
+                // ── Opaque content ───────────────────────────────────────────
+                // The fill is applied at the shell rather than in each tab, so no view can
+                // end up transparent over the window.
                 tabSurface
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background { backgroundFill }
@@ -279,16 +344,12 @@ public struct RootView: View {
                         searchOverlay.updateContext(newContext)
                     }
                     .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
-                    .ignoresSafeArea(edges: [.top, .bottom])
                     .usingRouter(cisum.router)
-                    // Over the content, not the transport: the bar owns the bottom strip.
+                    // Over the content, not the record: the band holds the transport and
+                    // nothing else, so the two never compete for the same strip.
                     .overlay(alignment: .top) {
                         SearchOverlayBar()
                             .padding(.top, 8)
-                    }
-                    .overlay(alignment: .bottom) {
-                        cisum.playerBar()
-                            .padding(.bottom, 14)
                     }
 
                 spotifyBackgroundRefresh
@@ -297,6 +358,15 @@ public struct RootView: View {
             .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Height of the strip the record is visible in.
+    ///
+    /// Sized to clear the floating transport plus a band of record above it, and clamped
+    /// against the window height so a short window doesn't hand most of the screen to the
+    /// backdrop and starve the content below.
+    private static func vinylBandHeight(for windowHeight: CGFloat) -> CGFloat {
+        min(180, max(120, windowHeight * 0.24))
     }
     #endif
 
@@ -465,9 +535,9 @@ public struct RootView: View {
             selectedTabContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Clears the floating search field and leaves room for the transport below.
+        // Clears the floating search field. The transport lives in the band above rather
+        // than floating over this, so there is nothing to clear at the bottom.
         .contentMargins(.top, 56)
-        .contentMargins(.bottom, 96)
         .contentMargins(.trailing, isDynamicPlayerExpanded.wrappedValue ? 430 : 0)
         .animation(.playerExpandAnimation, value: isDynamicPlayerExpanded.wrappedValue)
     }

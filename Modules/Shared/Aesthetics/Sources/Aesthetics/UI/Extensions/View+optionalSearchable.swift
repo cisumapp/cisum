@@ -10,15 +10,13 @@ public extension View {
         onSuggestionTap: ((String) -> Void)? = nil
     ) -> some View {
         #if os(macOS)
-        searchable(text: text, placement: .toolbar) {
-            ForEach(suggestions, id: \.self) { suggestion in
-                Button {
-                    onSuggestionTap?(suggestion)
-                } label: {
-                    Text(suggestion)
-                }
-            }
-        }
+        // No-op on macOS. `searchable(placement: .toolbar)` asks AppKit for a toolbar item,
+        // which materialises as a bar across the top of the window — exactly the chrome the
+        // macOS shell is trying not to have, and it only ever appeared on the Search tab.
+        //
+        // macOS gets its search field from `SearchOverlayBar`, which the shell floats over
+        // the content and binds to the same `searchViewModel.searchText`.
+        self
         #else
         if #available(iOS 26.0, *) {
             searchable(

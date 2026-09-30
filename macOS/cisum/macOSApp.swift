@@ -5,6 +5,8 @@
 //  Created by Aarav Gupta on 18/03/26.
 //
 
+import Aesthetics
+import AppKit
 import Core
 import Models
 import Player
@@ -16,136 +18,104 @@ import YouTubeSDK
 
 @main
 struct macOSApp: App {
-    @Environment(\.scenePhase) private var scenePhase
-
-    private let youtube: YouTube
-    private let cisum: cisumModule
-    @State private var searchOverlay = SearchOverlayController()
-
-    init() {
-        PerfLog.info("cisum macOS app initializing")
-        let timer = PerfLog.start("macos-app-init")
-        self.youtube = YouTube.shared
-        self.cisum = cisumModule()
-        PerfLog.end(timer)
-    }
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            cisum.rootView
-                .environment(searchOverlay)
-                .tint(cisum.playerAccentColor)
-                .onOpenURL { url in
-                    PerfLog.info(" Handling incoming URL: \(url.absoluteString)")
-                    cisum.handleIncomingURL(url)
-                }
-                .onAppear {
-                    PerfLog.mark("root-view-appeared")
-                }
-                .modelContainer(cisum.modelContainer)
-                .background { WindowChrome() }
-        }
-        // Hides the title bar's *text and background* while keeping the window a normal
-        // titled, closable, miniaturizable, resizable window: the traffic lights stay, the
-        // edges still resize, the green button still zooms, and the title bar's area still
-        // drags the window. That is what the reference does — content running to the top
-        // of the window with the lights floating over the sidebar.
-        //
-        // This is deliberately not `.borderless`, which drops the whole title bar and with
-        // it every one of those affordances.
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 1200, height: 800)
-        .onChange(of: scenePhase) { _, newPhase in
-            PerfLog.info("Scene phase changed: \(String(describing: newPhase))")
-            cisum.handleScenePhaseChange(newPhase)
-        }
-
+        // Only Settings is a SwiftUI scene. The main window is built in AppKit
+        // (`MainWindowFactory`) because SwiftUI would otherwise own the `NSWindow` and rewrite
+        // its `styleMask` for `.windowStyle(.hiddenTitleBar)`, undoing `.fullSizeContentView`
+        // and leaving a strip above the sidebar.
         Settings {
-            cisum.settingsView
+            appDelegate.cisum.settingsView
         }
     }
 }
 
-// MARK: - Window chrome
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private(set) lazy var cisum = {
+        let timer = PerfLog.start("macos-app-init")
+        PerfLog.info("cisum macOS app initializing")
+        // Touches `YouTube.shared` and the fallback dependency graph, matching the
+        // initialisation order this app used when `WindowGroup` owned the window.
+        _ = YouTube.shared
+        let module = cisumModule()
+        PerfLog.end(timer)
+        return module
+    }()
 
-/// Makes the window behave the way the layout assumes: content running to the true top
-/// edge, no title text, no separator, and the system traffic lights moved into the
-/// sidebar's top-left corner.
-///
-/// The load-bearing part is `.fullSizeContentView`. With it the content view spans the
-/// whole window, title bar included, so AppKit stops reserving a strip and stops insetting
-/// the safe area. Without it the content is pushed down by a title bar height that no
-/// amount of `ignoresSafeArea` can reach, which parks a band of bare window background
-/// across the top and leaves the traffic lights stranded above the sidebar panel.
-///
-/// Scoped to the title bar, the traffic light frames and the layer's radius. It
-/// deliberately does not touch `isOpaque` or the background colour, which is where an
-/// earlier attempt at custom windowing turned the window transparent.
-private struct WindowChrome: NSViewRepresentable {
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
+    private var window: NSWindow?
+    private let searchOverlay = SearchOverlayController()
 
-    func makeNSView(context _: Context) -> NSView {
-        NSView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        // The view is not in a window until after this call returns.
-        Task { @MainActor in
-            context.coordinator.attach(to: nsView.window)
-        }
-    }
-
-    /// Owns the window and reapplies the chrome whenever AppKit relayouts the title bar.
-    ///
-    /// AppKit resets the standard buttons' frames on resize, which would snap them out of
-    /// the sidebar the moment the window was resized, so the placement is reapplied rather
-    /// than done once.
-    final class Coordinator {
-        private weak var window: NSWindow?
-        /// Observed so the placement survives a resize. Deliberately not torn down in
-        /// `deinit`, which cannot touch a non-`Sendable` stored property: the block captures
-        /// `self` weakly and the observation is scoped to `object: window`, so it neither
-        /// leaks the coordinator nor fires for a closed window. Replaced in `attach`.
-        private var resizeObserver: NSObjectProtocol?
-
-        func attach(to window: NSWindow?) {
-            guard let window else { return }
-
-            if self.window !== window {
-                self.window = window
-                if let resizeObserver {
-                    NotificationCenter.default.removeObserver(resizeObserver)
-                }
-                resizeObserver = NotificationCenter.default.addObserver(
-                    forName: NSWindow.didResizeNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.applyChrome() }
-                }
+    func applicationDidFinishLaunching( _: Notification) {
+        let root = cisum.rootView
+            .environment(searchOverlay)
+            .tint(cisum.playerAccentColor)
+            .onOpenURL { url in
+                PerfLog.info("Handling incoming URL: \(url.absoluteString)")
+                self.cisum.handleIncomingURL(url)
             }
+            .onAppear { PerfLog.mark("root-view-appeared") }
+            .modelContainer(cisum.modelContainer)
+            // Publishes the `NSWindow` so `WindowControls` can drive it, and gets the
+            // system's own traffic lights out of the way.
+            .windowBridge()
+            .background { WindowAccessor() }
 
-            applyChrome()
+        let window = MainWindowFactory.make(rootView: root)
+        self.window = window
+        window.makeKeyAndOrderFront(nil)
+        // Showing the window is what triggers the hosted content's first layout pass, and that
+        // is where `NSWindow` would shrink itself to the content's fitting size. Re-assert the
+        // intended size once that pass has happened.
+        MainWindowFactory.applyInitialFrame(to: window)
+
+        observeLifecycle()
+    }
+
+    /// Standard Mac behaviour: closing the last window quits.
+    func applicationShouldTerminateAfterLastWindowClosed( _: NSApplication) -> Bool {
+        true
+    }
+
+    func applicationShouldOpenUntitledFile( _: NSApplication) -> Bool {
+        window == nil
+    }
+
+    /// `onOpenURL` only fires for SwiftUI scenes, so universal and custom links arrive here.
+    func application( _: NSApplication, open urls: [URL]) {
+        for url in urls {
+            cisum.handleIncomingURL(url)
         }
+    }
 
-        private func applyChrome() {
-            guard let window, let contentView = window.contentView else { return }
+    // MARK: - Lifecycle
 
-            window.styleMask.insert(.fullSizeContentView)
-            window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
-            // Without this the system still draws its hairline under the title bar, which
-            // reads as a stray divider across the top of the sidebar.
-            window.titlebarSeparatorStyle = .none
-
-            contentView.wantsLayer = true
-            contentView.layer?.masksToBounds = true
-            contentView.layer?.cornerRadius = 12
-            // `continuous` matches the system's own corner curve, so the override reads as a
-            // slightly tighter version of the standard window rather than a hard-cornered box.
-            contentView.layer?.cornerCurve = .continuous
+    /// A window built in AppKit does not drive SwiftUI's `scenePhase`, so the phase is
+    /// translated from `NSApplication`'s own notifications. The only thing the app does with
+    /// it is flush pending settings writes when it is no longer active.
+    private func observeLifecycle() {
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cisum.handleScenePhaseChange(.active) }
+        }
+        center.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cisum.handleScenePhaseChange(.inactive) }
+        }
+        center.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cisum.handleScenePhaseChange(.background) }
         }
     }
 }
