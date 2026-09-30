@@ -62,9 +62,12 @@ public struct LibraryView: View {
         }
         #else
         // `NavigationBarView` is built on UIKit's blur + scroll-driven title, neither of
-        // which exists on AppKit. The macOS window supplies its own frame, so render the
-        // content directly.
-        content
+        // which exists on AppKit, so there is no nav bar here to supply the `ScrollView`.
+        // Without one, the sections overflow the window and the shell clips them.
+        ScrollView {
+            content
+                .contentMargins(.top, 8)
+        }
         #endif
     }
 
@@ -126,7 +129,11 @@ public struct LibraryView: View {
                 )
             }
         }
+        #if os(iOS)
+        // Clears the floating mini player, which sits over the content on iOS. The macOS
+        // transport lives in the band above the content, so nothing floats here.
         .safeAreaPadding(.bottom, 140)
+        #endif
         // YouTube import sheet
         .sheet(isPresented: $viewModel.isPresentingYouTubeImport) {
             YouTubePlaylistImportSheet { importedPlaylistID in

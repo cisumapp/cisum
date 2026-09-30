@@ -285,13 +285,12 @@ public struct RootView: View {
         // Reserves the strip the traffic lights occupy. The controls are an overlay, and
         // without this they would land on top of the first row. A `safeAreaInset` is used
         // rather than padding so the row's own metrics and selection stay intact.
+        //
+        // This has to come *before* the two overlays below. Applied after them it shrinks the
+        // bounds they align to, which drops the controls onto the "Home" row instead of
+        // parking them 14pt from the top of the window.
         .safeAreaInset(edge: .top, spacing: 0) {
             Color.clear.frame(height: 34)
-        }
-        .overlay(alignment: .topLeading) {
-            WindowControls()
-                .padding(.leading, 14)
-                .padding(.top, 14)
         }
         // The window can only be dragged from this strip.
         //
@@ -299,11 +298,27 @@ public struct RootView: View {
         // empty pixel draggable — including the sliver beside the resize handle, so grabbing
         // it to resize the column drags the window instead. `mouseDownCanMoveWindow` limits
         // dragging to this header, which is where a title bar's drag area normally lives.
+        //
+        // Added before the controls, and inset past them, because this view swallows the
+        // mouse-down to start a window drag. Laid over the traffic lights it made all three
+        // of them dead: the drag began instead of the tap, so close, minimise and zoom never
+        // ran.
         .overlay(alignment: .top) {
             WindowDragRegion()
+                .padding(.leading, Self.windowControlsWidth)
                 .frame(height: 34)
         }
+        .overlay(alignment: .topLeading) {
+            WindowControls()
+                .padding(.leading, 14)
+                .padding(.top, 14)
+        }
     }
+
+    /// Trailing edge of the traffic lights, measured from the sidebar's leading edge: the
+    /// 14pt inset plus three 12pt buttons and two 8pt gaps. `WindowDragRegion` starts here so
+    /// the two never overlap.
+    private static let windowControlsWidth: CGFloat = 14 + 3 * 12 + 2 * 8
     #endif
 
     #if !os(iOS)

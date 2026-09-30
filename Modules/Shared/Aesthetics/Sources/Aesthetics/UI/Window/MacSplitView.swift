@@ -65,9 +65,13 @@ public struct MacSplitView: NSViewControllerRepresentable {
         let sidebarItem = NSSplitViewItem(viewController: sidebarHost)
         // Matches the reference's proportions and stops the column being dragged to a
         // width that leaves no room for the content.
-        sidebarItem.minimumThickness = 190
+        sidebarItem.minimumThickness = Self.sidebarWidth
         sidebarItem.maximumThickness = 320
         sidebarItem.canCollapse = false
+        // Left without an identifier deliberately: AppKit then has no key under which to
+        // autosave this column's frame, so a stale width from an earlier build cannot come
+        // back and override the one set below.
+        sidebarItem.viewController.view.identifier = nil
 
         let detailItem = NSSplitViewItem(viewController: detailHost)
         detailItem.minimumThickness = 420
@@ -83,7 +87,23 @@ public struct MacSplitView: NSViewControllerRepresentable {
         return split
     }
 
-    public func updateNSViewController( _: NSSplitViewController, context: Context) {
+    /// Width the navigation column opens at, and the narrowest it can be dragged to.
+    ///
+    /// Apple Music's sidebar is a fixed, narrow column, so the shell opens at the minimum and
+    /// grows only if the user drags it wider.
+    public static let sidebarWidth: CGFloat = 190
+
+    public func updateNSViewController(_ controller: NSSplitViewController, context: Context) {
+        // The divider position is only valid once the split view has been given a size, which
+        // has not happened by the time `makeNSViewController` returns. One deferred pass is
+        // enough, and doing it only once leaves the user's own drag widths alone afterwards.
+        if !context.coordinator.hasSetInitialWidth {
+            context.coordinator.hasSetInitialWidth = true
+            DispatchQueue.main.async {
+                controller.splitView.setPosition(Self.sidebarWidth, ofDividerAt: 0)
+            }
+        }
+
         context.coordinator.detailKey = detailKey
         // Only swap the hosted root when the tab actually changed. Reassigning on every update
         // would rebuild the detail column's scroll position, focus and animations each time
@@ -97,6 +117,7 @@ public struct MacSplitView: NSViewControllerRepresentable {
         var sidebarHost: NSHostingController<AnyView>?
         var detailHost: NSHostingController<AnyView>?
         var detailKey: Int = 0
+        var hasSetInitialWidth = false
     }
 }
 #endif

@@ -78,8 +78,13 @@ public struct DiscoverView: View {
             }
         }
         .padding(.horizontal)
+        #if os(iOS)
+        // Clears the floating mini player, which sits over the content on iOS. The macOS
+        // transport lives in the band above the content, so nothing floats here.
         .padding(.bottom, 120)
+        // Reserves the translucent nav bar, which is drawn over the scroll content.
         .contentMargins(.top, 140)
+        #endif
         .task {
             if let cached = await DiscoverCache.load() {
                 sections = cached.sections
