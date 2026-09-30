@@ -46,7 +46,7 @@ public extension Color {
     static var cisumChromeStrong: Color {
         .white.opacity(0.32)
     }
-
+    
     static var cisumTrackActive: Color {
         .white.opacity(0.9)
     }

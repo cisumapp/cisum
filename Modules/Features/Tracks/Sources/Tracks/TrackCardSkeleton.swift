@@ -6,8 +6,12 @@ public struct TrackCardSkeleton: View {
     public init() {}
 
     public var body: some View {
+        #if os(iOS)
         let screenWidth = UIScreen.main.bounds.width
-        let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
+        #elseif os(macOS)
+        let screenWidth = NSScreen.main?.frame.width ?? 0
+        #endif
+        let scale = ResponsiveLayout.scaleFactor(forScreenWidth: screenWidth)
 
         VStack(alignment: .leading) {
             SkeletonBox(cornerRadius: 0)

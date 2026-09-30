@@ -5,7 +5,6 @@
 //  Created by Aarav Gupta on 19/05/26.
 //
 
-#if os(iOS)
 import Aesthetics
 import Kingfisher
 import SwiftUI
@@ -30,15 +29,15 @@ public final class AlbumViewModel {
         guard !hasFetched else { return }
         hasFetched = true
 
-        let data: Data? = await withCheckedContinuation { continuation in
-            KingfisherManager.shared.retrieveImage(with: thumbnailURL) { result in
-                switch result {
-                case let .success(value):
-                    continuation.resume(returning: value.image.pngData())
-                case .failure:
-                    continuation.resume(returning: nil)
-                }
-            }
+        // `data()` hands back the original bytes on a network fetch and re-serialises
+        // from the cache on a hit, so it is preferred over re-encoding the image.
+        // `pngData()` is the fallback for the rare case where neither yields anything.
+        let data: Data?
+        do {
+            let result = try await KingfisherManager.shared.retrieveImage(with: thumbnailURL)
+            data = result.data() ?? result.image.pngData()
+        } catch {
+            data = nil
         }
 
         guard let data,
@@ -51,4 +50,3 @@ public final class AlbumViewModel {
         palette = extracted
     }
 }
-#endif

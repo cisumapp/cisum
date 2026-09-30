@@ -30,6 +30,34 @@ public enum ResponsiveLayout {
         }
     }
 
+    /// The largest multiplier `desktopScaleFactor` will ever return.
+    public static let desktopScaleCeiling: CGFloat = 1.2
+
+    /// Scaling for a macOS window.
+    ///
+    /// `DeviceSizeClass.scaleFactor(for:)` is normalized to an iPhone and grows without bound,
+    /// which is right on a phone (and on iPad, where a wider screen genuinely wants bigger
+    /// artwork) but wrong for a desktop window: a 1512pt-wide Mac display yields 3.88×, turning
+    /// a 60pt track row into a 232pt one. macOS has no width-driven type ramp to join — a window
+    /// can be resized independently of its display — so the multiplier is capped instead.
+    ///
+    /// Use this for every layout that multiplies a fixed point size by a screen-width scale.
+    public static func desktopScaleFactor(for width: CGFloat) -> CGFloat {
+        min(width / 390.0, desktopScaleCeiling)
+    }
+
+    /// The scale multiplier appropriate to the current platform, given a screen width.
+    ///
+    /// Prefer this over calling `DeviceSizeClass.scaleFactor` directly, so macOS windows
+    /// cannot accidentally inherit the uncapped iPhone ramp.
+    public static func scaleFactor(forScreenWidth width: CGFloat) -> CGFloat {
+        #if os(macOS)
+        desktopScaleFactor(for: width)
+        #else
+        DeviceSizeClass(width: width).scaleFactor(for: width)
+        #endif
+    }
+
     /// The determinable states the system accessory actually has.
     ///
     /// Every field is observable from the main SwiftUI tree, so the state can be

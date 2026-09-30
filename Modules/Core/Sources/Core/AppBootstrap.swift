@@ -144,6 +144,26 @@ enum AppBootstrap {
             YouTubeVideoSource(youtube: youtube),
         ])
         sourceRegistry.preferredSourceID = "youtube_music"
+        PerfLog.info("AppBootstrap: SourceRegistry seeded with YouTube sources, preferredSourceID='youtube_music'")
+
+        // Rebuild sources whenever a plugin is enabled/disabled/installed/removed.
+        pluginStore.onPluginsChanged = { @MainActor [sourceRegistry] in
+            PerfLog.info("AppBootstrap: onPluginsChanged — rebuilding SourceRegistry")
+            var sources: [any MusicSource] = [
+                YouTubeMusicSource(youtube: youtube),
+                YouTubeVideoSource(youtube: youtube),
+            ]
+            await sources.append(contentsOf: SourceBuilder.buildSources(from: pluginStore))
+            sourceRegistry.replace(with: sources)
+
+            if let firstPlugin = sources.first(where: { $0.id != "youtube_music" && $0.id != "youtube" }) {
+                sourceRegistry.preferredSourceID = firstPlugin.id
+                PerfLog.info("AppBootstrap: after rebuild, preferredSourceID='\(firstPlugin.id)'")
+            } else {
+                sourceRegistry.preferredSourceID = "youtube_music"
+                PerfLog.info("AppBootstrap: after rebuild, no plugins — preferredSourceID='youtube_music'")
+            }
+        }
 
         let searchCache = SearchResultsCache.shared
         let radioSessionStore = RadioSessionStore.shared
@@ -157,10 +177,10 @@ enum AppBootstrap {
         let spotifySessionCoordinator = SpotifySessionCoordinator.shared
         let spotifyCacheStore = SpotifyCacheStore(modelContainer: modelContainer)
         spotifySessionCoordinator.setCacheDelegate(spotifyCacheStore)
-        #if os(iOS)
+        // Touching `ImageColorExtractor.shared` here forces the palette cache to exist
+        // before the first album view asks for one.
         let artworkColorExtractor = ImageColorExtractor.shared
         ArtworkPipeline.configure()
-        #endif
         let playerPresentationController = PlayerPresentationController()
         let searchOverlayController = SearchOverlayController()
         let coreServices = CoreServices(
@@ -175,6 +195,7 @@ enum AppBootstrap {
         )
 
         Task { @MainActor in
+            PerfLog.info("AppBootstrap: loading plugins into SourceRegistry")
             await pluginStore.load()
 
             // Native SDKs and downloaded plugins go into the same registry and are
@@ -184,10 +205,21 @@ enum AppBootstrap {
                 YouTubeMusicSource(youtube: youtube),
                 YouTubeVideoSource(youtube: youtube),
             ]
+            PerfLog.info("AppBootstrap: building sources from plugin store — enabled plugins: \(pluginStore.enabled().map(\.id))")
             await sources.append(contentsOf: SourceBuilder.buildSources(from: pluginStore))
 
             sourceRegistry.replace(with: sources)
-            sourceRegistry.preferredSourceID = sourceRegistry.preferredSourceID ?? "youtube_music"
+
+            // Prefer the first enabled plugin (ISRC-based provider) over YouTube.
+            // Plugins provide better audio quality and standardized metadata; YouTube
+            // remains the fast fallback when no plugin matches.
+            if let firstPlugin = sources.first(where: { $0.id != "youtube_music" && $0.id != "youtube" }) {
+                sourceRegistry.preferredSourceID = firstPlugin.id
+                PerfLog.info("AppBootstrap: preferredSourceID set to plugin '\(firstPlugin.id)'")
+            } else {
+                sourceRegistry.preferredSourceID = "youtube_music"
+                PerfLog.info("AppBootstrap: no plugins found, preferredSourceID remains 'youtube_music'")
+            }
         }
 
         Task { @MainActor in

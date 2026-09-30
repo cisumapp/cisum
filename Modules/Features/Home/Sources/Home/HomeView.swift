@@ -39,9 +39,13 @@ public struct HomeView: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         NavigationBarView(title: "Home", scrollOffset: $scrollOffset) {
             content
         }
+        #elseif os(macOS)
+        content
+        #endif
     }
 
     var content: some View {

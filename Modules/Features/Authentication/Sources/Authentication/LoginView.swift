@@ -233,9 +233,11 @@ public struct LoginView: View {
                 Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
             }
 
+            #if os(iOS)
             AppleSignInButton(action: handleAppleSignIn)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52) // Approximate height for standard buttons
+            #endif
 
             Button(action: handleGoogleSignIn) {
                 HStack {

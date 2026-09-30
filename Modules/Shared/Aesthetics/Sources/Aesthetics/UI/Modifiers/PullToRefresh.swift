@@ -65,7 +65,9 @@ struct PullToRefresh: ViewModifier {
 
         // Now it works perfectly: it only triggers when they physically stretch it down!
         if pullDistance > threshold, !hasReachedThreshold {
+            #if os(iOS)
             UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+            #endif
             hasReachedThreshold = true
         }
 

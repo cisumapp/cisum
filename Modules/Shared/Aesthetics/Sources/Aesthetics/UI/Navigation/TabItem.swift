@@ -8,6 +8,29 @@ public enum TabItem: String, CaseIterable {
     }
 }
 
+public extension TabItem {
+    /// Sidebar / tab-bar label. Single source of truth so the macOS sidebar and the
+    /// iOS tab bar can never drift apart.
+    var title: String {
+        switch self {
+        case .home: "Home"
+        case .discover: "Discover"
+        case .library: "Library"
+        case .search: "Search"
+        }
+    }
+
+    /// SF Symbol for the tab.
+    var icon: String {
+        switch self {
+        case .home: "house.fill"
+        case .discover: "globe"
+        case .library: "music.note.list"
+        case .search: "magnifyingglass"
+        }
+    }
+}
+
 public enum ScrollPhases: Equatable {
     case idle
     case interacting

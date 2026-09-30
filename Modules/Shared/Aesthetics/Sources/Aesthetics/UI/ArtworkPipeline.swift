@@ -1,4 +1,3 @@
-#if os(iOS)
 import Kingfisher
 
 /// One-time Kingfisher configuration for the artwork pipeline.
@@ -13,4 +12,3 @@ public enum ArtworkPipeline {
         KingfisherManager.shared.defaultOptions = [.cacheOriginalImage, .backgroundDecode]
     }
 }
-#endif

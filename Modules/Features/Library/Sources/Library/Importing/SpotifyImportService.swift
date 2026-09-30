@@ -129,7 +129,7 @@ public final class SpotifyImportService: ImportService {
         // Normal playlists: detailsWithAllTracks fetches the full track list in one shot.
         let playlist = try await sdk.playlists.detailsWithAllTracks(id: playlistID)
         let tracks = (playlist.tracks?.items ?? []).map(Self.incoming(from:))
-        return await PerfLog.measure("SpotifyImportService.page(\(tracks.count))") {
+        return PerfLog.measure("SpotifyImportService.page(\(tracks.count))") {
             ImportTrackPage(tracks: tracks, nextCursor: nil, startOffset: offset)
         }
     }

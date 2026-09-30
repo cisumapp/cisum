@@ -1,5 +1,5 @@
 {
-  "originHash" : "6876a00e8faf9893e18e25352c66caf42ef9989501769e396ded7edfd5e97d22",
+  "originHash" : "7e40e8a9070424a5ec9eb21c0df0be26d04ead370bd99a2565a5426b6c375218",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -8,24 +8,6 @@
       "state" : {
         "revision" : "76bbbe374f3aa49f1dde793d9a465864b3c03d9d",
         "version" : "1.2.3"
-      }
-    },
-    {
-      "identity" : "ffmpeg-kit-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tylerjonesio/ffmpeg-kit-spm.git",
-      "state" : {
-        "revision" : "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
-        "version" : "5.1.2"
-      }
-    },
-    {
-      "identity" : "javascriptkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftwasm/JavaScriptKit.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "fba3be0d4647583b139a8a0af0e187ab97855713"
       }
     },
     {
@@ -56,39 +38,12 @@
       }
     },
     {
-      "identity" : "supabase-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/supabase/supabase-swift",
-      "state" : {
-        "revision" : "a4e684d979f4a5fa017ebd9d5f635a4bc03830fb",
-        "version" : "2.47.0"
-      }
-    },
-    {
       "identity" : "swift-asn1",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
         "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
         "version" : "1.7.1"
-      }
-    },
-    {
-      "identity" : "swift-clocks",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-clocks",
-      "state" : {
-        "revision" : "72d749bf341b78851203066ab421869b783ec42a",
-        "version" : "1.1.0"
-      }
-    },
-    {
-      "identity" : "swift-concurrency-extras",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-concurrency-extras",
-      "state" : {
-        "revision" : "a90e2e40a7a840a853dd29e57cbef5dbb72c9d5b",
-        "version" : "1.4.0"
       }
     },
     {
@@ -101,39 +56,12 @@
       }
     },
     {
-      "identity" : "swift-http-types",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-http-types.git",
-      "state" : {
-        "revision" : "db774a277f60063a32d854f2980299caf06da041",
-        "version" : "1.6.0"
-      }
-    },
-    {
       "identity" : "swift-java-jni-core",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-java-jni-core",
       "state" : {
         "revision" : "b440a0be98381550cf189c903782e817619ffa05",
         "version" : "0.5.1"
-      }
-    },
-    {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax",
-      "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "cb281f343fd953280336dcbd3822cdf47c182f5b",
-        "version" : "1.10.0"
       }
     }
   ],

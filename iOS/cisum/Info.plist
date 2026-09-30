@@ -2,8 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>studio.cisum.spotify.refresh</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -22,13 +24,5 @@
 		<string>fetch</string>
 		<string>audio</string>
 	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>studio.cisum.spotify.refresh</string>
-	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>This app requires camera access to capture media.</string>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>cisum uses Apple Music access to import your library playlists and songs.</string>
 </dict>
 </plist>

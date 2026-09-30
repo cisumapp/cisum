@@ -424,11 +424,24 @@ public class SearchViewModel: SearchViewModelInterface {
 
         switch result {
         case let .success(items):
-            federatedSections[index].items = Array(items.prefix(sectionLimit))
+            let limited = Array(items.prefix(sectionLimit))
+            federatedSections[index].items = limited
             federatedSections[index].state = .success
+            if service == .providerSDK {
+                PerfLog.info("SearchViewModel.applyFederatedSearchResult(.providerSDK): \(limited.count) items")
+                for item in limited {
+                    if case let .providerSDK(ref) = item.payload {
+                        let reprs = ref.representations.map { "providerID=\($0.providerID) trackID=\($0.providerTrackID)" }
+                        PerfLog.info("  providerSDK result: '\(item.title)' — representations: \(reprs)")
+                    }
+                }
+            }
         case let .failure(error):
             federatedSections[index].items = []
             federatedSections[index].state = .error(error.localizedDescription)
+            if service == .providerSDK {
+                PerfLog.error("SearchViewModel.applyFederatedSearchResult(.providerSDK) FAILED: \(error)")
+            }
         }
     }
 
@@ -832,29 +845,31 @@ public class SearchViewModel: SearchViewModelInterface {
 
     nonisolated func providerPriority(for service: FederatedService) -> Int {
         switch service {
-        case .youtubeMusic:
-            1
-        case .youtube:
-            2
-        case .spotify:
-            3
         case .providerSDK:
+            // ISRC-based providers (Qobuz, Tidal, etc.) rank highest — they carry
+            // better audio quality and standardized metadata.
+            1
+        case .youtubeMusic:
+            2
+        case .youtube:
+            3
+        case .spotify:
             4
         }
     }
 
     private nonisolated func providerConfidenceBoost(for service: FederatedService, queryHasArtistHint: Bool) -> Double {
         switch service {
+        case .providerSDK:
+            // ISRC-based providers get the highest confidence boost — they
+            // provide better audio quality and standardized metadata.
+            queryHasArtistHint ? 0.05 : 0.06
         case .youtube:
             queryHasArtistHint ? 0.03 : 0.04
         case .youtubeMusic:
             queryHasArtistHint ? 0.02 : 0.03
         case .spotify:
             0
-        case .providerSDK:
-            // ProviderSDK tracks already carry quality metadata — the quality boost
-            // handles the ranking lift; provider boost stays neutral here.
-            0.01
         }
     }
 
@@ -1109,8 +1124,11 @@ public class SearchViewModel: SearchViewModelInterface {
         guard let sources = await MainActor.run(resultType: [any MusicSource]?.self, body: {
             self.sourceRegistry?.sources.filter { $0.capabilities.contains(.search) }
         }), !sources.isEmpty else {
+            PerfLog.info("SearchViewModel.fetchProviderSDKSectionItems: no sources with .search capability")
             return .success([])
         }
+
+        PerfLog.info("SearchViewModel.fetchProviderSDKSectionItems: searching \(sources.count) sources: \(sources.map { "\($0.id) caps=\($0.capabilities)" })")
 
         // Fan-out lives here, in the Search feature, rather than in ProviderSDK. That is the
         // boundary the reset draws: the SDK talks to one service at a time and returns what it
@@ -1323,8 +1341,16 @@ public class SearchViewModel: SearchViewModelInterface {
     }
 
     private nonisolated func parseVideoDurationSeconds(_ value: String?) -> TimeInterval? {
-        guard let value else { return nil }
-        return Double(value)
+        guard let value, !value.isEmpty else { return nil }
+        if let numeric = Double(value) {
+            return numeric
+        }
+        let parts = value.split(separator: ":").compactMap { Int($0) }
+        switch parts.count {
+        case 2: return TimeInterval(parts[0] * 60 + parts[1])
+        case 3: return TimeInterval(parts[0] * 3600 + parts[1] * 60 + parts[2])
+        default: return nil
+        }
     }
 
     private func inferCodecLabel(from url: URL) -> String {

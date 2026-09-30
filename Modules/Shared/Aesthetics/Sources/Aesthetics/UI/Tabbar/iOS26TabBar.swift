@@ -5,6 +5,8 @@
 //  Created by Aarav Gupta on 05/12/25.
 //
 
+#if os(iOS)
+
 import SwiftUI
 
 struct iOS26TabBar<SelectionValue: Hashable>: View {
@@ -315,3 +317,5 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
         }
     }
 }
+
+#endif

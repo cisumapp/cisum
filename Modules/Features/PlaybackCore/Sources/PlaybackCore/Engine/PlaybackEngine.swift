@@ -41,6 +41,12 @@ public final class PlaybackEngine {
     /// since the overwhelmingly common cause is an expired CDN URL rather than a dead track.
     public var onPlaybackFailed: (@MainActor (Error) -> Void)?
 
+    /// Fires when an item finishes loading and is ready to play.
+    ///
+    /// Carries the item so the caller can read `duration` for the scrubber when search metadata
+    /// lacked a parseable timestamp (common with YouTube Music results).
+    public var onReadyForPlayback: (@MainActor (AVPlayerItem) -> Void)?
+
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
@@ -88,7 +94,11 @@ public final class PlaybackEngine {
     }
 
     public func togglePlayPause() {
-        transport.isPlaying ? pause() : resume()
+        if transport.isPlaying {
+            pause()
+        } else {
+            resume()
+        }
     }
 
     public func seek(to seconds: Double) {
@@ -142,6 +152,7 @@ public final class PlaybackEngine {
                 switch item.status {
                 case .readyToPlay:
                     self.transport.isBuffering = false
+                    self.onReadyForPlayback?(item)
                 case .failed:
                     self.transport.isBuffering = false
                     self.transport.isPlaying = false

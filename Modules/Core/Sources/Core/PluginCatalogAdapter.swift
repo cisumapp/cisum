@@ -21,9 +21,12 @@ struct PluginCatalogAdapter: PluginCatalog {
 
     func enabledPlugins() async -> [PluginBundle] {
         await MainActor.run {
-            store.enabled().map { plugin in
+            let enabled = store.enabled()
+            let bundles = enabled.map { plugin in
                 PluginBundle(id: plugin.id, source: plugin.source, settings: plugin.settings)
             }
+            PerfLog.info("PluginCatalogAdapter: enabledPlugins() returning \(bundles.count) bundles: \(bundles.map(\.id))")
+            return bundles
         }
     }
 }
@@ -35,9 +38,11 @@ struct PluginCatalogAdapter: PluginCatalog {
 @MainActor
 enum SourceBuilder {
     static func buildSources(from store: PluginStore) async -> [any MusicSource] {
+        PerfLog.info("SourceBuilder.buildSources(): starting — loading sources from enabled plugins")
         let adapter = PluginCatalogAdapter(store: store)
         let (sources, failures) = await SourceLoader.loadAll(from: adapter)
 
+        PerfLog.info("SourceBuilder.buildSources(): loaded \(sources.count) sources: \(sources.map { "\($0.id) caps=\($0.capabilities)" })")
         for failure in failures {
             PerfLog.error("Plugin \(failure.id) failed to load: \(failure.error.localizedDescription)")
         }

@@ -5,7 +5,6 @@
 //  Created by Aarav Gupta on 19/05/26.
 //
 
-#if os(iOS)
 import Aesthetics
 import Kingfisher
 import Models
@@ -130,4 +129,3 @@ public struct PlaylistCover: View {
         }
     }
 }
-#endif

@@ -129,7 +129,7 @@ public actor ImportDownloadManager {
             runningCount += 1
             let task = Task { [self] in
                 await run(job)
-                await jobFinished(job.jobID)
+                jobFinished(job.jobID)
             }
             tasks[job.jobID] = task
         }

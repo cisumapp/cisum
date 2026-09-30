@@ -38,7 +38,10 @@ public struct DynamicPlayerIsland: View {
                     isHovering = hovering
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            // Bottom-trailing, not top-trailing: the panel is a floating overlay anchored
+            // above the window's bottom edge, so its hover expansion (compact 60pt →
+            // controls 180pt) grows *upward* into the content instead of off-screen.
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .animation(.playerExpandAnimation, value: presentationState)
             .environment(\.isDynamicPlayerExpanded, $isLyricsExpanded)
     }

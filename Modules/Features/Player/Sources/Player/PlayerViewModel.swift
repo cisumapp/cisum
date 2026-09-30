@@ -195,6 +195,14 @@ public final class PlayerViewModel: PlaybackCommands {
             // queue on the first failure is what made tracks appear to skip themselves.
             self?.retryCurrentAfterFailure()
         }
+        engine.onReadyForPlayback = { [weak self] item in
+            guard let self else { return }
+            // When search metadata lacks duration (YouTube Music often does), read it from the
+            // actual audio asset once AVPlayer finishes loading.
+            if nowPlaying.duration <= 0, item.duration.isNumeric {
+                nowPlaying.duration = item.duration.seconds
+            }
+        }
     }
 
     private var hasRetriedCurrent = false

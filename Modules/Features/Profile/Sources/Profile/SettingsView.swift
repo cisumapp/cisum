@@ -11,7 +11,9 @@ public struct SettingsView: View {
     @Environment(PrefetchSettings.self) private var settings
     @Environment(NetworkPathMonitor.self) private var networkMonitor
     @Environment(PlaybackControlSettings.self) private var playbackControlSettings
+    #if os(iOS)
     @Environment(PlayerThemeSettings.self) private var playerThemeSettings
+    #endif
     @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
     @Environment(AuthService.self) private var authService
 
@@ -28,6 +30,9 @@ public struct SettingsView: View {
 
     public var body: some View {
         Form {
+            #if os(iOS)
+            // Player theming is an iOS feature — `PlayerThemeSettings` and
+            // `PlayerThemeID` do not exist in the macOS Player module yet.
             Section("Player") {
                 Picker("Theme", selection: Bindable(playerThemeSettings).selected) {
                     ForEach(PlayerThemeID.allCases) { theme in
@@ -41,6 +46,7 @@ public struct SettingsView: View {
 
                 // add slider for managing vinyl speed
             }
+            #endif
 
             Section("Prefetch") {
                 Toggle("Adaptive Prefetch", isOn: Bindable(settings).adaptivePrefetchEnabled)

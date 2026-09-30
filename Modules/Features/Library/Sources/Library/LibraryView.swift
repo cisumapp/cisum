@@ -30,7 +30,10 @@ public struct LibraryView: View {
     }
 
     @State private var viewModel = LibraryViewModel()
+    #if os(iOS)
+    /// Only `NavigationBarView` reads this; the macOS chrome ignores scroll position.
     @State private var scrollOffset: CGFloat = 0
+    #endif
     @State private var isPresentingNewPlaylist = false
     @State private var newPlaylistName = ""
 
@@ -42,6 +45,7 @@ public struct LibraryView: View {
     @State private var isSharedExpanded = true
 
     public var body: some View {
+        #if os(iOS)
         NavigationBarView(
             title: "Library",
             scrollOffset: $scrollOffset,
@@ -56,6 +60,12 @@ public struct LibraryView: View {
         ) {
             content
         }
+        #else
+        // `NavigationBarView` is built on UIKit's blur + scroll-driven title, neither of
+        // which exists on AppKit. The macOS window supplies its own frame, so render the
+        // content directly.
+        content
+        #endif
     }
 
     var content: some View {

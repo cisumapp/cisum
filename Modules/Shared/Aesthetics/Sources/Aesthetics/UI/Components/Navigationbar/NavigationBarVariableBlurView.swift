@@ -5,6 +5,8 @@
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 18/03/25.
 //
 
+#if os(iOS)
+
 import SwiftUI
 import UIKit
 
@@ -193,3 +195,5 @@ extension View {
     .frame(maxWidth: .infinity, alignment: .center)
     .variableBlur(radius: 12, maskHeight: 100, opacity: 1)
 }
+
+#endif

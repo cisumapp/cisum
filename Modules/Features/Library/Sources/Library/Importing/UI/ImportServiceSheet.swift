@@ -35,7 +35,9 @@ public struct ImportServiceSheet: View {
         NavigationStack {
             content
                 .navigationTitle(navTitle)
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
@@ -46,7 +48,7 @@ public struct ImportServiceSheet: View {
                                 .disabled(selected.isEmpty || isSubmitting)
                         }
                         if provider == .youtube {
-                            ToolbarItem(placement: .topBarLeading) {
+                            ToolbarItem(placement: leadingToolbarPlacement) {
                                 Button("Link") { stage = .link }
                             }
                         }
@@ -63,6 +65,15 @@ public struct ImportServiceSheet: View {
                     Button("OK", role: .cancel) { errorText = nil }
                 } message: { Text(errorText ?? "") }
         }
+    }
+
+    /// `.topBarLeading` is iOS-only; on macOS the leading toolbar slot is `.navigation`.
+    private var leadingToolbarPlacement: ToolbarItemPlacement {
+        #if os(iOS)
+        .topBarLeading
+        #else
+        .navigation
+        #endif
     }
 
     private var navTitle: String {
@@ -156,7 +167,9 @@ public struct ImportServiceSheet: View {
         Form {
             Section("Playlist link or ID") {
                 TextField("https://… or playlist ID", text: $linkText)
+                    #if os(iOS)
                     .textInputAutocapitalization(.never)
+                    #endif
                     .autocorrectionDisabled()
             }
             Section {

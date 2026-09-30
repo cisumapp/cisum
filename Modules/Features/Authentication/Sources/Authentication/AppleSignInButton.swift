@@ -1,3 +1,5 @@
+#if os(iOS)
+
 import AuthenticationServices
 import SwiftUI
 
@@ -30,3 +32,5 @@ struct AppleSignInButton: UIViewRepresentable {
         }
     }
 }
+
+#endif

@@ -5,6 +5,7 @@
 //  The package's front door.
 //
 
+import Aesthetics
 import Models
 import SwiftUI
 
@@ -65,10 +66,19 @@ public final class PlayerModule {
 
     /// The collapsed player strip.
     public func miniPlayer(isExpanded: Binding<Bool>, namespace: Namespace.ID) -> some View {
+        #if os(iOS)
         DynamicPlayerIsland(isPlayerExpanded: isExpanded, namespace: namespace)
             .environment(viewModel)
             .environment(viewModel.progress)
             .environment(PlayerThemeSettings.shared)
+        #elseif os(macOS)
+        // The macOS island reads `PlayerViewModel` and `ProgressState` from the
+        // environment just like the iOS one, so it needs the same two injections —
+        // it has no namespace-driven transitions, hence no `namespace` here.
+        DynamicPlayerIsland()
+            .environment(viewModel)
+            .environment(viewModel.progress)
+        #endif
     }
 
     /// The full-screen player.
@@ -77,10 +87,14 @@ public final class PlayerModule {
         isExpanded: Binding<Bool>,
         collapsedFrame: CGRect
     ) -> some View {
+        #if os(iOS)
         ExpandablePlayer(show: show, isPlayerExpanded: isExpanded, collapsedFrame: collapsedFrame)
             .environment(viewModel)
             .environment(viewModel.progress)
             .environment(PlayerThemeSettings.shared)
+        #elseif os(macOS)
+        EmptyView()
+        #endif
     }
 
     /// The full player for the iOS 26 zoom cover.
@@ -88,10 +102,41 @@ public final class PlayerModule {
     /// Distinct from `expandablePlayer` because that one carries the hand-rolled expansion — pan
     /// gesture, window stacking, collapsed geometry — which the system provides on the cover path.
     public func zoomedPlayer() -> some View {
+        #if os(iOS)
         ZoomedPlayerView()
             .environment(viewModel)
             .environment(viewModel.progress)
             .environment(PlayerThemeSettings.shared)
+        #elseif os(macOS)
+        EmptyView()
+        #endif
+    }
+
+    /// The persistent macOS transport bar. Handed out here for the same reason as the views
+    /// above: constructing `PlayerBar()` directly would skip the environment injection and
+    /// crash on the first missing `@Environment`.
+    public func playerBar() -> some View {
+        #if os(iOS)
+        EmptyView()
+        #elseif os(macOS)
+        PlayerBar()
+            .environment(viewModel)
+            .environment(viewModel.progress)
+        #endif
+    }
+
+    /// The rotating record behind everything on macOS. Owned by the player module so the
+    /// backdrop can spin with the transport rather than needing its own copy of that state.
+    public func vinylBackdrop() -> some View {
+        #if os(iOS)
+        EmptyView()
+        #elseif os(macOS)
+        VinylBackdrop(
+            isPlaying: viewModel.isPlaying,
+            accentColor: viewModel.nowPlaying.accentColor
+        )
+        .environment(viewModel)
+        #endif
     }
 
     // MARK: - Lifecycle

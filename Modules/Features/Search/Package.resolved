@@ -1,5 +1,5 @@
 {
-  "originHash" : "2eacb06c7d4bbb048d044e7be57a0048b23cbb259499413c4bbdfbb842b83080",
+  "originHash" : "486539a0846c64249b164391243d9de94a8d7ff6d5c747e63fb425aca2d8bf36",
   "pins" : [
     {
       "identity" : "clerk-ios",
@@ -8,24 +8,6 @@
       "state" : {
         "revision" : "76bbbe374f3aa49f1dde793d9a465864b3c03d9d",
         "version" : "1.2.3"
-      }
-    },
-    {
-      "identity" : "ffmpeg-kit-spm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tylerjonesio/ffmpeg-kit-spm.git",
-      "state" : {
-        "revision" : "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
-        "version" : "5.1.2"
-      }
-    },
-    {
-      "identity" : "javascriptkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftwasm/JavaScriptKit.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "fba3be0d4647583b139a8a0af0e187ab97855713"
       }
     },
     {
@@ -116,15 +98,6 @@
       "state" : {
         "revision" : "b440a0be98381550cf189c903782e817619ffa05",
         "version" : "0.5.1"
-      }
-    },
-    {
-      "identity" : "swift-syntax",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-syntax",
-      "state" : {
-        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
-        "version" : "603.0.2"
       }
     },
     {
