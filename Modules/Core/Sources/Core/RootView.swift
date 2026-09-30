@@ -22,12 +22,16 @@ public struct RootView: View {
 
     @Environment(ServicesContainer.self) private var container
 
+    /// Shared by both platform branches. The macOS island has no namespace-driven
+    /// transitions, so it ignores this — but routing it through `PlayerModule.miniPlayer`
+    /// keeps a single entry point that is guaranteed to inject the player environment.
+    @Namespace private var playerAnimationNamespace
+
     #if os(iOS)
     @State private var isScrollingDown = false
     @State private var storedOffset: CGFloat = 0
     @State var scrollPhase: ScrollPhases = .idle
     @State var tabBarVisibility: Visibility = .visible
-    @Namespace private var playerAnimationNamespace
     @State private var showProfile = false
     @State private var showSettings = false
     @State private var appOrientation = AppOrientation(UIDevice.current.orientation)
@@ -241,36 +245,60 @@ public struct RootView: View {
             Text(updateChecker.message)
         }
         #else
-        tabSurface
-            .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
-                searchOverlay.updateContext(newContext)
+        // The system split, doing the system's job.
+        //
+        // Every earlier attempt hand-rolled this column and it never looked native: rows,
+        // selection pill, spacing, hover and the floating panel itself were all ours to get
+        // wrong. `NavigationSplitView` with a `.sidebar` list style hands all of that to
+        // AppKit, which is the only way it reads as a Mac app.
+        NavigationSplitView {
+            List(selection: selectedTabBinding) {
+                ForEach(TabItem.allCases, id: \.self) { tab in
+                    Label(tab.title, systemImage: tab.icon)
+                        .tag(tab)
+                }
             }
-            .overlay(alignment: .top) {
-                Color.clear
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 20)
-                    .allowWindowDrag()
-
-                SearchOverlayBar()
-                    .padding(8)
-            }
-            .overlay(alignment: .topLeading) {
-                ProfileButton(profileImageURL: profileImageURL, onAction: handleProfileAction)
-                    .padding(8)
-            }
-            .overlay(alignment: .topTrailing) {
-                DynamicPlayerIsland()
-                    .padding(8)
-            }
-            .background {
-                backgroundFill
-                spotifyBackgroundRefresh
-            }
-            .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
-            .ignoresSafeArea()
-            .usingRouter(cisum.router)
+            .listStyle(.sidebar)
+        } detail: {
+            detailColumn
+        }
+        .navigationSplitViewStyle(.balanced)
         #endif
     }
+
+    #if !os(iOS)
+    /// The content side: the floating search field, the selected tab, and the transport
+    /// pinned to the bottom of the window.
+    private var detailColumn: some View {
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                tabSurface
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background { backgroundFill }
+                    .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
+                        searchOverlay.updateContext(newContext)
+                    }
+                    .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
+                    .ignoresSafeArea(edges: [.top, .bottom])
+                    .usingRouter(cisum.router)
+                    // Over the content, not the transport: the bar owns the bottom strip.
+                    .overlay(alignment: .top) {
+                        SearchOverlayBar()
+                            .padding(.top, 8)
+                    }
+                    .overlay(alignment: .bottom) {
+                        cisum.playerBar()
+                            .padding(.bottom, 14)
+                    }
+
+                spotifyBackgroundRefresh
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+            .clipped()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    #endif
 
     private func sharedPlaylistMessage(_ playlist: SharedPlaylist) -> String {
         switch playlist {
@@ -322,7 +350,9 @@ public struct RootView: View {
         }
     }
 
-    #if os(iOS)
+    /// Selection for whichever primary-navigation shell is in play — the iOS tab bar or
+    /// the macOS sidebar. Both drive the same `NavigationState`, so switching tabs is
+    /// consistent across platforms.
     private var selectedTabBinding: Binding<TabItem> {
         Binding(
             get: { cisum.navigationState.selectedTab },
@@ -330,6 +360,7 @@ public struct RootView: View {
         )
     }
 
+    #if os(iOS)
     private func expandPlayer() {
         container.appServices.playerPresentationController.expand()
     }
@@ -421,16 +452,12 @@ public struct RootView: View {
         }
     }
     #else
-    @ViewBuilder
+    /// Opaque, so the window reads as a real surface rather than a sheet over whatever is
+    /// behind it. Applied at the shell so every tab is covered without each view repeating
+    /// it. Deliberately *not* glass: the reference's content area is solid, and only the
+    /// sidebar and the transport float.
     private var backgroundFill: some View {
-        if #available(macOS 26.0, *) {
-            Rectangle()
-                .fill(.clear)
-                .glassEffect(.regular, in: .rect)
-        } else {
-            Rectangle()
-                .fill(.ultraThinMaterial.opacity(0.92))
-        }
+        Color.cisumBg
     }
 
     private var tabSurface: some View {
@@ -438,7 +465,9 @@ public struct RootView: View {
             selectedTabContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .contentMargins(.top, 80)
+        // Clears the floating search field and leaves room for the transport below.
+        .contentMargins(.top, 56)
+        .contentMargins(.bottom, 96)
         .contentMargins(.trailing, isDynamicPlayerExpanded.wrappedValue ? 430 : 0)
         .animation(.playerExpandAnimation, value: isDynamicPlayerExpanded.wrappedValue)
     }

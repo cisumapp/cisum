@@ -1,4 +1,3 @@
-#if os(iOS)
 import Aesthetics
 import Kingfisher
 import Models
@@ -9,6 +8,12 @@ import SwiftUI
 import Tracks
 import Utilities
 import YouTubeSDK
+
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 public struct PlaylistCard: View {
     @State private var viewModel = PlaylistViewModel()
@@ -23,8 +28,12 @@ public struct PlaylistCard: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         let screenWidth = UIScreen.main.bounds.width
-        let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
+        #elseif os(macOS)
+        let screenWidth = NSScreen.main?.frame.width ?? 0
+        #endif
+        let scale = ResponsiveLayout.scaleFactor(forScreenWidth: screenWidth)
 
         VStack {
             CardOpenTransition(backgroundColor: viewModel.backgroundColor) { isCardExpanded, _ in
@@ -97,12 +106,17 @@ struct PlaylistTrackListView: View {
                 }
             }
         }
+        #if os(iOS)
+        // `AddToPlaylistSheet` and `ShareSheet` are UIKit presentations that do not exist on
+        // macOS yet. The buttons that would present them are gated to match, so macOS never
+        // offers a menu item that goes nowhere.
         .sheet(item: $trackToAdd) { track in
             AddToPlaylistSheet(track: track)
         }
         .sheet(item: $shareURL) { item in
             ShareSheet(url: item.url)
         }
+        #endif
         .alert("Rename Playlist", isPresented: $isRenaming) {
             TextField("Name", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -172,11 +186,13 @@ struct PlaylistTrackListView: View {
                             Label("Save", systemImage: "star")
                         }
 
+                        #if os(iOS)
                         Button {
                             trackToAdd = savableTrack(for: track)
                         } label: {
                             Label("Add to Playlist", systemImage: "text.badge.plus")
                         }
+                        #endif
 
                         if let sharedSong = SharedSong(savable: savableTrack(for: track)),
                            let shareURL = CisumLink.song(sharedSong).webURL()
@@ -297,6 +313,7 @@ struct PlaylistTrackListView: View {
 
     private var moreMenu: some View {
         Menu {
+            #if os(iOS)
             if let shared = sharedPlaylistValue {
                 Button {
                     Task {
@@ -308,6 +325,7 @@ struct PlaylistTrackListView: View {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
             }
+            #endif
 
             // Opt-in merge: prepend the cisum "Saved" collection on top of an imported playlist.
             if playlist.sourceProvider != .local {
@@ -464,5 +482,3 @@ struct PlaylistTrackListView: View {
 #Preview {
     PlaylistCard(playlist: Models.Playlist(title: "tera sharmana", normalizedTitle: "tera sharmana"))
 }
-
-#endif

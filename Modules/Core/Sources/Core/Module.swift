@@ -207,7 +207,11 @@ public final class cisumModule {
         PluginsView()
             .environment(container)
             .environment(container.playbackServices.streamingProviderSettings)
+            #if os(iOS)
+            // `PlayerThemeSettings` is an iOS-only type; the macOS player has no
+            // theme selection yet, so there is nothing to inject there.
             .environment(PlayerThemeSettings.shared)
+            #endif
             .environment(container.providerServices.pluginStore)
     }
 
@@ -320,6 +324,16 @@ public final class cisumModule {
         player.zoomedPlayer()
     }
 
+    /// The persistent macOS transport bar.
+    public func playerBar() -> some View {
+        player.playerBar()
+    }
+
+    /// The rotating record behind the macOS content.
+    public func vinylBackdrop() -> some View {
+        player.vinylBackdrop()
+    }
+
     #if os(iOS) || os(macOS)
     public var systemVolumeController: SystemVolumeController {
         SystemVolumeController.shared
@@ -363,7 +377,10 @@ public final class cisumModule {
             .environment(container.playbackServices.lastFMSettings)
             .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
             .environment(container.playbackServices.streamingProviderSettings)
+            .environment(container.providerServices.pluginStore)
+            #if os(iOS)
             .environment(PlayerThemeSettings.shared)
+            #endif
             .modelContainer(modelContainer)
     }
 

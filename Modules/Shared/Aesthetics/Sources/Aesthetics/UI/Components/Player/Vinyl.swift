@@ -22,15 +22,7 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     let isPlaying: Bool
     let accentColor: Color
 
-    @State private var phaseStartAngle: Double = 0
-    @State private var phaseStartDate: Date?
-    @State private var phaseStartSpeed: Double = 0
-    @State private var phaseTargetSpeed: Double = 0
-    @State private var phaseTau: Double = 0.67
-
-    private let targetMaxSpeed: Double = 35
-    private let tauStart: Double = 0.6
-    private let tauStop: Double = 0.67
+    @State private var spin = VinylSpin()
 
     public var body: some View {
         GeometryReader { geo in
@@ -171,43 +163,11 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
     }
 
     public func rotation(at date: Date) -> Double {
-        guard let phaseStartDate else {
-            return phaseStartAngle
-        }
-
-        let elapsed = max(date.timeIntervalSince(phaseStartDate), 0)
-        let deltaSpeed = phaseStartSpeed - phaseTargetSpeed
-
-        // Fast path once acceleration settles to steady-state motion.
-        if abs(deltaSpeed) < 0.0001 {
-            return phaseStartAngle + (phaseTargetSpeed * elapsed)
-        }
-
-        return phaseStartAngle + (phaseTargetSpeed * elapsed)
-            + (deltaSpeed * phaseTau * (1 - exp(-elapsed / phaseTau)))
-    }
-
-    private func speed(at date: Date) -> Double {
-        guard let phaseStartDate else { return 0 }
-        let elapsed = max(date.timeIntervalSince(phaseStartDate), 0)
-        let delta = phaseStartSpeed - phaseTargetSpeed
-        if abs(delta) < 0.0001 {
-            return phaseTargetSpeed
-        }
-        return phaseTargetSpeed + delta * exp(-elapsed / phaseTau)
+        spin.rotation(at: date)
     }
 
     private func syncPlaybackState(at date: Date) {
-        let currentAngle = rotation(at: date)
-        let currentSpeed = speed(at: date)
-        let nextTargetSpeed = isPlaying ? targetMaxSpeed : 0
-        let nextTau = isPlaying ? tauStart : tauStop
-
-        phaseStartAngle = currentAngle
-        phaseStartDate = date
-        phaseStartSpeed = currentSpeed
-        phaseTargetSpeed = nextTargetSpeed
-        phaseTau = nextTau
+        spin.syncPlaybackState(at: date, isPlaying: isPlaying)
     }
 }
 
@@ -220,6 +180,10 @@ struct VinylDisk<Content: View>: View {
 
     /// Current angle in degrees. Defaults to 0 so a static disc reads as `VinylDisk(size:) { ... }`.
     var rotation: Double = 0
+
+    /// How strongly the groove texture reads. The hero player sits on its own opaque
+    /// backdrop and wants it subtle; the macOS band is small and needs the disc legible.
+    var grooveOpacity: Double = 0.5
 
     /// Declared last so the trailing closure binds here rather than to `rotation`.
     let content: () -> Content
@@ -238,7 +202,7 @@ struct VinylDisk<Content: View>: View {
                 Image.vinylGrooves
                     .resizable()
                     .scaledToFill()
-                    .opacity(0.5)
+                    .opacity(grooveOpacity)
                     .padding(5)
 
                 Image.vinylOverlay

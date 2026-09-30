@@ -5,6 +5,8 @@
 //  Created by Aarav Gupta (github.com/atpugvaraa) on 18/03/25.
 //
 
+#if os(iOS)
+
 import SwiftUI
 
 public struct NavigationBarView<Content: View>: View {
@@ -70,3 +72,5 @@ public struct NavigationBarView<Content: View>: View {
         return endOffset + (startOffset - endOffset) * progress
     }
 }
+
+#endif

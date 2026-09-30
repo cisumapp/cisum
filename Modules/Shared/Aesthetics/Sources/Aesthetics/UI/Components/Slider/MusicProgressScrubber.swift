@@ -212,7 +212,9 @@ private extension MusicProgressScrubber {
                 .fill(Color.cisumTrackInactive)
 
             RoundedRectangle(cornerRadius: 999, style: .continuous)
+#if os(iOS)
                 .fill(isEditing ? .primary.opacity(0.98) : .cisumTrackActive)
+#endif
                 .frame(width: fillWidth)
         }
         .frame(height: 6)

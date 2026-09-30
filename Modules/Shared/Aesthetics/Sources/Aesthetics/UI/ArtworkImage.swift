@@ -1,4 +1,4 @@
-#if os(iOS)
+//#if os(iOS)
 import Kingfisher
 import SwiftUI
 
@@ -16,7 +16,11 @@ public struct ArtworkImage: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         let px = pointSize * UIScreen.main.scale
+        #elseif os(macOS)
+        let px = pointSize * (NSScreen.main?.backingScaleFactor ?? 1.0)
+        #endif
         KFImage(ArtworkURL.best(from: url))
             .cacheOriginalImage()
             .downsampling(size: CGSize(width: px, height: px))
@@ -24,4 +28,4 @@ public struct ArtworkImage: View {
             .scaledToFill()
     }
 }
-#endif
+//#endif

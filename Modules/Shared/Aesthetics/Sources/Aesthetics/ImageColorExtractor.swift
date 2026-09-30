@@ -1,7 +1,34 @@
-#if os(iOS)
 import CoreImage
 import SwiftUI
+#if os(iOS)
 import UIKit
+
+/// The platform image type: `UIImage` on iOS, `NSImage` on macOS.
+typealias PlatformImage = UIImage
+
+/// The platform colour type: `UIColor` on iOS, `NSColor` on macOS.
+public typealias PlatformColor = UIColor
+#elseif os(macOS)
+import AppKit
+
+/// The platform image type: `UIImage` on iOS, `NSImage` on macOS.
+typealias PlatformImage = NSImage
+
+/// The platform colour type: `UIColor` on iOS, `NSColor` on macOS.
+public typealias PlatformColor = NSColor
+#endif
+
+#if os(macOS)
+/// SwiftUI spells the bridging initializer `init(nsColor:)` on macOS. Routing the
+/// `uiColor:` spelling through here keeps the rest of this file — and its call sites —
+/// identical on both platforms. Compiled out entirely on iOS, where `Color(uiColor:)`
+/// is the real SwiftUI API.
+private extension Color {
+    init(uiColor: NSColor) {
+        self.init(nsColor: uiColor)
+    }
+}
+#endif
 
 // MARK: - ImageColorPalette
 
@@ -123,7 +150,7 @@ public actor ImageColorExtractor {
         if let key = cacheKey, let hit = cache[key] {
             touchLRU(key); return hit
         }
-        guard let image = UIImage(data: imageData),
+        guard let image = PlatformImage(data: imageData),
               let palette = compute(image)
         else { return nil }
 
@@ -208,7 +235,7 @@ public actor ImageColorExtractor {
     // so cache hits on other tasks can proceed in parallel.
 
     private nonisolated func compute(
-        _ image: UIImage,
+        _ image: PlatformImage,
         thumbnailSide: Int = 36,
         colorThreshold: Float = 0.1,
         highlightDiversity: Float = 0.2,
@@ -221,9 +248,10 @@ public actor ImageColorExtractor {
         // resolution. Removing it has no measurable effect on palette quality.
 
         // ── OPTIMISATION 3 — Exact 1× scale ──────────────────────────────────
-        // UIGraphicsImageRenderer respects the *screen* scale by default, so on
-        // a 3× device a "36 pt" thumbnail is actually 108×108 px — 9× the pixels
-        // we need. `fmt.scale = 1` guarantees exactly `thumbnailSide` physical px.
+        // Both platform renderers respect the *screen* scale by default, so on a
+        // 3× device a "36 pt" thumbnail is actually 108×108 px — 9× the pixels we
+        // need. `fmt.scale = 1` on iOS and a 1:1-sized `NSBitmapImageRep` on macOS
+        // each guarantee exactly `thumbnailSide` physical px.
         guard let thumb = downsample(image, side: thumbnailSide),
               let (raw, w, h) = rawBytes(thumb)
         else { return nil }
@@ -264,12 +292,12 @@ public actor ImageColorExtractor {
         let titleRGB = !hilites.isEmpty ? hilites[0] : contrasting(bg)
         let songsRGB = hilites.count > 1 ? hilites[1] : nil
 
-        let songsUI: UIColor = songsRGB.map { UIColor($0) }
-            ?? UIColor(titleRGB).withAlphaComponent(0.7)
+        let songsUI: PlatformColor = songsRGB.map { PlatformColor($0) }
+            ?? PlatformColor(titleRGB).withAlphaComponent(0.7)
 
-        let originalDominant = UIColor(dom)
-        let originalBackground = UIColor(bg)
-        let originalTitle = UIColor(titleRGB)
+        let originalDominant = PlatformColor(dom)
+        let originalBackground = PlatformColor(bg)
+        let originalTitle = PlatformColor(titleRGB)
 
         return ImageColorPalette(
             dominant: originalDominant.cisumReadableAccentColor,
@@ -335,7 +363,8 @@ public actor ImageColorExtractor {
 
     // MARK: - Pixel extraction
 
-    private nonisolated func downsample(_ image: UIImage, side: Int) -> UIImage? {
+    #if os(iOS)
+    private nonisolated func downsample(_ image: PlatformImage, side: Int) -> PlatformImage? {
         let sz = CGSize(width: side, height: side)
         let fmt = UIGraphicsImageRendererFormat()
         fmt.scale = 1 // physical pixels == logical points — critical on 3× devices
@@ -343,12 +372,46 @@ public actor ImageColorExtractor {
             image.draw(in: CGRect(origin: .zero, size: sz))
         }
     }
+    #elseif os(macOS)
+    private nonisolated func downsample(_ image: PlatformImage, side: Int) -> PlatformImage? {
+        // A bitmap rep allocated at `side × side` pixels with a 1:1 `size` is the
+        // AppKit analogue of `UIGraphicsImageRendererFormat.scale = 1`: the backing
+        // store is exactly `thumbnailSide` physical pixels, independent of the
+        // backing scale of whichever screen happens to be attached.
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side, pixelsHigh: side,
+            bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: side * 4, bitsPerPixel: 32
+        ), let context = NSGraphicsContext(bitmapImageRep: rep)
+        else { return nil }
+        rep.size = NSSize(width: side, height: side)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        image.draw(
+            in: NSRect(x: 0, y: 0, width: side, height: side),
+            from: .zero, operation: .copy, fraction: 1
+        )
+        NSGraphicsContext.restoreGraphicsState()
+
+        guard let thumb = rep.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return NSImage(cgImage: thumb, size: NSSize(width: side, height: side))
+    }
+    #endif
 
     /// Renders the image into a flat RGBA byte buffer exactly once.
     /// All downstream passes (quantise, edgePixels) read from this single
-    /// allocation — no intermediate UIImage conversions needed.
-    private nonisolated func rawBytes(_ image: UIImage) -> (bytes: [UInt8], w: Int, h: Int)? {
+    /// allocation — no intermediate platform-image conversions needed.
+    private nonisolated func rawBytes(_ image: PlatformImage) -> (bytes: [UInt8], w: Int, h: Int)? {
+        #if os(iOS)
         guard let cg = image.cgImage else { return nil }
+        #elseif os(macOS)
+        var rect = NSRect(origin: .zero, size: image.size)
+        guard let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else { return nil }
+        #endif
         let w = cg.width, h = cg.height
         var raw = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(
@@ -457,9 +520,9 @@ public actor ImageColorExtractor {
     }
 }
 
-// MARK: - UIColor  RGB
+// MARK: - PlatformColor  RGB
 
-private extension UIColor {
+private extension PlatformColor {
     convenience init(_ rgb: RGB) {
         self.init(red: CGFloat(rgb.r), green: CGFloat(rgb.g), blue: CGFloat(rgb.b), alpha: 1)
     }
@@ -467,33 +530,48 @@ private extension UIColor {
 
 // MARK: - W3C contrast helpers
 
-public extension UIColor {
+public extension PlatformColor {
     /// Perceived brightness, 0–255 (W3C YIQ formula).
     var perceivedBrightness: CGFloat {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        #if os(iOS)
         getRed(&r, green: &g, blue: &b, alpha: &a)
+        #elseif os(macOS)
+        // `NSColor.getRed` is `- (void)`, unlike `UIColor.getRed` which returns Bool, and
+        // it raises for colours that are not component-based — which dynamic
+        // `NSColor(name:dynamicProvider:)` colours are. Resolving to sRGB first turns
+        // that trap into the same "leave the channels at 0" fallback iOS already has.
+        usingColorSpace(.sRGB)?.getRed(&r, green: &g, blue: &b, alpha: &a)
+        #endif
         return (r * 299 + g * 587 + b * 114) / 1000 * 255
     }
 
     /// W3C colour difference, 0–765.
-    func w3cColorDifference(from other: UIColor) -> CGFloat {
+    func w3cColorDifference(from other: PlatformColor) -> CGFloat {
         var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
         var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        #if os(iOS)
         getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
         other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        #elseif os(macOS)
+        usingColorSpace(.sRGB)?.getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        other.usingColorSpace(.sRGB)?.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        #endif
         return (max(r1, r2) - min(r1, r2) + max(g1, g2) - min(g1, g2) + max(b1, b2) - min(b1, b2)) * 255
     }
 
     /// `true` when brightness diff > 125 AND colour diff > 500 (W3C minimum).
-    func meetsW3CContrast(against other: UIColor) -> Bool {
+    func meetsW3CContrast(against other: PlatformColor) -> Bool {
         abs(perceivedBrightness - other.perceivedBrightness) > 125
             && w3cColorDifference(from: other) > 500
     }
 
     /// Best legible text colour (black or white) per W3C YIQ brightness.
-    var w3cTextColor: UIColor {
+    var w3cTextColor: PlatformColor {
         perceivedBrightness > 125 ? .black : .white
     }
+
+    #if os(iOS)
 
     var cisumReadableAccentColor: Color {
         Color(uiColor: UIColor { traits in
@@ -536,13 +614,62 @@ public extension UIColor {
             alpha: alpha
         )
     }
+
+    #elseif os(macOS)
+
+    var cisumReadableAccentColor: Color {
+        Color(uiColor: NSColor(name: nil) { appearance in
+            self.cisumRegulatedForAppearance(appearance)
+        })
+    }
+
+    func cisumReadableHighlightColor(over background: NSColor) -> Color {
+        Color(uiColor: NSColor(name: nil) { appearance in
+            let regulated = self.cisumRegulatedForAppearance(appearance)
+            return regulated.meetsW3CContrast(against: background)
+                ? regulated
+                : background.w3cTextColor
+        })
+    }
+
+    private func cisumRegulatedForAppearance(_ appearance: NSAppearance) -> NSColor {
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+
+        // The macOS counterpart of the iOS `guard getHue(...) else { return self }`:
+        // `usingColorSpace` is the failable step `NSColor.getHue` — being `- (void)` —
+        // no longer performs for us.
+        guard let rgb = usingColorSpace(.sRGB) else { return self }
+
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        rgb.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+
+        let targetBrightness: CGFloat = if isDark {
+            max(brightness, 0.42)
+        } else {
+            min(brightness, 0.64)
+        }
+
+        guard targetBrightness != brightness else { return self }
+
+        return NSColor(
+            hue: hue,
+            saturation: max(saturation, 0.18),
+            brightness: targetBrightness,
+            alpha: alpha
+        )
+    }
+
+    #endif
 }
 
 public extension Color {
     func safeTextColor(over background: Color) -> Color {
-        let uiSelf = UIColor(self)
-        let uiBg = UIColor(background)
+        let uiSelf = PlatformColor(self)
+        let uiBg = PlatformColor(background)
         return uiSelf.meetsW3CContrast(against: uiBg) ? self : Color(uiColor: uiBg.w3cTextColor)
     }
 }
-#endif

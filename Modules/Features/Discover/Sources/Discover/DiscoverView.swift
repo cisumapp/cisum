@@ -26,6 +26,7 @@ public struct DiscoverView: View {
     @State private var scrollOffset: CGFloat = 0
 
     public var body: some View {
+        #if os(iOS)
         NavigationBarView(
             title: "Discover",
             scrollOffset: $scrollOffset,
@@ -38,6 +39,16 @@ public struct DiscoverView: View {
         ) {
             content
         }
+        #elseif os(macOS)
+        // `NavigationBarView` supplies the ScrollView on iOS. There is no nav bar on macOS,
+        // so `content` needs its own or the section grid overflows the window and is clipped.
+        ScrollView {
+            content
+                // `content` reserves 140pt for the iOS nav bar; the shell already clears
+                // the search field, so only a small inset is wanted here.
+                .contentMargins(.top, 8)
+        }
+        #endif
     }
 
     var content: some View {

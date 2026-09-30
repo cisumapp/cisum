@@ -135,7 +135,7 @@ public protocol PlaybackCommands: AnyObject, Sendable {
 /// `@Environment(NowPlayingState.self)` for artwork — rather than the whole player. This type is a
 /// convenience for wiring at the composition root, not something a view should observe wholesale.
 @MainActor
-public struct PlayerStates: Sendable {
+public struct PlayerStates {
     public let nowPlaying: NowPlayingState
     public let transport: TransportState
     public let progress: ProgressState

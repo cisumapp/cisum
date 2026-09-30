@@ -27,12 +27,27 @@ public final class PluginStore {
 
     public private(set) var isRefreshing = false
 
+    /// User-ordered plugin IDs, best first. Drives source priority in the playback registry.
+    public private(set) var orderedPluginIDs: [String] = []
+
+    /// Sort mode for enabled plugins.
+    public var pluginSortMode: PluginSortMode = .manual
+
+    /// Called whenever the installed/enabled list changes so the composition root can rebuild sources.
+    public var onPluginsChanged: (() async -> Void)?
+
     private let client: RegistryClient
     private let storage: PluginStorage
+    private let sortModeStorage: PluginSortModeStorage
 
-    public init(client: RegistryClient = RegistryClient(), storage: PluginStorage = PluginStorage()) {
+    public init(
+        client: RegistryClient = RegistryClient(),
+        storage: PluginStorage = PluginStorage(),
+        sortModeStorage: PluginSortModeStorage = PluginSortModeStorage()
+    ) {
         self.client = client
         self.storage = storage
+        self.sortModeStorage = sortModeStorage
     }
 
     // MARK: - Lifecycle
@@ -44,10 +59,23 @@ public final class PluginStore {
 
         do {
             installed = try await storage.loadAll()
+            PerfLog.info("PluginStore: loaded \(installed.count) installed plugins: \(installed.map { "\($0.id)(enabled=\($0.isEnabled))" })")
         } catch {
             PerfLog.error("PluginStore failed to load installed plugins: \(error)")
             installed = []
         }
+
+        // Load persisted ordering (best-first). Any new plugin not yet in the list is appended.
+        var savedOrder = await sortModeStorage.loadOrder()
+        let installedIDs = installed.map(\.id)
+        let savedSet = Set(savedOrder)
+        savedOrder.append(contentsOf: installedIDs.filter { !savedSet.contains($0) })
+        // Remove IDs no longer installed.
+        savedOrder.removeAll { !installedIDs.contains($0) }
+        orderedPluginIDs = savedOrder
+
+        pluginSortMode = await sortModeStorage.loadSortMode()
+        PerfLog.info("PluginStore: loaded order=\(orderedPluginIDs), sortMode=\(pluginSortMode)")
     }
 
     // MARK: - Catalog
@@ -56,9 +84,15 @@ public final class PluginStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
+        PerfLog.trace("PluginStore: refreshCatalog() starting")
         do {
             catalog = try await client.fetchCatalog()
             lastError = nil
+            PerfLog.info("PluginStore: refreshCatalog() succeeded, \(catalog.count) entries")
+        } catch is CancellationError {
+            PerfLog.trace("PluginStore: refreshCatalog() cancelled (view dismissed)")
+        } catch let error as URLError where error.code == .cancelled {
+            PerfLog.trace("PluginStore: refreshCatalog() URLSession cancelled (view dismissed)")
         } catch {
             lastError = error.localizedDescription
             PerfLog.error("Plugin catalog refresh failed: \(error)")
@@ -140,7 +174,9 @@ public final class PluginStore {
     public func setEnabled(_ enabled: Bool, for id: String) async {
         guard let index = installed.firstIndex(where: { $0.id == id }) else { return }
         installed[index].isEnabled = enabled
+        PerfLog.info("PluginStore: setEnabled(\(enabled)) for \(id)")
         await persist(installed[index])
+        await onPluginsChanged?()
     }
 
     public func setSetting(_ value: String, key: String, for id: String) async {
@@ -151,11 +187,14 @@ public final class PluginStore {
 
     public func remove(_ id: String) async {
         installed.removeAll { $0.id == id }
+        orderedPluginIDs.removeAll { $0 == id }
+        await sortModeStorage.saveOrder(orderedPluginIDs)
         do {
             try await storage.delete(id)
         } catch {
             PerfLog.error("Could not delete plugin \(id): \(error)")
         }
+        await onPluginsChanged?()
     }
 
     // MARK: - The catalog seam
@@ -164,20 +203,80 @@ public final class PluginStore {
     // What the composition root reads to build sources. Returning plain values, not something
     // executable, is the point: this module never learns what a MusicSource is.
 
-    /// Installed and enabled, in install order.
+    /// Installed and enabled, in user-preferred order.
     public func enabled() -> [InstalledPlugin] {
-        installed.filter(\.isEnabled)
+        let enabledPlugins = installed.filter(\.isEnabled)
+        PerfLog.info("PluginStore.enabled(): \(enabledPlugins.count) of \(installed.count) enabled: \(enabledPlugins.map(\.id))")
+
+        switch pluginSortMode {
+        case .manual:
+            // Sort by the user's orderedPluginIDs (best first).
+            return enabledPlugins.sorted { lhs, rhs in
+                let lhsIndex = orderedPluginIDs.firstIndex(of: lhs.id) ?? Int.max
+                let rhsIndex = orderedPluginIDs.firstIndex(of: rhs.id) ?? Int.max
+                return lhsIndex < rhsIndex
+            }
+        case .quality:
+            // Sort by quality label descending (Hi-Res > Lossless > High > Standard).
+            return enabledPlugins.sorted { lhs, rhs in
+                qualityRank(lhs.settings["quality"] ?? "") > qualityRank(rhs.settings["quality"] ?? "")
+            }
+        case .speed:
+            // Sort by average latency ascending (fastest first).
+            return enabledPlugins.sorted { lhs, rhs in
+                let lhsLatency = Double(lhs.settings["avgLatencyMs"] ?? "") ?? Double.greatestFiniteMagnitude
+                let rhsLatency = Double(rhs.settings["avgLatencyMs"] ?? "") ?? Double.greatestFiniteMagnitude
+                return lhsLatency < rhsLatency
+            }
+        }
+    }
+
+    /// Move installed plugins within the list (drag-to-reorder).
+    public func moveInstalled(from source: IndexSet, to destination: Int) {
+        installed.move(fromOffsets: source, toOffset: destination)
+        orderedPluginIDs = installed.map(\.id)
+        Task {
+            await sortModeStorage.saveOrder(orderedPluginIDs)
+        }
+    }
+
+    /// Set the sort mode for enabled plugins.
+    public func setSortMode(_ mode: PluginSortMode) async {
+        pluginSortMode = mode
+        await sortModeStorage.saveSortMode(mode)
+        await onPluginsChanged?()
+    }
+
+    private func qualityRank(_ quality: String) -> Int {
+        let q = quality.uppercased()
+        if q.contains("HI-RES") || q.contains("24-BIT") {
+            return 4
+        }
+        if q.contains("LOSSLESS") || q.contains("FLAC") {
+            return 3
+        }
+        if q.contains("HIGH") || q.contains("320") {
+            return 2
+        }
+        return 1
     }
 
     // MARK: - Private
 
     private func add(_ plugin: InstalledPlugin) async throws {
         try await storage.save(plugin)
+        let isNew = !installed.contains(where: { $0.id == plugin.id })
         if let index = installed.firstIndex(where: { $0.id == plugin.id }) {
             installed[index] = plugin
         } else {
             installed.insert(plugin, at: 0)
         }
+        // Track newly-installed plugins in ordering (append to end = lowest priority).
+        if isNew {
+            orderedPluginIDs.append(plugin.id)
+            await sortModeStorage.saveOrder(orderedPluginIDs)
+        }
+        await onPluginsChanged?()
     }
 
     private func persist(_ plugin: InstalledPlugin) async {

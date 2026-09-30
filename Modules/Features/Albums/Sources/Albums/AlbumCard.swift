@@ -1,4 +1,3 @@
-#if os(iOS)
 import Aesthetics
 import Kingfisher
 import Models
@@ -7,6 +6,12 @@ import SwiftData
 import SwiftUI
 import Tracks
 import YouTubeSDK
+
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 public struct AlbumCard: View {
     @State private var viewModel = AlbumViewModel()
@@ -25,8 +30,12 @@ public struct AlbumCard: View {
     }
 
     public var body: some View {
+        #if os(iOS)
         let screenWidth = UIScreen.main.bounds.width
-        let scale = ResponsiveLayout.DeviceSizeClass(width: screenWidth).scaleFactor(for: screenWidth)
+        #elseif os(macOS)
+        let screenWidth = NSScreen.main?.frame.width ?? 0
+        #endif
+        let scale = ResponsiveLayout.scaleFactor(forScreenWidth: screenWidth)
 
         VStack {
             CardOpenTransition(backgroundColor: viewModel.backgroundColor) { isCardExpanded, _ in
@@ -102,6 +111,4 @@ public struct AlbumCard: View {
 #Preview {
     AlbumCard(album: Album(title: "Bad", normalizedTitle: "Bad"))
 }
-#endif
-
 #endif

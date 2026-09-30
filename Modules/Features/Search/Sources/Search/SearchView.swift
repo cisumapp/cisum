@@ -164,6 +164,7 @@ public struct SearchView: View {
 
     private func handleRowSelection(_ item: FederatedSearchItem) {
         hideKeyboard()
+        PerfLog.info("SearchView: handleRowSelection title='\(item.title)' service=\(item.service.rawValue) id=\(item.id)")
 
         switch item.payload {
         case let .youtube(ref):
@@ -186,6 +187,7 @@ public struct SearchView: View {
 
         case .providerSDK:
             // ProviderSDK tracks resolve via the same external stream path as Spotify.
+            PerfLog.info("SearchView: providerSDK tap — creating playableRef")
             Task {
                 await playProviderSDKTrack(item)
             }
@@ -234,11 +236,13 @@ public struct SearchView: View {
             // No pre-resolution here any more. The view supplies an identity; the player resolves
             // it, caches the stream URL, and persists the binding so the next play skips all of it.
             guard let ref = item.playableRef else {
+                PerfLog.error("SearchView.playProviderSDKTrack: item has no playableRef — item.id=\(item.id) title='\(item.title)'")
                 throw FederatedSearchError.noPlayableStream(
                     "This result has no playable source."
                 )
             }
 
+            PerfLog.info("SearchView.playProviderSDKTrack: ref.sourceID='\(ref.sourceID)' ref.sourceTrackID='\(ref.sourceTrackID)' title='\(ref.title)'")
             searchViewModel.recordSuccessfulPlayFromCurrentQuery()
             playbackCommands?.load(ref, preserveQueue: false)
             presentationController.expand()

@@ -53,9 +53,12 @@ public final class PlaybackResolver {
         let span = CisumSignpost.resolver.begin("stream-resolve", "\(ref.sourceID) \(ref.title)")
         defer { CisumSignpost.resolver.end("stream-resolve", state: span) }
 
+        PerfLog.info("PlaybackResolver.resolve(): starting for sourceID='\(ref.sourceID)' trackID='\(ref.sourceTrackID)' title='\(ref.title)'")
+
         // ── Step 1: a cached URL that is still good. No network at all. ──────────────────
         if let binding = lookup?(ref), let cached = binding.freshStreamURL() {
             CisumSignpost.cache.event("cache-hit", "\(ref.sourceID) \(ref.title)")
+            PerfLog.info("PlaybackResolver: Step 1 CACHED URL — returning \(cached.absoluteString.prefix(80))")
             return [SourceStream(
                 url: cached,
                 kind: cached.pathExtension.lowercased() == "m3u8" ? .hls : .direct,
@@ -66,6 +69,7 @@ public final class PlaybackResolver {
             )]
         }
         CisumSignpost.cache.event("cache-miss", "\(ref.sourceID) \(ref.title)")
+        PerfLog.trace("PlaybackResolver: Step 1 cache miss — no cached URL for \(ref.sourceID)/\(ref.sourceTrackID)")
 
         // ── Step 2: the track id is known. Resolve directly, no search. ─────────────────
         //
@@ -73,12 +77,15 @@ public final class PlaybackResolver {
         // cisum's point of view — Spotify has the best catalogue data but its API returns no
         // playable audio — so a Spotify ref means "this track, identified by Spotify", not "play
         // it from Spotify". That distinction is why `sourceID` and playback are separate concepts.
+        PerfLog.trace("PlaybackResolver: Step 2 — looking up source for ref.sourceID='\(ref.sourceID)'")
         if let source = sources.source(for: ref.sourceID), source.capabilities.contains(.stream) {
+            PerfLog.info("PlaybackResolver: Step 2 — source '\(ref.sourceID)' found with .stream capability, attempting direct resolve")
             do {
                 let streams = try await source.streamCandidates(
                     trackID: ref.sourceTrackID,
                     quality: selector.preferred
                 )
+                PerfLog.info("PlaybackResolver: Step 2 — direct resolve on '\(ref.sourceID)' returned \(streams.count) streams")
                 if let best = streams.first {
                     persistIfPossible(ref, stream: best)
                 }
@@ -89,6 +96,8 @@ public final class PlaybackResolver {
                 // Falling back to a fresh match is the correct response, not surfacing an error.
                 PerfLog.error("Direct resolve failed for \(ref.sourceID)/\(ref.sourceTrackID): \(error). Re-matching.")
             }
+        } else {
+            PerfLog.warning("PlaybackResolver: Step 2 — source '\(ref.sourceID)' NOT FOUND or no .stream capability. Available: \(sources.sources.map { "\($0.id)(\($0.capabilities))" })")
         }
 
         // ── Step 3: match on a source that can actually play, then persist. ────────────
@@ -109,7 +118,11 @@ public final class PlaybackResolver {
         // so the thrown error can carry it.
         var lastError: (any Error)?
 
+        let playableSources = sources.playable
+        PerfLog.info("PlaybackResolver: Step 3 — iterating \(playableSources.count) playable sources: \(playableSources.map(\.id))")
+
         for source in sources.playable {
+            PerfLog.trace("PlaybackResolver: Step 3 — trying source '\(source.id)' for '\(ref.title)'")
             let match: MatchResult?
             do {
                 match = try await matcher.match(target, on: source)
@@ -118,7 +131,11 @@ public final class PlaybackResolver {
                 lastError = error
                 continue
             }
-            guard let match else { continue }
+            guard let match else {
+                PerfLog.trace("PlaybackResolver: Step 3 — no match on '\(source.id)' for '\(ref.title)'")
+                continue
+            }
+            PerfLog.info("PlaybackResolver: Step 3 — MATCHED on '\(source.id)' for '\(ref.title)': trackID='\(match.track.id)'")
 
             let streams: [SourceStream]
             do {
@@ -131,7 +148,12 @@ public final class PlaybackResolver {
                 lastError = error
                 continue
             }
-            guard let stream = streams.first else { continue }
+            guard let stream = streams.first else {
+                PerfLog.warning("PlaybackResolver: Step 3 — no streams returned from '\(source.id)' for '\(ref.title)'")
+                continue
+            }
+
+            PerfLog.info("PlaybackResolver: Step 3 — resolved '\(ref.title)' from '\(source.id)': url=\(stream.url.absoluteString.prefix(80))")
 
             // Persisted against the *playing* source, so the next play resolves straight from it.
             let playbackRef = PlayableRef(
@@ -147,6 +169,7 @@ public final class PlaybackResolver {
             return streams
         }
 
+        PerfLog.error("PlaybackResolver: FAILED to resolve '\(ref.title)' from source '\(ref.sourceID)' — no playable source matched")
         throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title, underlying: lastError)
     }
 
@@ -197,19 +220,31 @@ public final class SourceRegistry {
     }
 
     public func replace(with sources: [any MusicSource]) {
+        PerfLog.info("SourceRegistry.replace(with:): replacing \(self.sources.count) sources with \(sources.count) sources: \(sources.map { "\($0.id) caps=\($0.capabilities)" })")
         self.sources = sources
         if let preferredSourceID, !sources.contains(where: { $0.id == preferredSourceID }) {
-            self.preferredSourceID = sources.first?.id
+            let newPreferred = sources.first?.id
+            PerfLog.warning("SourceRegistry: preferredSourceID '\(preferredSourceID)' not found in new sources — falling back to '\(newPreferred ?? "nil")'")
+            self.preferredSourceID = newPreferred
+        } else {
+            PerfLog.info("SourceRegistry: preferredSourceID=\(preferredSourceID ?? "nil")")
         }
     }
 
     public func source(for id: String) -> (any MusicSource)? {
-        sources.first { $0.id == id }
+        let source = sources.first { $0.id == id }
+        if source == nil {
+            PerfLog.warning("SourceRegistry.source(for: '\(id)'): NOT FOUND. Available sources: \(sources.map(\.id))")
+        } else {
+            PerfLog.trace("SourceRegistry.source(for: '\(id)'): found \(source!.id) caps=\(source!.capabilities)")
+        }
+        return source
     }
 
     /// Sources that can actually play audio, in preference order.
     public var playable: [any MusicSource] {
         let capable = sources.filter { $0.capabilities.contains(.stream) }
+        PerfLog.trace("SourceRegistry.playable: \(capable.count) of \(sources.count) sources have .stream capability: \(capable.map(\.id))")
         guard let preferredSourceID,
               let index = capable.firstIndex(where: { $0.id == preferredSourceID })
         else { return capable }

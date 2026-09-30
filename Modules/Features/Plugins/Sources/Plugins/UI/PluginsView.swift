@@ -17,17 +17,28 @@ public struct PluginsView: View {
 
     @State private var query = ""
     @State private var installing: Set<String> = []
+    @State private var isEditing = false
 
     public init() {}
 
     public var body: some View {
         List {
             if !store.installed.isEmpty {
-                Section("Installed") {
+                Section {
                     ForEach(store.installed) { plugin in
                         InstalledPluginRow(plugin: plugin, hasUpdate: store.hasUpdate(plugin))
                     }
+                    .onMove { indices, destination in
+                        store.moveInstalled(from: indices, to: destination)
+                    }
+                    .deleteDisabled(true)
+                } header: {
+                    installedHeader
                 }
+            }
+
+            Section("Sort Priority") {
+                SortModePicker()
             }
 
             Section("Browse") {
@@ -56,6 +67,9 @@ public struct PluginsView: View {
         }
         .navigationTitle("Plugins")
         .searchable(text: $query, prompt: "Search plugins")
+        #if os(iOS)
+        .environment(\.editMode, .constant(isEditing ? .active : .inactive))
+        #endif
         .refreshable { await store.refreshCatalog() }
         .task {
             guard store.catalog.isEmpty else { return }
@@ -64,8 +78,6 @@ public struct PluginsView: View {
     }
 
     private var filteredCatalog: [RegistryEntry] {
-        // Only MODULE entries are music sources; the registry also lists ARTWORK and CONNECTOR
-        // types that this screen has nothing to do with.
         let modules = store.catalog.filter { $0.type == "MODULE" }
         guard !query.isEmpty else { return modules }
 
@@ -80,7 +92,50 @@ public struct PluginsView: View {
         defer { installing.remove(entry.id) }
         try? await store.install(entry)
     }
+
+    private var installedHeader: some View {
+        HStack {
+            Text("Installed")
+            Spacer()
+            if isEditing {
+                Button("Done") { isEditing = false }
+                    .font(.caption)
+            } else {
+                Button("Reorder") { isEditing = true }
+                    .font(.caption)
+            }
+        }
+    }
 }
+
+// MARK: - Sort Mode Picker
+
+private struct SortModePicker: View {
+    @Environment(PluginStore.self) private var store
+
+    var body: some View {
+        Picker("Priority", selection: sortModeBinding) {
+            ForEach(PluginSortMode.allCases, id: \.self) { mode in
+                Label(mode.displayName, systemImage: mode.systemImage)
+                    .tag(mode)
+            }
+        }
+        .pickerStyle(.inline)
+    }
+
+    private var sortModeBinding: Binding<PluginSortMode> {
+        Binding(
+            get: { store.pluginSortMode },
+            set: { newMode in
+                Task { @MainActor in
+                    await store.setSortMode(newMode)
+                }
+            }
+        )
+    }
+}
+
+// MARK: - Installed Plugin Row
 
 private struct InstalledPluginRow: View {
     @Environment(PluginStore.self) private var store
@@ -121,6 +176,8 @@ private struct InstalledPluginRow: View {
         }
     }
 }
+
+// MARK: - Catalog Row
 
 private struct CatalogRow: View {
     let entry: RegistryEntry
@@ -167,6 +224,8 @@ private struct CatalogRow: View {
         }
     }
 }
+
+// MARK: - Plugin Icon
 
 private struct PluginIcon: View {
     let url: URL?
