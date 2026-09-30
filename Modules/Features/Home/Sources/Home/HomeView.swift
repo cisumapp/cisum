@@ -44,7 +44,12 @@ public struct HomeView: View {
             content
         }
         #elseif os(macOS)
-        content
+        // `NavigationBarView` supplies the ScrollView on iOS. There is no nav bar on macOS,
+        // so `content` needs its own or the sections overflow the window and are clipped.
+        ScrollView {
+            content
+                .contentMargins(.top, 8)
+        }
         #endif
     }
 
@@ -132,7 +137,11 @@ public struct HomeView: View {
                     .padding(.vertical, 6)
             }
         }
+        #if os(iOS)
+        // Clears the floating mini player, which sits over the content on iOS. The macOS
+        // transport lives in the band above the content, so nothing floats here.
         .padding(.bottom, 120)
+        #endif
         .padding(.top, 16)
         .task {
             updateUniqueHistoryItems()
