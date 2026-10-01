@@ -313,7 +313,39 @@ public struct RootView: View {
                 .padding(.leading, 14)
                 .padding(.top, 14)
         }
+        .background { sidebarMaterial }
     }
+
+    /// The navigation column's surface.
+    ///
+    /// A sidebar is a *structural* region, so its material stays the heavy, dark one rather
+    /// than a prominent tint — weight encodes hierarchy here. On macOS 26 the system draws
+    /// this itself for a `.sidebar` list, so the native material is left showing; the glass
+    /// below is only reached once the list's own background is hidden, which is what lets the
+    /// content behind the column show through instead.
+    ///
+    /// Only the two leading corners are rounded. The trailing edge meets the split view's
+    /// divider and must stay square, and the window's own corners clip the top and bottom
+    /// against the frame.
+    @ViewBuilder
+    private var sidebarMaterial: some View {
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: Self.windowCornerRadius,
+            bottomLeadingRadius: Self.windowCornerRadius,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 0,
+            style: .continuous
+        )
+        if #available(macOS 26.0, *) {
+            shape.glassEffect(.regular, in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+        }
+    }
+
+    /// The window's corner radius. Matches what AppKit draws for a standard titled window, so
+    /// the sidebar's leading edge meets the frame without a visible step.
+    private static let windowCornerRadius: CGFloat = 10
 
     /// Trailing edge of the traffic lights, measured from the sidebar's leading edge: the
     /// 14pt inset plus three 12pt buttons and two 8pt gaps. `WindowDragRegion` starts here so
@@ -346,7 +378,7 @@ public struct RootView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 14)
                 }
-                .frame(height: Self.vinylBandHeight(for: proxy.size.height))
+                .frame(height: Self.vinylBandHeight(for: proxy.size.height, width: proxy.size.width))
                 .clipped()
 
                 // ── Opaque content ───────────────────────────────────────────
@@ -380,8 +412,8 @@ public struct RootView: View {
     /// Sized to clear the floating transport plus a band of record above it, and clamped
     /// against the window height so a short window doesn't hand most of the screen to the
     /// backdrop and starve the content below.
-    private static func vinylBandHeight(for windowHeight: CGFloat) -> CGFloat {
-        min(180, max(120, windowHeight * 0.24))
+    private static func vinylBandHeight(for windowHeight: CGFloat, width windowWidth: CGFloat = 0) -> CGFloat {
+        min(max(260, windowWidth * 0.1), max(120, windowHeight * 0.24))
     }
     #endif
 

@@ -33,6 +33,7 @@ struct macOSApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let discord = DiscordModel()
     private(set) lazy var cisum = {
         let timer = PerfLog.start("macos-app-init")
         PerfLog.info("cisum macOS app initializing")
@@ -70,12 +71,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // intended size once that pass has happened.
         MainWindowFactory.applyInitialFrame(to: window)
 
+        discord.start()
+        discord.attach(to: cisum.container.playbackServices.player)
         observeLifecycle()
     }
 
     /// Standard Mac behaviour: closing the last window quits.
     func applicationShouldTerminateAfterLastWindowClosed( _: NSApplication) -> Bool {
         true
+    }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        discord.stop()
     }
 
     func applicationShouldOpenUntitledFile( _: NSApplication) -> Bool {

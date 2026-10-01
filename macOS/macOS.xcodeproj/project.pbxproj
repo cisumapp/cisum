@@ -10,10 +10,27 @@
 		776B8BDE2FDFD02E00352279 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 776B8BDD2FDFD02E00352279 /* Core */; };
 		777B92BA2FA48CE000ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92B92FA48CE000ECAF15 /* Core */; };
 		777B92D62FA4AA2400ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92D52FA4AA2400ECAF15 /* Core */; };
+		77E33960306E64ED00546A3E /* discord_partner_sdk.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77E3395A306E5F0300546A3E /* discord_partner_sdk.framework */; };
+		77E33961306E64ED00546A3E /* discord_partner_sdk.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 77E3395A306E5F0300546A3E /* discord_partner_sdk.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		77E33959306E5EC800546A3E /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				77E33961306E64ED00546A3E /* discord_partner_sdk.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		772039692F6AAAD500E85D4A /* cisum.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = cisum.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		77E3395A306E5F0300546A3E /* discord_partner_sdk.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = discord_partner_sdk.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -43,6 +60,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				777B92BA2FA48CE000ECAF15 /* Core in Frameworks */,
+				77E33960306E64ED00546A3E /* discord_partner_sdk.framework in Frameworks */,
 				777B92D62FA4AA2400ECAF15 /* Core in Frameworks */,
 				776B8BDE2FDFD02E00352279 /* Core in Frameworks */,
 			);
@@ -55,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				7720396B2F6AAAD500E85D4A /* cisum */,
+				77E33955306E5EC800546A3E /* Frameworks */,
 				7720396A2F6AAAD500E85D4A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -67,6 +86,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		77E33955306E5EC800546A3E /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				77E3395A306E5F0300546A3E /* discord_partner_sdk.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -77,6 +104,7 @@
 				772039652F6AAAD500E85D4A /* Sources */,
 				772039662F6AAAD500E85D4A /* Frameworks */,
 				772039672F6AAAD500E85D4A /* Resources */,
+				77E33959306E5EC800546A3E /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -107,6 +135,7 @@
 				TargetAttributes = {
 					772039682F6AAAD500E85D4A = {
 						CreatedOnToolsVersion = 26.3;
+						LastSwiftMigration = 2700;
 					};
 				};
 			};
@@ -284,6 +313,8 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = cisum/macOS.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -300,7 +331,12 @@
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_FILE = cisum/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = cisum;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -328,6 +364,8 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "cisum/cisum-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};
@@ -340,6 +378,8 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = cisum/macOS.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -356,7 +396,12 @@
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "";
 				INFOPLIST_FILE = cisum/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = cisum;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
@@ -384,6 +429,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "cisum/cisum-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 6.0;
 			};
