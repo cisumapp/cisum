@@ -64,7 +64,7 @@ public struct VinylBackdrop: View {
         VinylDisk(size: side, rotation: rotation, grooveOpacity: 0.95) {
             // The label area is deliberately empty — this is the "no art" disc. A faint
             // radial tint keeps the spindle from reading as a hole punched in the record.
-            Color.black.opacity(0.35)
+            Color.black.opacity(0.85)
         }
     }
 

@@ -88,7 +88,7 @@ public final class PlayerViewModel: PlaybackCommands {
         guard let next = queue.advance() else {
             engine.stop()
             nowPlaying.ref = nil
-            nowPlayingCenter?.clear()
+            publishNowPlaying()
             return
         }
         start(next)
@@ -244,6 +244,12 @@ public final class PlayerViewModel: PlaybackCommands {
     /// Injected rather than reached for directly, because persistence is the application's concern
     /// and Player does not import SwiftData.
     public var invalidateCachedStream: (@MainActor (PlayableRef) -> Void)?
+    
+    /// Fires whenever the published now-playing or transport state changes.
+    ///
+    /// Injected, not observed: Player does not know about the app's Discord presence, it just
+    /// calls a closure the composition root supplies — same pattern as `invalidateCachedStream`.
+    public var onNowPlayingChange: (@MainActor () -> Void)?
 
     // MARK: - Wiring for the composition root
 
@@ -284,5 +290,6 @@ public final class PlayerViewModel: PlaybackCommands {
             transport: transport,
             currentTime: progress.currentTime
         )
+        onNowPlayingChange?()
     }
 }
