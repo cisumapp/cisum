@@ -168,6 +168,10 @@ enum AppBootstrap {
         // Seeded synchronously with the native sources. Plugin loading below is async, and
         // buildDependencies returns before it finishes — a tap in that window used to find an
         // empty registry and fail with no log at all.
+        // Per-session YouTube state (visitorData, signature timestamp) loads now, in the background,
+        // instead of in front of the first tap (~1.4 s measured).
+        Task { await YouTubeStreamResolver.shared.warmUp() }
+
         let sourceRegistry = SourceRegistry(sources: [
             YouTubeMusicSource(youtube: youtube),
             YouTubeVideoSource(youtube: youtube),

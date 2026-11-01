@@ -235,6 +235,7 @@ public final class PlayerViewModel: PlaybackCommands {
                     lastTickSeconds = nil
                 }
                 refillRadioIfNeeded()
+                preResolveUpcoming()
                 publishNowPlaying()
             } catch {
                 guard !Task.isCancelled, nowPlaying.ref == ref else { return }
@@ -344,6 +345,29 @@ public final class PlayerViewModel: PlaybackCommands {
         lyrics.plainText = nil
         lyrics.currentIndex = nil
         lyrics.attribution = nil
+    }
+
+    // MARK: - Pre-resolution
+
+    /// How many upcoming tracks are resolved ahead while the current one plays.
+    private static let preResolveDepth = 2
+
+    /// Upcoming refs already resolved (or being resolved) ahead, so each is fetched once.
+    @ObservationIgnored private var preResolved = Set<String>()
+
+    /// Resolves the next tracks in the background while this one plays.
+    ///
+    /// The resolver persists each result's stream URL, so when the queue reaches the track its
+    /// resolve is the cached-URL path: no network before AVPlayer starts. This is the difference
+    /// between a skip that waits on a fresh resolve and one that starts immediately.
+    private func preResolveUpcoming() {
+        guard let position = queue.position else { return }
+        let next = queue.entries.dropFirst(position + 1).prefix(Self.preResolveDepth)
+        for ref in next where preResolved.insert(Self.queueKey(ref)).inserted {
+            Task { [resolver] in
+                _ = try? await resolver.resolve(ref)
+            }
+        }
     }
 
     // MARK: - Listening history
@@ -464,6 +488,7 @@ public final class PlayerViewModel: PlaybackCommands {
                 return
             }
             updateSkipAvailability()
+            preResolveUpcoming()
             PerfLog.info("Radio: appended \(added.count) of \(batch?.refs.count ?? 0) track(s) seeded by '\(seed.title)'")
         }
     }
