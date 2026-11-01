@@ -29,11 +29,27 @@ public struct TimedLyricLine: Identifiable, Equatable, Sendable {
     public let timestamp: TimeInterval
     public let text: String
     public let syllables: [LyricSyllable]?
+    /// Backing vocals sung under the line.
+    public let backgroundSyllables: [LyricSyllable]?
+    /// The line in the listener's language.
+    public let translation: String?
+    /// The line in Latin script, for non-Latin songs.
+    public let romanization: String?
 
-    public init(timestamp: TimeInterval, text: String, syllables: [LyricSyllable]? = nil) {
+    public init(
+        timestamp: TimeInterval,
+        text: String,
+        syllables: [LyricSyllable]? = nil,
+        backgroundSyllables: [LyricSyllable]? = nil,
+        translation: String? = nil,
+        romanization: String? = nil
+    ) {
         self.timestamp = timestamp
         self.text = text
         self.syllables = syllables
+        self.backgroundSyllables = backgroundSyllables
+        self.translation = translation
+        self.romanization = romanization
         self.id = "\(timestamp)-\(text)"
     }
 }
