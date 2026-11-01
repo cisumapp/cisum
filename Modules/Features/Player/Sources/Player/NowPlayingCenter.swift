@@ -44,7 +44,10 @@ public final class NowPlayingCenter {
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: nowPlaying.title,
             MPMediaItemPropertyArtist: nowPlaying.artist,
-            MPMediaItemPropertyPlaybackDuration: nowPlaying.duration,
+            // The length of the item that is actually playing, not the catalogue's claim about it:
+            // the lock screen's scrubber is measuring this file. `0` when nothing is known, which is
+            // the value it already treats as "unknown length".
+            MPMediaItemPropertyPlaybackDuration: nowPlaying.timelineDuration ?? 0,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             // Zero while paused, so the lock screen's clock does not keep advancing.
             MPNowPlayingInfoPropertyPlaybackRate: transport.isPlaying ? 1.0 : 0.0,

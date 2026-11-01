@@ -65,7 +65,12 @@ public struct MacSplitView: NSViewControllerRepresentable {
         let sidebarItem = NSSplitViewItem(viewController: sidebarHost)
         // Matches the reference's proportions and stops the column being dragged to a
         // width that leaves no room for the content.
-        sidebarItem.minimumThickness = Self.sidebarWidth
+        //
+        // The column's trailing edge *is* the sidebar surface's trailing edge. There is no
+        // margin on that side, so the surface ends exactly where the divider is and the user
+        // perceives one edge rather than a surface with a strip of empty, draggable gutter
+        // beside it. The margin only exists on the three sides that face the window frame.
+        sidebarItem.minimumThickness = Self.sidebarColumnWidth
         sidebarItem.maximumThickness = 320
         sidebarItem.canCollapse = false
         // Left without an identifier deliberately: AppKit then has no key under which to
@@ -80,6 +85,18 @@ public struct MacSplitView: NSViewControllerRepresentable {
         split.addSplitViewItem(detailItem)
         split.splitView.dividerStyle = .thin
 
+        // The divider keeps doing its job — it is the drag handle — but stops drawing a line
+        // along it. The sidebar surface already ends on this edge and the reference shows the
+        // two meeting without a rule between them; a drawn divider would put a hard vertical
+        // seam exactly where the composition is supposed to be continuous.
+        //
+        // AppKit creates these views lazily, so this has to run after the items are added and
+        // again once the split has been sized.
+        Self.hideDividers(in: split)
+        DispatchQueue.main.async {
+            Self.hideDividers(in: split)
+        }
+
         context.coordinator.sidebarHost = sidebarHost
         context.coordinator.detailHost = detailHost
         context.coordinator.detailKey = detailKey
@@ -87,11 +104,42 @@ public struct MacSplitView: NSViewControllerRepresentable {
         return split
     }
 
-    /// Width the navigation column opens at, and the narrowest it can be dragged to.
+    /// Makes the split view's divider views invisible without disabling them.
     ///
-    /// Apple Music's sidebar is a fixed, narrow column, so the shell opens at the minimum and
-    /// grows only if the user drags it wider.
+    /// Clearing the layer rather than hiding the view is deliberate: a hidden divider cannot be
+    /// hit-tested, so the column would stop being resizable and the resize affordance would
+    /// have to be faked somewhere else. This leaves the drag behaviour untouched.
+    ///
+    /// `NSSplitViewDividerView` is not public, so the views are matched by class name rather
+    /// than cast — there is no supported way to reference the type directly.
+    private static func hideDividers(in controller: NSSplitViewController) {
+        for view in controller.splitView.subviews
+            where String(describing: type(of: view)) == "NSSplitViewDividerView"
+        {
+            view.wantsLayer = true
+            view.layer?.backgroundColor = .clear
+        }
+    }
+
+    /// Width the sidebar surface is drawn at, before the margin around it.
+    ///
+    /// Apple Music's sidebar is a fixed, narrow column, so it opens at the narrowest it can be
+    /// and grows only if the user drags the divider wider.
     public static let sidebarWidth: CGFloat = 190
+
+    /// Margin the floating sidebar surface insets itself by on the sides facing the window.
+    ///
+    /// Leading, top and bottom only. The trailing side deliberately has none — see
+    /// `sidebarColumnWidth`.
+    public static let sidebarMargin: CGFloat = 10
+
+    /// Total thickness of the column: the surface plus the leading margin.
+    ///
+    /// Adding the margin on both sides is what produced a dead strip between the visible
+    /// surface and the divider, so only the leading one is counted here.
+    public static var sidebarColumnWidth: CGFloat {
+        sidebarWidth + sidebarMargin
+    }
 
     public func updateNSViewController(_ controller: NSSplitViewController, context: Context) {
         // The divider position is only valid once the split view has been given a size, which
@@ -100,7 +148,7 @@ public struct MacSplitView: NSViewControllerRepresentable {
         if !context.coordinator.hasSetInitialWidth {
             context.coordinator.hasSetInitialWidth = true
             DispatchQueue.main.async {
-                controller.splitView.setPosition(Self.sidebarWidth, ofDividerAt: 0)
+                controller.splitView.setPosition(Self.sidebarColumnWidth, ofDividerAt: 0)
             }
         }
 

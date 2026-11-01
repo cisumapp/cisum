@@ -63,7 +63,9 @@ public extension PlaylistItem {
             title: title,
             artist: artistName ?? "",
             artworkURL: artworkURLString.flatMap(URL.init(string:)),
-            durationSeconds: durationSeconds
+            durationSeconds: durationSeconds,
+            isrc: isrc,
+            album: albumName
         )
     }
 }

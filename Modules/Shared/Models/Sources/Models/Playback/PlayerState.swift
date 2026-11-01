@@ -46,8 +46,35 @@ public final class NowPlayingState {
     public var accentColor: Color = .gray
     public var isExplicit: Bool = false
 
-    /// Total length in seconds. Lives here, not with progress: it changes once per track.
+    /// Total length in seconds, **as the catalogue reports it**. Lives here, not with progress: it
+    /// changes once per track.
+    ///
+    /// Canonical, and not necessarily the length of the audio being played — see
+    /// `observedItemDuration` and `timelineDuration`.
     public var duration: Double = 0
+
+    /// What `AVPlayerItem` reported for the file that actually loaded, in seconds.
+    ///
+    /// `nil` when unknown, which is every track until its item is ready — and is why this is not
+    /// simply written over `duration`: the two answer different questions. This one is what the user
+    /// is hearing; `duration` is what the catalogue promised. Keeping them apart is what lets the
+    /// timeline be corrected by the real file without discarding the canonical value, and what stops
+    /// a stale item from rewriting the current track's number.
+    public var observedItemDuration: Double?
+
+    /// What the service states as the length of the file that is playing, when it says.
+    ///
+    /// Outranks `observedItemDuration`: it describes the same file, but exactly, whereas
+    /// AVFoundation estimates the length of fragmented MP4.
+    public var reportedStreamDuration: Double?
+
+    /// The length the scrubber, the elapsed/total labels and the lock screen measure against.
+    ///
+    /// The observed item duration when there is a usable one, else the canonical one, else `nil` for
+    /// unknown — never `0`, which is indistinguishable from a real zero-length value.
+    public var timelineDuration: Double? {
+        PlaybackTimeline.duration(canonical: duration, observed: observedItemDuration, reported: reportedStreamDuration)
+    }
 
     public init() {}
 
@@ -102,6 +129,31 @@ public final class LyricsPresentation {
     // a boolean here could disagree with the mode and there would be no right answer.
 
     public init() {}
+}
+
+/// Lyrics for one track, as whatever fetched them found them.
+public struct LyricsContent: Sendable {
+    public let synced: [TimedLyricLine]
+    public let plain: String?
+    public let attribution: String?
+
+    public init(synced: [TimedLyricLine], plain: String?, attribution: String?) {
+        self.synced = synced
+        self.plain = plain
+        self.attribution = attribution
+    }
+}
+
+/// One page of a radio station: the tracks to append, and where the next page starts.
+public struct RadioBatch: Sendable {
+    public let refs: [PlayableRef]
+    /// `nil` when the station has nothing further.
+    public let continuation: String?
+
+    public init(refs: [PlayableRef], continuation: String?) {
+        self.refs = refs
+        self.continuation = continuation
+    }
 }
 
 /// Commands the UI can send to the player.

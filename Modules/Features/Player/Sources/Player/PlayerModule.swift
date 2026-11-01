@@ -139,6 +139,22 @@ public final class PlayerModule {
         #endif
     }
 
+    /// The current track's artwork, washed out behind the macOS record band.
+    ///
+    /// Sits beside `vinylBackdrop` rather than replacing it: with a track loaded the band's
+    /// imagery comes from the artwork, which is what ties the band to what is actually
+    /// playing, and with nothing loaded there is no artwork to show so the record stands in.
+    /// Both are handed out here rather than read from the shell so neither needs its own copy
+    /// of the view model.
+    public func artworkBackdrop() -> some View {
+        #if os(iOS)
+        EmptyView()
+        #elseif os(macOS)
+        PlayerArtworkBackdrop()
+            .environment(viewModel)
+        #endif
+    }
+
     // MARK: - Lifecycle
 
     public func handleScenePhaseChange(_ phase: ScenePhase) {

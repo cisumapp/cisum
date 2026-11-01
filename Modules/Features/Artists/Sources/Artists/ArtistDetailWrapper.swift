@@ -1,4 +1,3 @@
-#if os(iOS)
 import Models
 import SwiftData
 import SwiftUI
@@ -21,4 +20,3 @@ public struct ArtistDetailWrapper: View {
         }
     }
 }
-#endif

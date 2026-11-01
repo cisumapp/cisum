@@ -225,3 +225,88 @@ struct PlaybackQueueTests {
         #expect(one != other)
     }
 }
+
+@MainActor
+@Suite("Radio-filled queue")
+struct RadioQueueTests {
+    private func song(_ id: String, _ title: String, _ artist: String, source: String = "youtube_music") -> PlayableRef {
+        PlayableRef(songID: nil, sourceID: source, sourceTrackID: id, title: title, artist: artist)
+    }
+
+    @Test("turning shuffle on never puts played tracks back in front")
+    func shuffleKeepsHistoryBehind() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [a, b, c, d], startIndex: 2)
+        queue.mode = .shuffle
+        #expect(queue.position == 2)
+        #expect(Array(queue.entries.prefix(3)) == [a, b, c])
+        #expect(queue.entries.last == d)
+    }
+
+    @Test("the same song from another service is not appended twice")
+    func crossServiceDuplicateDropped() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [song("yt1", "Yellow", "Coldplay")])
+        let added = queue.appendUnique([
+            song("sp1", "Yellow", "Coldplay", source: "spotify"),
+            song("yt2", "Coldplay - Yellow (Official Video)", "Coldplay"),
+            song("yt3", "Clocks", "Coldplay"),
+            song("sp2", "Clocks", "Coldplay", source: "spotify"),
+        ])
+        #expect(added.map(\.sourceTrackID) == ["yt3"])
+        #expect(queue.count == 2)
+    }
+
+    @Test("featured-artist spelling does not defeat de-duplication")
+    func featuredArtistsIgnored() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [song("a", "Like That", "Future, Metro Boomin")])
+        #expect(queue.appendUnique([song("b", "Like That", "Future & Metro Boomin", source: "spotify")]).isEmpty)
+    }
+
+    @Test("radio tracks appended while shuffled stay after the current track")
+    func appendWhileShuffled() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [a, b], startIndex: 1)
+        queue.mode = .shuffle
+        queue.appendUnique([c, d])
+        #expect(queue.current == b)
+        #expect(Set(queue.entries.suffix(2)) == [c, d])
+        queue.mode = .off
+        #expect(queue.current == b)
+        #expect(queue.entries == [a, b, c, d])
+    }
+}
+
+@MainActor
+@Suite("Queue reordering")
+struct QueueMoveTests {
+    @Test("moving an upcoming entry keeps the same track playing")
+    func moveKeepsCurrent() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [a, b, c, d], startIndex: 1)
+        queue.move(from: 3, to: 2)
+        #expect(queue.entries == [a, b, d, c])
+        #expect(queue.current == b)
+        queue.move(from: 2, to: 4)
+        #expect(queue.entries == [a, b, c, d])
+    }
+
+    @Test("the playing entry cannot be moved")
+    func currentStaysPut() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [a, b, c], startIndex: 1)
+        queue.move(from: 1, to: 3)
+        #expect(queue.entries == [a, b, c])
+    }
+
+    @Test("a reorder survives turning shuffle on and off")
+    func reorderSurvivesShuffle() {
+        let queue = PlaybackQueue()
+        queue.replace(with: [a, b, c, d], startIndex: 0)
+        queue.move(from: 3, to: 1)
+        queue.mode = .shuffle
+        queue.mode = .off
+        #expect(queue.entries == [a, d, b, c])
+    }
+}

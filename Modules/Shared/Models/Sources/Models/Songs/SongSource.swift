@@ -128,6 +128,24 @@ public final class SongSource {
         return url
     }
 
+    /// Refreshes what the provider claims about this representation.
+    ///
+    /// Never overwrites a known value with `nil`, mirroring `Song.bind` — a later, poorer response
+    /// must not erase evidence a better one already supplied. Used when a binding is reused rather
+    /// than created (for example an ad-hoc play of a representation that is already persisted).
+    public func updateEvidence(
+        isrc: String?,
+        durationSeconds: Double?,
+        audioQualityLabel: String?,
+        allowsStreamCaching: Bool
+    ) {
+        self.isrc = isrc ?? self.isrc
+        self.durationSeconds = durationSeconds ?? self.durationSeconds
+        self.audioQualityLabel = audioQualityLabel ?? self.audioQualityLabel
+        self.allowsStreamCaching = allowsStreamCaching
+        lastVerifiedAt = .now
+    }
+
     /// Records a resolved stream.
     ///
     /// - Parameter expiresAt: The service's declared expiry. When `nil`, `defaultLifetime` applies

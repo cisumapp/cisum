@@ -13,6 +13,7 @@
 		77C8BF5C2F6E36D200E7354F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF5B2F6E36D200E7354F /* SwiftUI.framework */; };
 		77C8BF6D2F6E36D200E7354F /* LyricsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 77C8BF572F6E36D200E7354F /* LyricsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1B2C3D42F6F000100E7354F /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D52F6F000100E7354F /* XCTest.framework */; };
+		A1B2C3E22F6F000100E7354F /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3E12F6F000100E7354F /* Core */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +100,11 @@
 			path = Lyrics;
 			sourceTree = "<group>";
 		};
+		A1B2C3E02F6F000100E7354F /* cisumTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = cisumTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +131,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B2C3D42F6F000100E7354F /* XCTest.framework in Frameworks */,
+				A1B2C3E22F6F000100E7354F /* Core in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -136,6 +143,7 @@
 			children = (
 				772039542F6AAAA700E85D4A /* cisum */,
 				77C8BF5D2F6E36D200E7354F /* Lyrics */,
+				A1B2C3E02F6F000100E7354F /* cisumTests */,
 				77C8BF582F6E36D200E7354F /* Frameworks */,
 				772039532F6AAAA700E85D4A /* Products */,
 			);
@@ -228,8 +236,12 @@
 			dependencies = (
 				A1B2C3DA2F6F000100E7354F /* PBXTargetDependency */,
 			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3E02F6F000100E7354F /* cisumTests */,
+			);
 			name = cisumTests;
 			packageProductDependencies = (
+				A1B2C3E12F6F000100E7354F /* Core */,
 			);
 			productName = cisumTests;
 			productReference = A1B2C3D62F6F000100E7354F /* cisumTests.xctest */;
@@ -709,6 +721,10 @@
 			productName = Core;
 		};
 		777B92D22FA4AA1B00ECAF15 /* Core */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Core;
+		};
+		A1B2C3E12F6F000100E7354F /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = Core;
 		};

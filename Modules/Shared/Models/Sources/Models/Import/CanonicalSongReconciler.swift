@@ -92,39 +92,62 @@ public enum CanonicalSongReconciler {
         return na == nb || similarity(na, nb) >= threshold
     }
 
-    /// Coarse version-type tag of a title (so a studio cut never dedups into a live/remix cut).
-    private static func versionType(_ title: String) -> String {
-        let lower = title.lowercased()
-        for tag in ["live", "remix", "acoustic", "instrumental"] where lower.contains(tag) {
-            return tag
-        }
-        return "studio"
-    }
-
     // MARK: Scoring
 
     /// How likely an incoming track is the same canonical song as `key`. 0.0–1.0.
     /// ISRC equality is handled by an exact fetch in the store; this is the metadata fallback.
     public static func score(_ incoming: IncomingTrack, against key: SongMatchKey) -> Double {
-        // Version type must match for a confident dedup.
-        if versionType(incoming.title) != versionType(key.normalizedTitle) {
+        score(
+            title: incoming.title,
+            artistName: incoming.artistName,
+            durationSeconds: incoming.durationSeconds,
+            albumName: incoming.albumName,
+            versionEvidence: incoming.version,
+            against: key
+        )
+    }
+
+    /// The same scoring, over scalar fields.
+    ///
+    /// Exists so callers that hold a projection rather than an `IncomingTrack` — a search-result
+    /// snapshot, say — can score without fabricating a provider. Behaviour is identical to
+    /// `score(_:against:)`, which delegates here.
+    /// - Parameter versionEvidence: Structured version evidence for the incoming track, when its
+    ///   adapter reported one. Omitted, the version is inferred from `title`.
+    public static func score(
+        title: String,
+        artistName: String?,
+        durationSeconds: Double?,
+        albumName: String?,
+        versionEvidence: VersionEvidence? = nil,
+        against key: SongMatchKey
+    ) -> Double {
+        // Structured version evidence first; conservative title inference only as a fallback. Both
+        // sides resolve through the same policy, so a reported `live` on one side contradicts an
+        // inferred `original` on the other and blocks the merge.
+        let incomingVersion = VersionEvidencePolicy.resolvedVersion(versionEvidence, rawTitle: title)
+        let canonicalVersion = VersionEvidencePolicy.resolvedVersion(
+            key.versionEvidence,
+            rawTitle: key.title ?? key.normalizedTitle
+        )
+        if !incomingVersion.isCompatible(with: canonicalVersion) {
             return 0.0
         }
 
-        let titleMatch = isSimilar(incoming.title, key.normalizedTitle, threshold: 0.90)
+        let titleMatch = isSimilar(title, key.normalizedTitle, threshold: 0.90)
 
         let durationMatch: Bool = {
-            guard let a = incoming.durationSeconds, let b = key.durationSeconds else { return false }
+            guard let a = durationSeconds, let b = key.durationSeconds else { return false }
             return abs(a - b) < 2.0
         }()
 
         let artistMatch: Bool = {
-            guard let a = incoming.artistName, let b = key.artistName else { return false }
+            guard let a = artistName, let b = key.artistName else { return false }
             return isSimilar(a, b, threshold: 0.85)
         }()
 
         let albumMatch: Bool = {
-            guard let a = incoming.albumName, let b = key.albumName else { return false }
+            guard let a = albumName, let b = key.albumName else { return false }
             return isSimilar(a, b, threshold: 0.90)
         }()
 

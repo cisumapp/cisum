@@ -7,9 +7,14 @@
 
 import Foundation
 import Models
+import Player
 import ProviderSDK
 import Utilities
 import YouTubeSDK
+
+// `Player` re-exports `PlaybackCore`, which owns the decision about what AVPlayer can play. Format
+// compatibility is playback policy rather than this adapter's private opinion, so a second adapter
+// cannot answer the same question differently.
 
 /// YouTube Music, adapted to `MusicSource`.
 ///
@@ -33,8 +38,13 @@ public actor YouTubeMusicSource: MusicSource {
         self.youtube = youtube
     }
 
+    /// Songs-shelf search, so matching sees catalogue tracks rather than every upload.
+    ///
+    /// The plain `search(_:)` falls back to generic YouTube search, which is how a fan upload or a
+    /// music-video edit used to get bound to a song. Each result carries its `musicVideoType`, so
+    /// the matcher can prefer the official audio and refuse user uploads outright.
     public func searchTracks(query: String, limit: Int) async throws -> [SourceTrack] {
-        let songs = try await youtube.music.search(query)
+        let songs = try await youtube.music.searchSongs(query)
 
         return songs.prefix(limit).map { song in
             SourceTrack(
@@ -44,12 +54,22 @@ public actor YouTubeMusicSource: MusicSource {
                 album: song.album,
                 durationSeconds: song.duration,
                 artworkURL: song.thumbnailURL,
-                isExplicit: song.isExplicit
+                isExplicit: song.isExplicit,
+                recordingKind: Self.recordingKind(song.videoType)
             )
         }
     }
 
-    /// Every way this track can be played, best first.
+    static func recordingKind(_ type: YouTubeMusicSong.VideoType?) -> RecordingKind? {
+        switch type {
+        case .officialAudio: .officialAudio
+        case .musicVideo: .musicVideo
+        case .userUpload: .userUpload
+        case .other, nil: nil
+        }
+    }
+
+    /// Every way this track can be played, in the adapter's own order.
     ///
     /// Uses `YouTubeStreamResolver`, not `YouTubeClient.video(id:)`.
     ///
@@ -63,49 +83,24 @@ public actor YouTubeMusicSource: MusicSource {
     /// `YouTubeStreamResolver.resolve` is the ladder that actually works: unauthenticated Android
     /// first for time-to-first-byte, then a seven-stage InnerTube client chain, then WKWebView HLS
     /// extraction, deciphering and descrambling every URL along the way.
+    ///
+    /// **This list is no longer what decides playback.** Every parsed format that this platform can
+    /// play becomes a candidate and `CandidateRankingPolicy` orders them; the position in this array
+    /// survives only as a tie-break between candidates that are equal on every other dimension. The
+    /// compatibility judgement — which parsed formats may be candidates at all, and why — is
+    /// `YouTubeFormatSelection`'s, which makes it through `PlaybackFormatCompatibility` so the rule is
+    /// stated once, in the package that owns playback.
     public func streamCandidates(trackID: String, quality _: QualityHint) async throws -> [SourceStream] {
         let info = try await YouTubeStreamResolver.shared.resolve(videoId: trackID, preferAudio: true)
-        let expiry = Self.expiry(from: info)
 
-        var candidates: [SourceStream] = []
-
-        // Each candidate carries the User-Agent of the client its URL was signed for. The CDN
-        // checks it, and a mismatch is rejected with no error thrown anywhere — it surfaces only
-        // as `CRABS ... ReadError` in the system log while the player sits at 0:00.
-        if let hls = info.hlsURL {
-            candidates.append(SourceStream(
-                url: hls,
-                kind: .hls,
-                mimeType: "application/x-mpegURL",
-                qualityLabel: "Adaptive",
-                expiresAt: expiry,
-                headers: ["User-Agent": InnerTubeClients.WebSafari.userAgent],
-                requiresProxyLoader: hls.absoluteString.contains("manifest.googlevideo.com")
-            ))
-        }
-
-        if let audio = info.bestAdaptiveAudioURL {
-            candidates.append(SourceStream(
-                url: audio,
-                kind: .direct,
-                mimeType: "audio/mp4",
-                expiresAt: expiry,
-                headers: ["User-Agent": InnerTubeClients.WebSafari.userAgent]
-            ))
-        }
-
-        // Muxed last on quality, but it is the candidate with no strings attached: an
-        // Android-signed progressive URL that needs only the Android UA — no manifest, no
-        // per-segment token, no resource-loader delegate.
-        if let muxed = info.bestMuxedDownloadURL {
-            candidates.append(SourceStream(
-                url: muxed,
-                kind: .direct,
-                mimeType: "video/mp4",
-                expiresAt: expiry,
-                headers: ["User-Agent": InnerTubeClients.Android.userAgent]
-            ))
-        }
+        // The decision — which parsed formats are usable here, in what order, with which headers —
+        // lives in `YouTubeFormatSelection` so it can be read and tested as one unit. This method owns
+        // only the part that needs the network.
+        let candidates = YouTubeFormatSelection.candidates(
+            hlsURL: info.hlsURL,
+            formats: info.formats,
+            expiry: Self.expiry(from: info)
+        )
 
         guard !candidates.isEmpty else {
             throw SourceError.noStreamAvailable(source: id, trackID: trackID)
@@ -159,16 +154,39 @@ public actor YouTubeVideoSource: MusicSource {
 
         return results.items.compactMap { item -> SourceTrack? in
             guard case let .video(video) = item else { return nil }
+            let topic = Self.topicArtist(video.author)
             return SourceTrack(
                 id: video.id,
                 title: video.title,
-                artist: video.author,
+                artist: topic ?? Self.channelArtist(video.author),
                 durationSeconds: TimeInterval(video.lengthInSeconds),
-                artworkURL: video.thumbnailURL.flatMap(URL.init(string:))
+                artworkURL: video.thumbnailURL.flatMap(URL.init(string:)),
+                // ponytail: "Artist - Topic" channels are YouTube's auto-generated label uploads,
+                // the same audio YouTube Music serves. Everything else is a video of some kind; a
+                // search result cannot tell an official video from a fan upload, so it is only ever
+                // treated as a video and never as the official audio.
+                recordingKind: topic == nil ? .musicVideo : .officialAudio
             )
         }
         .prefix(limit)
         .map(\.self)
+    }
+
+    /// The artist behind an auto-generated `"<Artist> - Topic"` channel, or nil for any other channel.
+    static func topicArtist(_ author: String) -> String? {
+        let suffix = " - Topic"
+        guard author.hasSuffix(suffix) else { return nil }
+        let artist = author.dropLast(suffix.count).trimmingCharacters(in: .whitespaces)
+        return artist.isEmpty ? nil : artist
+    }
+
+    /// A channel name as the artist it stands for: `"TheWeekndVEVO"` → `"TheWeeknd"`.
+    ///
+    /// The matcher only accepts a video whose channel *is* the artist, so a label's VEVO channel
+    /// has to read as the artist's name to count as official.
+    static func channelArtist(_ author: String) -> String {
+        guard author.hasSuffix("VEVO"), author.count > 4 else { return author }
+        return String(author.dropLast(4))
     }
 
     /// Resolution is identical for both catalogues — same player endpoint, same formats — so it

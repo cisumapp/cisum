@@ -17,14 +17,11 @@ public struct SettingsView: View {
     @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
     @Environment(AuthService.self) private var authService
 
-    @State private var snapshot = PlaybackMetricsStore.Snapshot(
-        cacheHitRate: 0,
-        avgResolveMs: 0,
-        avgTapToPlayMs: 0,
-        resolveSampleCount: 0,
-        tapToPlaySampleCount: 0,
-        totalStallCount: 0
-    )
+    @State private var snapshot = PlaybackMetricsStore.Snapshot.empty
+
+    /// The stream playback is using right now, read from the shared playback observability store.
+    /// The player surfaces show the same thing as a compact label; this is the full detail.
+    @State private var activeStream: ActiveStreamState = .idle
 
     @State private var isSigningOut: Bool = false
 
@@ -172,17 +169,46 @@ public struct SettingsView: View {
 
             Section("Diagnostics") {
                 Toggle("Enable Metrics", isOn: Bindable(settings).metricsEnabled)
+
+                // The active stream: the resolved candidate playback was handed, including a
+                // fallback that replaced the ranked first choice. Unknown fields say so rather
+                // than showing a default.
+                ForEach(ActiveStreamDiagnostic.rows(activeStream)) { row in
+                    LabeledContent(row.label, value: row.value)
+                }
+
+                // Search metadata cache domain.
                 LabeledContent(
-                    "Cache Hit %", value: String(format: "%.1f%%", snapshot.cacheHitRate * 100)
+                    "Search Cache Hit %", value: String(format: "%.1f%%", snapshot.searchCacheHitRate * 100)
                 )
                 LabeledContent(
-                    "Avg Resolve", value: String(format: "%.0f ms", snapshot.avgResolveMs)
+                    "Avg Search Resolve", value: String(format: "%.0f ms", snapshot.avgSearchMetadataResolveMs)
                 )
+                LabeledContent("Search Resolve Samples", value: "\(snapshot.searchResolveSampleCount)")
+
+                // Playback stream-resolution domain.
                 LabeledContent(
-                    "Avg Tap-to-Play", value: String(format: "%.0f ms", snapshot.avgTapToPlayMs)
+                    "Avg Playback Resolve", value: String(format: "%.0f ms", snapshot.avgPlaybackResolveMs)
                 )
-                LabeledContent("Resolve Samples", value: "\(snapshot.resolveSampleCount)")
-                LabeledContent("Tap-to-Play Samples", value: "\(snapshot.tapToPlaySampleCount)")
+                LabeledContent("Playback Resolves", value: "\(snapshot.playbackResolveSampleCount)")
+                LabeledContent(
+                    "Warm / Cold", value: "\(snapshot.warmPlaybackResolveCount) / \(snapshot.coldPlaybackResolveCount)"
+                )
+
+                // Playback startup domain — first-time-advancing proxy, not audible audio.
+                LabeledContent(
+                    "Avg Startup (advance proxy)", value: String(format: "%.0f ms", snapshot.avgStartupProxyMs)
+                )
+                LabeledContent("Startup Samples", value: "\(snapshot.startupCompletedCount)")
+                LabeledContent(
+                    "Startup Failed / Cancelled", value: "\(snapshot.startupFailedCount) / \(snapshot.startupCancelledCount)"
+                )
+                LabeledContent("Fallbacks", value: "\(snapshot.fallbackCount)")
+
+                // Continuity only — NOT startup, NOT first audio.
+                LabeledContent(
+                    "Avg Intent → play()", value: String(format: "%.0f ms", snapshot.avgIntentToPlayCallMs)
+                )
 
                 Button("Refresh Metrics") {
                     Task { await refreshMetrics() }
@@ -206,6 +232,7 @@ public struct SettingsView: View {
 
     private func refreshMetrics() async {
         snapshot = await PlaybackMetricsStore.shared.snapshot()
+        activeStream = await PlaybackMetricsStore.shared.currentActiveStream()
     }
 }
 

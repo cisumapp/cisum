@@ -13,6 +13,7 @@ import Caching
 import ClerkKit
 import Foundation
 import Library
+import LyricsKit
 import Models
 import Networking
 import Player
@@ -81,8 +82,8 @@ enum AppBootstrap {
         let spid = lifecycleSP.begin("app-bootstrap")
         PerfLog.info("Bootstrap started")
         registerSpotifyBackgroundRefresh()
-        // FORCE IN-MEMORY FOR DIAGNOSTICS
-        // return makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: NSError(domain: "ManualBypass", code: 0))
+        // FORCE IN-MEMORY-FAILURE PLACEHOLDER FOR DIAGNOSTICS
+        // return makeInMemoryDependencies(youtube: youtube, router: router, failure: LibraryOpenFailure(error: NSError(domain: "ManualBypass", code: 0)))
 
         do {
             let container = try makeDependencies(youtube: youtube, router: router)
@@ -90,13 +91,40 @@ enum AppBootstrap {
             PerfLog.info("Bootstrap complete (persistent store)")
             return container
         } catch {
+            // The persistent library could not be opened. Previously this silently continued with
+            // an in-memory store, which presented to the user as an empty library and hid the real
+            // fault. The in-memory store is still built — the environment needs *a* container — but
+            // it is marked as a failure placeholder, is never presented as the user's library, and
+            // starts no background writers.
             PerfLog.error("Bootstrap persistent store error: \(error.localizedDescription)")
             lifecycleSP.event("bootstrap-fallback", "error=\(error.localizedDescription)")
-            // assertionFailure("Persistent bootstrap failed: \(error.localizedDescription). Falling back to in-memory dependencies.")
-            let container = makeInMemoryDependencies(youtube: youtube, router: router, underlyingError: error)
-            lifecycleSP.end("app-bootstrap", state: spid, "path=in-memory")
-            PerfLog.warning("Bootstrap complete (in-memory fallback)")
+            let container = makeInMemoryDependencies(
+                youtube: youtube,
+                router: router,
+                failure: LibraryOpenFailure(error: error)
+            )
+            lifecycleSP.end("app-bootstrap", state: spid, "path=in-memory-failure")
+            PerfLog.warning("Bootstrap complete (IN-MEMORY FAILURE PLACEHOLDER — library not opened)")
             return container
+        }
+    }
+
+    /// Re-attempts opening the persistent store without touching its contents.
+    ///
+    /// Used by the failure screen's "Try Again". Opening is non-destructive: it reads the store and
+    /// performs only the same lightweight migration a normal launch would. On success the app must
+    /// still be relaunched to use it — the dependency graph is built once at launch, and
+    /// `NowPlayingCenter` has no teardown for its remote-command targets, so rebuilding the graph
+    /// in place would double-register them. Relaunch is the safe affordance; silently swapping in a
+    /// second graph is not.
+    static func retryLibraryOpen() -> LibraryRetryOutcome {
+        do {
+            _ = try makePersistentModelContainer()
+            PerfLog.info("Bootstrap retry: persistent store opened on retry")
+            return .reopened
+        } catch {
+            PerfLog.error("Bootstrap retry: persistent store still unavailable: \(error.localizedDescription)")
+            return .stillUnavailable(LibraryOpenFailure(error: error))
         }
     }
 
@@ -110,7 +138,9 @@ enum AppBootstrap {
     private static func buildDependencies(
         youtube: YouTube,
         router: Router,
-        modelContainer: ModelContainer
+        modelContainer: ModelContainer,
+        libraryOpenFailure: LibraryOpenFailure? = nil,
+        startBackgroundWork: Bool = true
     ) -> ServicesContainer {
         let spid = lifecycleSP.begin("build-services")
         defer { lifecycleSP.end("build-services", state: spid) }
@@ -195,6 +225,9 @@ enum AppBootstrap {
         )
 
         Task { @MainActor in
+            // On the failure path the store is an in-memory placeholder; starting background
+            // writers against it would be pointless work, so they are skipped entirely.
+            guard startBackgroundWork else { return }
             PerfLog.info("AppBootstrap: loading plugins into SourceRegistry")
             await pluginStore.load()
 
@@ -223,6 +256,7 @@ enum AppBootstrap {
         }
 
         Task { @MainActor in
+            guard startBackgroundWork else { return }
             await mediaCacheStore.performMaintenance()
             await searchCacheHintStore.performMaintenance()
             await spotifySessionCoordinator.restoreSessionIfNeeded()
@@ -240,11 +274,67 @@ enum AppBootstrap {
         // SwiftData. These three closures are what make "match once, then never search again"
         // actually stick across launches.
         let songSourceStore = SongSourceStore(modelContainer: modelContainer)
+        // One-time repair: YouTube bindings matched before official-audio matching may point at a
+        // music-video edit or a fan upload. Bump the version to force another reset after a future
+        // matcher change.
+        let matcherVersion = 1
+        let matcherVersionKey = "cisum.songSourceStore.matcherVersion"
+        if UserDefaults.standard.integer(forKey: matcherVersionKey) < matcherVersion {
+            songSourceStore.resetSearchMatchedYouTubeBindings()
+            UserDefaults.standard.set(matcherVersion, forKey: matcherVersionKey)
+        }
         player.configurePersistence(
-            lookup: { songSourceStore.lookup($0) },
+            // Every provider that already has a representation of this track, not just the one the
+            // ref came from. That is what lets a better stream on another service compete for the
+            // same recording — and it costs no search, because a representation *is* the stored id.
+            bindings: { songSourceStore.knownRepresentations(for: $0) },
             persist: { songSourceStore.persist($0, track: $1, stream: $2) },
             invalidate: { songSourceStore.invalidate($0) }
         )
+
+        // Trust is cisum's own judgement, so it is supplied here rather than asked for. `displayName`
+        // is used as the "is it registered" test because it answers the question without the warning
+        // `source(for:)` logs for an id nobody serves.
+        // Player displays lyrics; where they come from is the app's call. LRCLIB answers by
+        // title/artist/album/duration, so the ref's display snapshot is enough — no binding needed.
+        let lyricsKit = LyricsKit()
+        player.fetchLyrics = { ref in
+            let signature = TrackSignature(
+                trackName: ref.title,
+                artistName: ref.artist,
+                albumName: ref.album ?? "",
+                durationInSeconds: Int(ref.durationSeconds ?? 0)
+            )
+            guard let record = try? await lyricsKit.bestLyrics(for: signature) else { return nil }
+            let synced = record.parsedSyncedLyrics?.lines.map {
+                TimedLyricLine(timestamp: $0.timestamp, text: $0.text)
+            } ?? []
+            return LyricsContent(synced: synced, plain: record.plainLyrics, attribution: "Lyrics from LRCLIB")
+        }
+
+        // The endless queue: a station mixed from YouTube Music radio and Spotify's taste-aware
+        // recommendations (see `StationMixer`). Seeded by a YouTube video id — the seed's own for a
+        // YouTube ref, otherwise the binding playback already resolved and persisted for it.
+        let stationMixer = StationMixer(youtube: youtube) { seed in
+            seed.sourceID.hasPrefix("youtube")
+                ? seed.sourceTrackID
+                : songSourceStore.knownRepresentations(for: seed).first { $0.sourceID.hasPrefix("youtube") }?.sourceTrackID
+        }
+        player.fetchRadio = { seed, continuation in
+            await stationMixer.nextPage(seed: seed, continuation: continuation)
+        }
+
+        player.configureSourceTrust { sourceID in
+            SourceTrustPolicy.trust(
+                for: sourceID,
+                isRegistered: sourceRegistry.displayName(for: sourceID) != nil
+            )
+        }
+
+        // How long another provider may take to improve on a candidate cisum already has. A policy
+        // value, not a measurement: Phase 4 owns measured startup budgets and is blocked on U-1, so
+        // this is the bound that keeps cross-provider resolution from waiting on a slow provider.
+        player.configureResolutionBudget(ResolutionBudget())
 
         let searchViewModel = SearchViewModel(
             youtube: youtube,
@@ -292,7 +382,10 @@ enum AppBootstrap {
             services: importServices,
             progress: importProgressFacade
         )
-        Task { await importDownloadManager.resumePendingJobs() }
+        Task {
+            guard startBackgroundWork else { return }
+            await importDownloadManager.resumePendingJobs()
+        }
 
         let libraryServices = LibraryServices(
             playlistLibraryStore: playlistLibraryStore,
@@ -316,7 +409,8 @@ enum AppBootstrap {
             router: router,
             modelContainer: modelContainer,
             playerPresentationController: playerPresentationController,
-            searchOverlayController: searchOverlayController
+            searchOverlayController: searchOverlayController,
+            libraryOpenFailure: libraryOpenFailure
         )
 
         return ServicesContainer(
@@ -330,65 +424,51 @@ enum AppBootstrap {
         )
     }
 
-    private static func makeInMemoryDependencies(youtube: YouTube, router: Router, underlyingError: Error) -> ServicesContainer {
+    /// Builds the app with an in-memory placeholder store after the persistent store failed.
+    ///
+    /// No background writers are started, so nothing durable is ever routed into the placeholder;
+    /// the failure is carried through to `AppServices.libraryOpenFailure` so the UI can present it
+    /// instead of a misleading empty library.
+    private static func makeInMemoryDependencies(
+        youtube: YouTube,
+        router: Router,
+        failure: LibraryOpenFailure
+    ) -> ServicesContainer {
         let modelContainer: ModelContainer
         do {
             modelContainer = try makeModelContainer(configuration: ModelConfiguration(isStoredInMemoryOnly: true))
         } catch {
             preconditionFailure(
                 "Bootstrap failed for persistent and in-memory stores. " +
-                    "persistent=\(underlyingError.localizedDescription) memory=\(error.localizedDescription)"
+                    "persistent=\(failure.technicalDescription) memory=\(error.localizedDescription)"
             )
         }
 
-        return buildDependencies(youtube: youtube, router: router, modelContainer: modelContainer)
+        return buildDependencies(
+            youtube: youtube,
+            router: router,
+            modelContainer: modelContainer,
+            libraryOpenFailure: failure,
+            startBackgroundWork: false
+        )
     }
 
     private static func makePersistentModelContainer() throws -> ModelContainer {
-        let schema = Schema([
-            SearchHistoryEntry.self,
-            ListeningHistoryEntry.self,
-            MediaCacheEntry.self,
-            SearchCacheHintEntry.self,
-            SpotifyCacheEntry.self,
-            Playlist.self,
-            PlaylistItem.self,
-            PlaylistImportJobEntry.self,
-            PlaylistImportTrackEntry.self,
-            PlaylistImportCandidateEntry.self,
-            Artist.self,
-            Album.self,
-            Song.self,
-            QueueStateEntry.self,
-        ])
-
         // Ensure Application Support directory exists
         let fileManager = FileManager.default
         if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
             try? fileManager.createDirectory(at: appSupportURL, withIntermediateDirectories: true)
         }
 
-        // Fallback to default configuration
-        return try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: false)])
+        return try ModelContainer(
+            for: Schema(CisumSchemaV1.models),
+            migrationPlan: CisumMigrationPlan.self,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: false)]
+        )
     }
 
     private static func makeModelContainer(configuration: ModelConfiguration? = nil) throws -> ModelContainer {
-        let schema = Schema([
-            SearchHistoryEntry.self,
-            ListeningHistoryEntry.self,
-            MediaCacheEntry.self,
-            SearchCacheHintEntry.self,
-            SpotifyCacheEntry.self,
-            Playlist.self,
-            PlaylistItem.self,
-            PlaylistImportJobEntry.self,
-            PlaylistImportTrackEntry.self,
-            PlaylistImportCandidateEntry.self,
-            Artist.self,
-            Album.self,
-            Song.self,
-            QueueStateEntry.self,
-        ])
+        let schema = Schema(CisumSchemaV1.models)
 
         if let configuration {
             return try ModelContainer(for: schema, configurations: configuration)

@@ -293,3 +293,98 @@ struct StreamSelectionTests {
         #expect(selector.best(from: []) == nil)
     }
 }
+
+@Suite("Matching prefers the official audio")
+struct OfficialAudioTests {
+    private let matcher = SongMatcher()
+
+    private func kind(_ id: String, _ title: String, _ kind: RecordingKind?) -> SourceTrack {
+        SourceTrack(id: id, title: title, artist: "Frank Ocean", durationSeconds: 249, recordingKind: kind)
+    }
+
+    /// The reported bug: the music video's edit played instead of the album track.
+    @Test("official audio beats a music video of the same song")
+    func audioBeatsVideo() throws {
+        let best = try #require(matcher.best(from: [
+            kind("v", "Ivy", .musicVideo),
+            kind("a", "Ivy", .officialAudio),
+        ], for: ivy))
+        #expect(best.track.id == "a")
+    }
+
+    @Test("official audio wins even when the video's title scores higher")
+    func audioBeatsBetterScoringVideo() throws {
+        let best = try #require(matcher.best(from: [
+            kind("v", "Ivy", .musicVideo),
+            kind("a", "Ivy - Album Version", .officialAudio),
+        ], for: ivy))
+        #expect(best.track.id == "a")
+    }
+
+    @Test("a user upload is rejected even as the only exact-looking result")
+    func userUploadRejected() {
+        #expect(matcher.best(from: [kind("u", "Ivy", .userUpload)], for: ivy) == nil)
+    }
+
+    @Test("a music video is still accepted when nothing better exists")
+    func videoAsLastResort() throws {
+        let best = try #require(matcher.best(from: [kind("v", "Ivy", .musicVideo)], for: ivy))
+        #expect(best.track.id == "v")
+    }
+
+    @Test("an unlabelled catalogue track beats a music video")
+    func unlabelledBeatsVideo() throws {
+        let best = try #require(matcher.best(from: [
+            kind("v", "Ivy", .musicVideo),
+            kind("c", "Ivy", nil),
+        ], for: ivy))
+        #expect(best.track.id == "c")
+    }
+
+    @Test("a matched music video carries no identity confirmation into ranking")
+    @MainActor
+    func videoMatchIsUnconfirmed() throws {
+        let video = try #require(matcher.best(from: [kind("v", "Ivy", .musicVideo)], for: ivy))
+        let audio = try #require(matcher.best(from: [kind("a", "Ivy", .officialAudio)], for: ivy))
+        #expect(PlaybackResolver.searchIdentity(for: video) == .unconfirmed)
+        #expect(PlaybackResolver.searchIdentity(for: audio) == .confirmed(.confidentMatch))
+    }
+}
+
+@Suite("Matching accepts only official videos")
+struct OfficialVideoTests {
+    private let matcher = SongMatcher()
+    private let blindingLights = MatchTarget(title: "Blinding Lights", artist: "The Weeknd", durationSeconds: 200)
+
+    private func video(_ id: String, _ title: String, by channel: String) -> SourceTrack {
+        SourceTrack(id: id, title: title, artist: channel, durationSeconds: 200, recordingKind: .musicVideo)
+    }
+
+    /// The reported case: a talk-show upload of the right song, whose channel shares only "The".
+    @Test("a talk-show performance is not an official video")
+    func talkShowRejected() {
+        let lateShow = video("l", "The Weeknd: \"Blinding Lights\"", by: "The Late Show with Stephen Colbert")
+        #expect(matcher.best(from: [lateShow], for: blindingLights) == nil)
+    }
+
+    @Test("a filler word alone never clears the artist gate")
+    func fillerWordIgnored() {
+        #expect(TextNormalizer.nameOverlap(expected: "The Weeknd", candidate: "The Late Show") == 0)
+        #expect(TextNormalizer.nameOverlap(expected: "The The", candidate: "The The") == 1)
+    }
+
+    @Test("a video from the artist's own channel is accepted")
+    func artistChannelAccepted() throws {
+        let official = video("o", "The Weeknd - Blinding Lights (Official Video)", by: "The Weeknd")
+        #expect(try #require(matcher.best(from: [official], for: blindingLights)).track.id == "o")
+        // A VEVO channel arrives with the suffix stripped by the YouTube adapter.
+        let vevo = video("v", "The Weeknd - Blinding Lights (Official Video)", by: "TheWeeknd")
+        #expect(try #require(matcher.best(from: [vevo], for: blindingLights)).track.id == "v")
+    }
+
+    @Test("a fan channel named after the artist is not official")
+    func fanChannelRejected() {
+        let fan = video("f", "Blinding Lights", by: "The Weeknd Fan Edits Daily")
+        #expect(matcher.best(from: [fan], for: blindingLights) == nil)
+    }
+}

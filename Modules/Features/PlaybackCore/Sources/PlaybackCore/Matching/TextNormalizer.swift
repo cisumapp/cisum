@@ -71,6 +71,20 @@ public enum TextNormalizer {
         return Double(expectedTokens.intersection(candidateTokens).count) / Double(expectedTokens.count)
     }
 
+    /// `tokenOverlap` over the words that identify a name, for artist comparison.
+    ///
+    /// Filler words carry no identity: "The Late Show with Stephen Colbert" shares "the" with
+    /// "The Weeknd", which alone was half of the plain overlap and cleared the artist gate. A name made
+    /// only of filler ("The The") falls back to the plain overlap.
+    public static func nameOverlap(expected: String, candidate: String) -> Double {
+        let expectedTokens = Set(tokens(expected)).subtracting(fillerWords)
+        guard !expectedTokens.isEmpty else { return tokenOverlap(expected: expected, candidate: candidate) }
+        let candidateTokens = Set(tokens(candidate))
+        return Double(expectedTokens.intersection(candidateTokens).count) / Double(expectedTokens.count)
+    }
+
+    static let fillerWords: Set<String> = ["the", "a", "an", "and", "of", "feat", "ft", "featuring", "with", "x"]
+
     /// Sørensen–Dice similarity over character bigrams, 0...1.
     ///
     /// Catches near-misses that token overlap misses — transliterations, small misspellings, and
