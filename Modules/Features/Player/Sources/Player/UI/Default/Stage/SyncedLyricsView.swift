@@ -70,18 +70,20 @@ struct LyricLineView: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
 
     var body: some View {
-        Group {
-            // Only the active line runs a per-frame clock, so the sweep never redraws the whole ForEach.
-            if isActive, let syllables = line.syllables, !syllables.isEmpty {
-                TimelineView(.animation) { _ in
-                    syllablesText(currentTime: playerViewModel.playbackTime)
-                }
-            } else {
-                Text(line.text)
-                    .foregroundStyle(.primary.opacity(isActive ? 1.0 : opacityForDistance))
+        VStack(alignment: .leading, spacing: 8) {
+            sung(line.syllables, fallback: line.text, dimmed: 1)
+                .font(.system(size: 34, weight: .heavy, design: .rounded))
+            // Backing vocals sit under the line, smaller and quieter, as in Apple Music.
+            if let background = line.backgroundSyllables, !background.isEmpty {
+                sung(background, fallback: Self.joined(background), dimmed: 0.7)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+            }
+            ForEach([line.romanization, line.translation].compactMap(\.self), id: \.self) { extra in
+                Text(extra)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.6 * (isActive ? 1.0 : opacityForDistance)))
             }
         }
-        .font(.system(size: 34, weight: .heavy, design: .rounded))
         .blur(radius: blurForDistance)
         .scaleEffect(scaleForDistance, anchor: .leading)
         .shadow(color: isActive ? .primary.opacity(0.3) : .clear, radius: 10, x: 0, y: 0)
@@ -95,9 +97,26 @@ struct LyricLineView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.75), value: distance)
     }
 
-    private func syllablesText(currentTime: TimeInterval) -> Text {
-        guard let syllables = line.syllables else { return Text(line.text) }
+    /// Syllables filling as they are sung on the active line; plain text everywhere else.
+    @ViewBuilder
+    private func sung(_ syllables: [LyricSyllable]?, fallback: String, dimmed: Double) -> some View {
+        // Only the active line runs a per-frame clock, so the sweep never redraws the whole ForEach.
+        if isActive, let syllables, !syllables.isEmpty {
+            TimelineView(.animation) { _ in
+                syllablesText(syllables, currentTime: playerViewModel.playbackTime)
+                    .opacity(dimmed)
+            }
+        } else {
+            Text(fallback)
+                .foregroundStyle(.primary.opacity(dimmed * (isActive ? 1.0 : opacityForDistance)))
+        }
+    }
 
+    private static func joined(_ syllables: [LyricSyllable]) -> String {
+        syllables.map { $0.isPartOfWord ? $0.text : $0.text + " " }.joined().trimmingCharacters(in: .whitespaces)
+    }
+
+    private func syllablesText(_ syllables: [LyricSyllable], currentTime: TimeInterval) -> Text {
         var combinedText = Text("")
         for (index, syllable) in syllables.enumerated() {
             // Each syllable fills over the time it is sung, rather than snapping on at its start.

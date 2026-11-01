@@ -317,13 +317,17 @@ enum AppBootstrap {
                 isrc: ref.isrc
             )
             if let result = await lyricsSources.best(for: query) {
+                let syllables: ([LyricWord]?) -> [LyricSyllable]? = { words in
+                    words?.map { LyricSyllable(text: $0.text, timestamp: $0.start, endTime: $0.end, isPartOfWord: $0.isPartOfWord) }
+                }
                 let synced = result.lines.map { line in
                     TimedLyricLine(
                         timestamp: line.timestamp,
                         text: line.text,
-                        syllables: line.words?.map {
-                            LyricSyllable(text: $0.text, timestamp: $0.start, endTime: $0.end, isPartOfWord: $0.isPartOfWord)
-                        }
+                        syllables: syllables(line.words),
+                        backgroundSyllables: syllables(line.background),
+                        translation: line.translation,
+                        romanization: line.romanization
                     )
                 }
                 return LyricsContent(synced: synced, plain: result.plain, attribution: "Lyrics from \(result.source)")
