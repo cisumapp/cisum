@@ -296,33 +296,49 @@ enum AppBootstrap {
         // Trust is cisum's own judgement, so it is supplied here rather than asked for. `displayName`
         // is used as the "is it registered" test because it answers the question without the warning
         // `source(for:)` logs for an id nobody serves.
-        // Player displays lyrics; where they come from is the app's call. LRCLIB answers by
-        // title/artist/album/duration, so the ref's display snapshot is enough — no binding needed.
-        let lyricsKit = LyricsKit()
+        // A ref's YouTube video id: its own for a YouTube ref, otherwise the binding playback already
+        // resolved and persisted for it.
+        let youtubeVideoID: @MainActor (PlayableRef) -> String? = { ref in
+            ref.sourceID.hasPrefix("youtube")
+                ? ref.sourceTrackID
+                : songSourceStore.knownRepresentations(for: ref).first { $0.sourceID.hasPrefix("youtube") }?.sourceTrackID
+        }
+
+        // Player displays lyrics; where they come from is the app's call. Every LyricsKit source is
+        // asked at once and the richest answer wins (syllable-timed Apple Music TTML first); YouTube
+        // Music's plain text is the last resort.
+        let lyricsSources = LyricsSources()
         player.fetchLyrics = { ref in
-            let signature = TrackSignature(
-                trackName: ref.title,
-                artistName: ref.artist,
-                albumName: ref.album ?? "",
-                durationInSeconds: Int(ref.durationSeconds ?? 0)
+            let query = LyricsQuery(
+                title: ref.title,
+                artist: ref.artist,
+                album: ref.album,
+                durationInSeconds: Int(ref.durationSeconds ?? 0),
+                isrc: ref.isrc
             )
-            guard let record = try? await lyricsKit.bestLyrics(for: signature) else { return nil }
-            let synced = record.parsedSyncedLyrics?.lines.map {
-                TimedLyricLine(timestamp: $0.timestamp, text: $0.text)
-            } ?? []
-            return LyricsContent(synced: synced, plain: record.plainLyrics, attribution: "Lyrics from LRCLIB")
+            if let result = await lyricsSources.best(for: query) {
+                let synced = result.lines.map { line in
+                    TimedLyricLine(
+                        timestamp: line.timestamp,
+                        text: line.text,
+                        syllables: line.words?.map {
+                            LyricSyllable(text: $0.text, timestamp: $0.start, endTime: $0.end, isPartOfWord: $0.isPartOfWord)
+                        }
+                    )
+                }
+                return LyricsContent(synced: synced, plain: result.plain, attribution: "Lyrics from \(result.source)")
+            }
+            guard let videoID = youtubeVideoID(ref),
+                  let plain = try? await youtube.music.getLyrics(videoId: videoID)
+            else { return nil }
+            return LyricsContent(synced: [], plain: plain, attribution: "Lyrics from YouTube Music")
         }
 
         // The endless queue: a station mixed from YouTube Music radio and Spotify's taste-aware
-        // recommendations (see `StationMixer`). Seeded by a YouTube video id — the seed's own for a
-        // YouTube ref, otherwise the binding playback already resolved and persisted for it.
+        // recommendations (see `StationMixer`), seeded by the seed's YouTube video id.
         let stationMixer = StationMixer(
             youtube: youtube,
-            youtubeVideoID: { seed in
-                seed.sourceID.hasPrefix("youtube")
-                    ? seed.sourceTrackID
-                    : songSourceStore.knownRepresentations(for: seed).first { $0.sourceID.hasPrefix("youtube") }?.sourceTrackID
-            },
+            youtubeVideoID: youtubeVideoID,
             localHistory: { await listeningHistoryStore.recentPlays() }
         )
 

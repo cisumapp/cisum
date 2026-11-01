@@ -132,6 +132,12 @@ public final class PlayerViewModel: PlaybackCommands {
         publishNowPlaying()
     }
 
+    /// The player's position read straight from AVPlayer, for per-frame consumers (syllable-timed
+    /// lyrics). `ProgressState` ticks at 4 Hz, coarser than a sung syllable.
+    var playbackTime: Double {
+        engine.player.currentTime().seconds
+    }
+
     public func cyclePlaybackMode() {
         queue.cycleMode()
         transport.playbackMode = queue.mode
