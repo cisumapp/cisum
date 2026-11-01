@@ -208,7 +208,26 @@ public class SearchViewModel: SearchViewModelInterface {
         let (spotifyResult, ytMusicResult, ytVideoResult, providerResult) =
             await (spotifyFetch, ytMusicFetch, ytVideoFetch, providerFetch)
 
-        try? Task.checkCancellation()
+        // Anything past this point publishes. A superseded search must publish nothing.
+        //
+        // Cancellation used to be checked with `try? Task.checkCancellation()`, which discards the
+        // thrown error and therefore *continues*: a search the user had already typed past went on to
+        // apply its results, set `state = .success` and claim `lastCompletedQuery`. Two visible
+        // consequences — the list could show the previous query's hits, and the live query could then
+        // be skipped as "matching last completed query" and never searched at all.
+        if Task.isCancelled {
+            PerfLog.info("SearchViewModel: search for '\(query)' was superseded before it published — discarding")
+            return
+        }
+
+        // Cancellation is not the only way a search becomes stale: tapping a suggestion runs
+        // `executeSearch` directly rather than through the debounced path. Publishing is gated on the
+        // query still being the one in the field, the same guard `refreshUnifiedResults` applies to
+        // its own deferred work.
+        guard query == searchText.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            PerfLog.info("SearchViewModel: discarding results for '\(query)' — the field now holds '\(searchText)'")
+            return
+        }
 
         applySpotifySearchResult(spotifyResult)
         applyFederatedSearchResult(ytMusicResult, for: .youtubeMusic)
@@ -965,7 +984,12 @@ public class SearchViewModel: SearchViewModelInterface {
     private nonisolated func fetchYouTubeMusicSectionItems(query: String, updateUI: Bool) async -> Result<[FederatedSearchItem], Error> {
         do {
             let results = try await youtube.music.search(query)
-            if updateUI {
+            // The UI writes belong to the *current* search. A superseded search's fetch may still
+            // complete (cancellation is cooperative and the request may already be in flight), and
+            // letting it write `musicResults` / `videoResults` here would bypass the guard in
+            // `executeSearch` entirely — the results would be replaced by the query the user has
+            // already typed past.
+            if updateUI, !Task.isCancelled {
                 await MainActor.run {
                     self.musicResults = results
                     self.searchCache.setMusicResults(results, for: query)
@@ -1010,7 +1034,12 @@ public class SearchViewModel: SearchViewModelInterface {
             let continuation = try await youtube.main.search(query)
 
             let topVideos: [YouTubeVideo]
-            if updateUI {
+            // The UI writes belong to the *current* search. A superseded search's fetch may still
+            // complete (cancellation is cooperative and the request may already be in flight), and
+            // letting it write `musicResults` / `videoResults` here would bypass the guard in
+            // `executeSearch` entirely — the results would be replaced by the query the user has
+            // already typed past.
+            if updateUI, !Task.isCancelled {
                 let videoResults = await MainActor.run {
                     self.resetVideoPagination()
                     self.updateVideoResults(with: continuation, appending: false)
@@ -1063,7 +1092,9 @@ public class SearchViewModel: SearchViewModelInterface {
                 let continuation = try await youtube.main.search(fallbackQuery)
 
                 let topVideos: [YouTubeVideo]
-                if updateUI {
+                // Same guard as above: this is a retry of a query the user may already have typed
+                // past, and it must not write the section state if it is no longer the current one.
+                if updateUI, !Task.isCancelled {
                     let videoResults = await MainActor.run {
                         self.resetVideoPagination()
                         self.updateVideoResults(with: continuation, appending: false)
@@ -1137,11 +1168,21 @@ public class SearchViewModel: SearchViewModelInterface {
         let collected = await withTaskGroup(of: [(String, SourceTrack)].self) { group in
             for source in sources {
                 group.addTask {
-                    guard let tracks = try? await source.searchTracks(query: query, limit: 10) else {
-                        PerfLog.info("SearchViewModel: source \(source.id) returned no results")
+                    do {
+                        let tracks = try await source.searchTracks(query: query, limit: 10)
+                        return tracks.map { (source.id, $0) }
+                    } catch is CancellationError {
+                        // The query was superseded. That is not the provider failing, and reporting it
+                        // as "no results" made a normal part of typing look like a provider problem.
+                        PerfLog.trace("SearchViewModel: source \(source.id) search cancelled")
+                        return []
+                    } catch {
+                        // The error's *type*, never its message: a provider error message can carry the
+                        // URL it failed on. A plugin that is enabled but not loaded is the common case
+                        // here, and `SourceBuilder` has already named it.
+                        PerfLog.info("SearchViewModel: source \(source.id) search failed (\(type(of: error)))")
                         return []
                     }
-                    return tracks.map { (source.id, $0) }
                 }
             }
 

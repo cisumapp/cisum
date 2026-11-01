@@ -48,6 +48,15 @@ public struct PlayableRef: Sendable, Hashable, Codable {
     public let artworkURL: URL?
     public let durationSeconds: Double?
 
+    // MARK: Matching evidence
+
+    //
+    // Only read when no provider knows the track yet and the resolver has to search. An ISRC turns
+    // that search into an exact match; the album breaks ties between a single and a compilation.
+
+    public let isrc: String?
+    public let album: String?
+
     public init(
         songID: String?,
         sourceID: String,
@@ -55,7 +64,9 @@ public struct PlayableRef: Sendable, Hashable, Codable {
         title: String,
         artist: String,
         artworkURL: URL? = nil,
-        durationSeconds: Double? = nil
+        durationSeconds: Double? = nil,
+        isrc: String? = nil,
+        album: String? = nil
     ) {
         self.songID = songID
         self.sourceID = sourceID
@@ -64,6 +75,8 @@ public struct PlayableRef: Sendable, Hashable, Codable {
         self.artist = artist
         self.artworkURL = artworkURL
         self.durationSeconds = durationSeconds
+        self.isrc = isrc
+        self.album = album
     }
 
     /// A ref for a YouTube result the user tapped directly.

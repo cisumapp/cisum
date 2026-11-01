@@ -89,8 +89,8 @@ public actor VideoMetadataCache {
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=cache")
             if metricsEnabled {
                 let elapsed = Date().timeIntervalSince(startedAt) * 1000
-                await PlaybackMetricsStore.shared.recordCacheHit()
-                await PlaybackMetricsStore.shared.recordResolve(milliseconds: elapsed)
+                // Search metadata cache domain — never a playback-resolution counter.
+                await PlaybackMetricsStore.shared.recordSearchMetadataCache(hit: true, milliseconds: elapsed)
             }
             return cached
         }
@@ -143,8 +143,8 @@ public actor VideoMetadataCache {
             inFlight[id] = nil
             if metricsEnabled {
                 let elapsed = Date().timeIntervalSince(startedAt) * 1000
-                await PlaybackMetricsStore.shared.recordCacheMiss()
-                await PlaybackMetricsStore.shared.recordResolve(milliseconds: elapsed)
+                // Search metadata cache domain — never a playback-resolution counter.
+                await PlaybackMetricsStore.shared.recordSearchMetadataCache(hit: false, milliseconds: elapsed)
                 PerfLog.info("Metadata fetched id=\(id) latency=\(elapsed)ms")
             }
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=network")

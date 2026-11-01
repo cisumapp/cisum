@@ -332,8 +332,11 @@ public actor CentralMediaStore {
     // MARK: - Canonical reconciliation (ISRC-first, library-wide dedup)
 
     /// Find-or-create the canonical `Song` for a neutral incoming track and merge its metadata.
-    /// Returns the canonical `Song.songID`. ISRC is the strong key; provider IDs and fuzzy
-    /// title/artist/duration matching are the fallbacks. See `CanonicalSongReconciler` for scoring.
+    /// Returns the canonical `Song.songID`.
+    ///
+    /// Resolution follows `CanonicalIdentityPolicy` (U-11): established provider binding, then a
+    /// **valid** matching ISRC, then confident `CanonicalSongReconciler` scoring. A title/artist
+    /// fingerprint is never sufficient on its own.
     @discardableResult
     public func reconcile(_ incoming: IncomingTrack) -> String {
         let song = findCanonicalSong(for: incoming)
@@ -351,26 +354,34 @@ public actor CentralMediaStore {
     }
 
     private func findCanonicalSong(for t: IncomingTrack) -> Song {
-        // 1. ISRC fast path — the canonical key.
-        if let isrc = t.isrc, !isrc.isEmpty,
-           let match = fetchFirstSong(predicate: #Predicate { $0.isrc == isrc })
-        {
-            PerfLog.debug("reconcile matched-by-isrc songID=\(match.songID) isrc=\(isrc)")
+        // 1. An established provider binding and a *valid* matching ISRC are gathered as evidence;
+        //    the ordering between them (and confident scoring) is the frozen policy, not ad hoc.
+        let established = existingSongByProviderID(t)?.songID
+
+        let isrcMatch: String? = {
+            guard let raw = t.isrc, CanonicalIdentityPolicy.isValidISRC(raw) else { return nil }
+            return fetchFirstSong(predicate: #Predicate { $0.isrc == raw })?.songID
+        }()
+
+        let evidence = CanonicalIdentityPolicy.decide(
+            isrc: t.isrc,
+            establishedBinding: established,
+            isrcMatch: isrcMatch,
+            scoredMatches: scoredCandidates(
+                title: t.title,
+                artistName: t.artistName,
+                durationSeconds: t.durationSeconds,
+                albumName: t.albumName,
+                versionEvidence: t.version
+            )
+        )
+
+        if let match = song(for: evidence) {
+            PerfLog.debug("reconcile matched songID=\(match.songID) via \(evidence)")
             return match
         }
 
-        // 2. Provider-ID exact path.
-        if let match = existingSongByProviderID(t) {
-            PerfLog.debug("reconcile matched-by-providerID songID=\(match.songID) provider=\(t.provider.rawValue)")
-            return match
-        }
-
-        // 3. Fuzzy fallback (missing ISRC / new track).
-        if let match = fuzzyMatch(t) {
-            return match
-        }
-
-        // 4. Create.
+        // 2. Create. Reached only when no candidate cleared the policy.
         let normalizedTitle = normalizedRankingText(t.title)
         let normalizedArtist = normalizedRankingText(t.artistName ?? "")
         let song = Song(
@@ -381,6 +392,53 @@ public actor CentralMediaStore {
         modelContext.insert(song)
         PerfLog.debug("reconcile created songID=\(song.songID) title=\(t.title)")
         return song
+    }
+
+    /// The canonical record the policy resolved to, if any.
+    private func song(for evidence: CanonicalIdentityPolicy.Evidence) -> Song? {
+        guard let songID = evidence.songID else { return nil }
+        return fetchFirstSong(predicate: #Predicate { $0.songID == songID })
+    }
+
+    /// Scores existing canonical records for a title/artist/duration/album probe.
+    ///
+    /// The candidate pool is bounded by an exact artist match, so this is a small fetch rather
+    /// than a full-table scan. When the artist is unknown there is no pool to score, and the
+    /// conservative outcome is to keep the records separate.
+    private func scoredCandidates(
+        title: String,
+        artistName: String?,
+        durationSeconds: Double?,
+        albumName: String?,
+        versionEvidence: VersionEvidence? = nil
+    ) -> [(songID: String, score: Double)] {
+        guard let artist = artistName, !artist.isEmpty else { return [] }
+
+        var descriptor = FetchDescriptor<Song>(predicate: #Predicate { $0.primaryArtistName == artist })
+        descriptor.fetchLimit = 50
+        let pool = (try? modelContext.fetch(descriptor)) ?? []
+
+        return pool.compactMap { candidate in
+            // The canonical side has no structured version column yet, so it carries only its raw
+            // title — enough for the version gate's title-inference fallback, which is what runs.
+            let key = SongMatchKey(
+                songID: candidate.songID,
+                normalizedTitle: CanonicalSongReconciler.normalize(candidate.title),
+                artistName: candidate.primaryArtistName,
+                durationSeconds: candidate.durationSeconds,
+                albumName: candidate.albumTitle,
+                title: candidate.title
+            )
+            let score = CanonicalSongReconciler.score(
+                title: title,
+                artistName: artistName,
+                durationSeconds: durationSeconds,
+                albumName: albumName,
+                versionEvidence: versionEvidence,
+                against: key
+            )
+            return score > 0 ? (songID: candidate.songID, score: score) : nil
+        }
     }
 
     /// Finds an existing song by one provider's id for it.
@@ -399,35 +457,6 @@ public actor CentralMediaStore {
         )
         descriptor.fetchLimit = 1
         return (try? modelContext.fetch(descriptor).first)?.song
-    }
-
-    private func fuzzyMatch(_ t: IncomingTrack) -> Song? {
-        // Bound the candidate pool by exact artist; score each with the pure reconciler.
-        guard let artist = t.artistName, !artist.isEmpty else { return nil }
-        var descriptor = FetchDescriptor<Song>(predicate: #Predicate { $0.primaryArtistName == artist })
-        descriptor.fetchLimit = 50
-        let pool = (try? modelContext.fetch(descriptor)) ?? []
-
-        var best: (song: Song, score: Double)?
-        for candidate in pool {
-            let key = SongMatchKey(
-                songID: candidate.songID,
-                normalizedTitle: CanonicalSongReconciler.normalize(candidate.title),
-                artistName: candidate.primaryArtistName,
-                durationSeconds: candidate.durationSeconds,
-                albumName: candidate.albumTitle
-            )
-            let score = CanonicalSongReconciler.score(t, against: key)
-            if score >= CanonicalSongReconciler.confidentThreshold, score > (best?.score ?? 0) {
-                best = (candidate, score)
-            }
-        }
-
-        if let best {
-            PerfLog.debug("reconcile matched-fuzzy songID=\(best.song.songID) score=\(best.score)")
-            return best.song
-        }
-        return nil
     }
 
     private func merge(_ t: IncomingTrack, into song: Song) {
@@ -670,6 +699,7 @@ private extension CentralMediaStore {
             ("apple_music", snapshot.appleMusicSongID),
         ]
 
+        var establishedSongID: String?
         for (sourceID, trackID) in candidates {
             guard let trackID, !trackID.isEmpty else { continue }
 
@@ -679,12 +709,28 @@ private extension CentralMediaStore {
             descriptor.fetchLimit = 1
 
             if let match = (try? modelContext.fetch(descriptor).first)?.song {
-                return match
+                establishedSongID = match.songID
+                break
             }
         }
 
-        let providerFingerprint = snapshot.providerFingerprint
-        return fetchFirstSong(predicate: #Predicate { $0.providerFingerprint == providerFingerprint })
+        // A bare `providerFingerprint` (title|artist) match is deliberately NOT a merge path any
+        // more (U-11). It has no duration or version check, so it merged distinct recordings. Only
+        // confident scoring remains here; there is no ISRC on a `SongSnapshot`, and the snapshot's
+        // provider ids are already covered by the established-binding loop above.
+        let evidence = CanonicalIdentityPolicy.decide(
+            isrc: nil,
+            establishedBinding: establishedSongID,
+            isrcMatch: nil,
+            scoredMatches: scoredCandidates(
+                title: snapshot.title,
+                artistName: snapshot.primaryArtistName,
+                durationSeconds: snapshot.durationSeconds,
+                albumName: snapshot.albumTitle
+            )
+        )
+
+        return song(for: evidence)
     }
 
     func existingPlaylist(for snapshot: PlaylistSnapshot) -> Playlist? {

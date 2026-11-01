@@ -138,6 +138,44 @@ public final class PlaybackQueue {
         }
     }
 
+    /// Appends only the refs that are not already queued as the same *song*, and returns them.
+    ///
+    /// For machine-filled queues (radio). Identity is `songKey`, not `PlayableRef` equality: the same
+    /// song routinely arrives from two services, or under two video ids on one, and ref equality
+    /// (service + id) lets every one of those in. Duplicates within `refs` are dropped too. In shuffle
+    /// the new tracks are shuffled, so a radio page does not play as one recognisable block.
+    @discardableResult
+    public func appendUnique(_ refs: [PlayableRef]) -> [PlayableRef] {
+        var known = Set(entries.map(Self.songKey))
+        let fresh = refs.filter { known.insert(Self.songKey($0)).inserted }
+        // Shuffled into the play order only; the order to restore keeps the source's own.
+        entries.append(contentsOf: mode == .shuffle ? fresh.shuffled() : fresh)
+        unshuffled.append(contentsOf: fresh)
+        if position == nil, !entries.isEmpty {
+            position = 0
+        }
+        return fresh
+    }
+
+    /// What makes two refs the same song for de-duplication: the version-stripped title and the
+    /// primary artist, both normalised.
+    ///
+    /// A leading `"<artist> - "` in the title is dropped first, because video titles carry it
+    /// ("Coldplay - Yellow") where catalogue titles do not. Only the primary artist counts, since
+    /// services disagree on how featured artists are listed.
+    public static func songKey(_ ref: PlayableRef) -> String {
+        let primaryArtist = ref.artist
+            .components(separatedBy: CharacterSet(charactersIn: ",&"))
+            .first?
+            .components(separatedBy: " feat")
+            .first ?? ref.artist
+        var title = ref.title
+        if let range = title.range(of: primaryArtist + " - ", options: [.caseInsensitive, .anchored]) {
+            title.removeSubrange(range)
+        }
+        return TextNormalizer.normalizeStrippingVersions(title) + "|" + TextNormalizer.normalize(primaryArtist)
+    }
+
     /// Advances. Returns the new entry, or `nil` when the queue has finished.
     @discardableResult
     public func advance() -> PlayableRef? {
@@ -191,6 +229,23 @@ public final class PlaybackQueue {
         }
     }
 
+    /// Moves an entry, keeping `position` on the same track. The playing entry itself does not move.
+    ///
+    /// `destination` is the index the entry should end up before, as `List.onMove` reports it,
+    /// measured against the array *with* the entry still in place.
+    public func move(from source: Int, to destination: Int) {
+        guard entries.indices.contains(source), let position, source != position else { return }
+        let current = entries[position]
+        let item = entries.remove(at: source)
+        let target = destination > source ? destination - 1 : destination
+        entries.insert(item, at: min(max(0, target), entries.count))
+        self.position = entries.firstIndex(of: current) ?? position
+        // Outside shuffle the user's order *is* the order to come back to.
+        if mode != .shuffle {
+            unshuffled = entries
+        }
+    }
+
     public func clear() {
         entries = []
         unshuffled = []
@@ -210,13 +265,12 @@ public final class PlaybackQueue {
         guard old != mode else { return }
 
         if mode == .shuffle, old != .shuffle {
+            // Only what is still to come is shuffled. Shuffling the played history in with it put
+            // already-heard tracks back in front of the user.
             guard let position, entries.indices.contains(position) else { return }
-            let currentEntry = entries[position]
             unshuffled = entries
-            var rest = entries
-            rest.remove(at: position)
-            entries = [currentEntry] + rest.shuffled()
-            self.position = 0
+            let upcoming = entries[(position + 1)...].shuffled()
+            entries = Array(entries[...position]) + upcoming
         } else if old == .shuffle, mode != .shuffle {
             // Restore the original order, keeping the same track playing.
             let currentEntry = current

@@ -282,6 +282,11 @@ public struct RootView: View {
             }
         }
         .listStyle(.sidebar)
+        // The list draws its own sidebar material, which would sit *on top of* the glass
+        // surface behind it and make the translucency invisible. Hiding it lets the glass
+        // through while keeping the native rows, metrics and selection — the surface below
+        // is what you actually see.
+        .scrollContentBackground(.hidden)
         // Reserves the strip the traffic lights occupy. The controls are an overlay, and
         // without this they would land on top of the first row. A `safeAreaInset` is used
         // rather than padding so the row's own metrics and selection stay intact.
@@ -314,38 +319,77 @@ public struct RootView: View {
                 .padding(.top, 14)
         }
         .background { sidebarMaterial }
+        // Applied last so it moves the surface and everything inside it away from the
+        // window edge together, leaving the canvas showing around it.
+        //
+        // Leading, top and bottom are inset; the trailing side is not. The split
+        // view's divider is the column's own trailing edge, so insetting that side
+        // too would strand the surface 10pt short of it — a strip of empty canvas
+        // that still drags the divider, so the surface's edge and the resize
+        // boundary stop reading as the same line. The insets come from
+        // `MacSplitView`, which sizes the column they have to fit inside.
+        .padding(EdgeInsets(
+            top: MacSplitView.sidebarMargin,
+            leading: MacSplitView.sidebarMargin,
+            bottom: MacSplitView.sidebarMargin,
+            trailing: 0
+        ))
+        // The canvas behind the margin. Without it the bare window background shows through the
+        // gutter, and on a light appearance that is a pale frame around a dark sidebar.
+        .background(Color.cisumBg)
     }
 
     /// The navigation column's surface.
     ///
-    /// A sidebar is a *structural* region, so its material stays the heavy, dark one rather
-    /// than a prominent tint — weight encodes hierarchy here. On macOS 26 the system draws
-    /// this itself for a `.sidebar` list, so the native material is left showing; the glass
-    /// below is only reached once the list's own background is hidden, which is what lets the
-    /// content behind the column show through instead.
+    /// A *floating* surface, not a structural region: it is inset from the window edge on
+    /// every side, rounded on all four corners, and translucent enough to pick up the canvas
+    /// behind it. That is what separates it from a docked sidebar, which is flush to the
+    /// frame, square on its divider edge, and opaque.
     ///
-    /// Only the two leading corners are rounded. The trailing edge meets the split view's
-    /// divider and must stay square, and the window's own corners clip the top and bottom
-    /// against the frame.
+    /// The dark scrim under the material is load-bearing, not decoration. `glassEffect(.regular)`
+    /// and `.ultraThinMaterial` both resolve to a mid-grey in a dark window — measured around
+    /// 20% luminance — which reads as a light grey panel rather than a dark translucent one,
+    /// and leaves the sidebar reading lighter than the content it is supposed to sit behind.
+    /// Laying the canvas colour over the material brings it down to roughly 10%: dark, still
+    /// translucent, and clearly separated from the canvas by the edge highlight rather than by
+    /// being brighter than it.
     @ViewBuilder
     private var sidebarMaterial: some View {
         let shape = UnevenRoundedRectangle(
-            topLeadingRadius: Self.windowCornerRadius,
-            bottomLeadingRadius: Self.windowCornerRadius,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 0,
+            topLeadingRadius: Self.sidebarCornerRadius,
+            bottomLeadingRadius: Self.sidebarCornerRadius,
+            bottomTrailingRadius: Self.sidebarCornerRadius,
+            topTrailingRadius: Self.sidebarCornerRadius,
             style: .continuous
         )
-        if #available(macOS 26.0, *) {
-            shape.glassEffect(.regular, in: shape)
-        } else {
-            shape.fill(.ultraThinMaterial)
+        Group {
+            if #available(macOS 26.0, *) {
+                shape.glassEffect(.regular, in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+        }
+        .overlay {
+            shape.fill(Color.cisumBg.opacity(Self.sidebarScrimOpacity))
+        }
+        // `glassEffect` draws its own highlight, but the scrim above sits on top of it, so the
+        // leading edge would otherwise lose the one cue that separates the panel from the
+        // canvas it floats over.
+        .overlay {
+            shape.strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
         }
     }
 
-    /// The window's corner radius. Matches what AppKit draws for a standard titled window, so
-    /// the sidebar's leading edge meets the frame without a visible step.
-    private static let windowCornerRadius: CGFloat = 10
+    /// How far the canvas colour is laid over the sidebar's material.
+    ///
+    /// Tuned against measured luminance rather than by eye: the material alone sits near 20%
+    /// and this brings the surface to roughly 10%, which is where the reference's sidebar
+    /// sits relative to its canvas.
+    private static let sidebarScrimOpacity: Double = 0.55
+
+    /// Corner radius of the floating surfaces. Wide enough to read as a detached panel rather
+    /// than a slightly-softened rectangle, but not so wide that it looks like a sheet.
+    private static let sidebarCornerRadius: CGFloat = 14
 
     /// Trailing edge of the traffic lights, measured from the sidebar's leading edge: the
     /// 14pt inset plus three 12pt buttons and two 8pt gaps. `WindowDragRegion` starts here so
@@ -362,24 +406,58 @@ public struct RootView: View {
     /// any of them knowing about it.
     private var detailColumn: some View {
         GeometryReader { proxy in
+            // Bound once here so the band and its backdrop layers cannot disagree about it.
+            let bandHeight = Self.vinylBandHeight(for: proxy.size.height, width: proxy.size.width)
+
             VStack(spacing: 0) {
                 // ── The record band ──────────────────────────────────────────
-                // The disc is only ever visible in this strip. The transport floats inside
-                // it, near its bottom edge; everything below is opaque content, so the
-                // record reads as peeking out from behind the interface rather than as
-                // wallpaper behind it.
+                // The band is the window's imagery: the current track's artwork
+                // washed out behind the transport, falling back to the record
+                // when nothing is loaded. The transport and the navigation pill
+                // both float inside it; everything below is opaque content, so
+                // the imagery reads as peeking out from behind the interface
+                // rather than as wallpaper behind it.
                 ZStack {
+                    // Both backdrops are pinned to the band's exact bounds, and that pin is
+                    // load-bearing rather than tidy.
+                    //
+                    // `ArtworkImage` is `.scaledToFill()` with no frame of its own, so an
+                    // unpinned artwork layer offers the stack the *decoded image's* natural size
+                    // — thousands of points. The stack grows to that, `.frame(height:)` below
+                    // centres the overflow around the band, and `.clipped()` removes the top
+                    // and bottom, which took the transport and the pill with them the moment a
+                    // track loaded. Nothing was ever hidden; it was laid out off-screen.
+                    //
+                    // Giving the layers a concrete size removes them from the stack's size
+                    // negotiation entirely: the stack's ideal height becomes the band's height,
+                    // and the transport keeps the topmost slot in the ZStack's draw order.
+                    cisum.artworkBackdrop()
+                        .frame(width: proxy.size.width, height: bandHeight)
                     cisum.vinylBackdrop()
+                        .frame(width: proxy.size.width, height: bandHeight)
 
-                    VStack {
+                    VStack(spacing: 10) {
                         Spacer(minLength: 0)
                         cisum.playerBar()
+                        navigationPill
                     }
                     .padding(.top, 12)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 12)
                 }
-                .frame(height: Self.vinylBandHeight(for: proxy.size.height, width: proxy.size.width))
+                .frame(height: bandHeight)
                 .clipped()
+                // The band's bottom edge is where one continuous canvas should stop looking
+                // like a strip of wallpaper with a rule under it, so it dissolves into the
+                // content below instead of ending on a hard horizontal line.
+                .overlay(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [.clear, Color.cisumBg],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: Self.bandFadeHeight)
+                    .allowsHitTesting(false)
+                }
 
                 // ── Opaque content ───────────────────────────────────────────
                 // The fill is applied at the shell rather than in each tab, so no view can
@@ -392,11 +470,16 @@ public struct RootView: View {
                     }
                     .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
                     .usingRouter(cisum.router)
-                    // Over the content, not the record: the band holds the transport and
-                    // nothing else, so the two never compete for the same strip.
+                    // Only over Search. On every other tab this is dead
+                    // weight sitting on the canvas — the reference keeps search inside the
+                    // search surface, and a floating field over Home or the Library competes
+                    // with the content for the eye. The overlay, its controller and the
+                    // context plumbing above are untouched; only where it is drawn changes.
                     .overlay(alignment: .top) {
-                        SearchOverlayBar()
-                            .padding(.top, 8)
+                        if navigationState.selectedTab == .search {
+                            SearchOverlayBar()
+                                .padding(.top, 8)
+                        }
                     }
 
                 spotifyBackgroundRefresh
@@ -413,7 +496,94 @@ public struct RootView: View {
     /// against the window height so a short window doesn't hand most of the screen to the
     /// backdrop and starve the content below.
     private static func vinylBandHeight(for windowHeight: CGFloat, width windowWidth: CGFloat = 0) -> CGFloat {
-        min(max(260, windowWidth * 0.1), max(120, windowHeight * 0.24))
+        min(max(300, windowWidth * 0.1), max(180, windowHeight * 0.28))
+    }
+
+    /// How far the band's lower edge dissolves into the canvas.
+    ///
+    /// Short on purpose — this is a seam softener, not a gradient. Long enough that the
+    /// transition can't be seen as an edge, short enough that the band still reads as a
+    /// distinct region of the window.
+    private static let bandFadeHeight: CGFloat = 48
+
+    /// The floating navigation pill.
+    ///
+    /// Purely a second *presentation* of navigation that already exists: it binds to the same
+    /// `NavigationState` the sidebar does and mutates the same `NavigationPath` the tab's
+    /// `NavigationStack` is already bound to, so there is no second route stack and nothing to
+    /// keep in sync. Added alongside the search overlay rather than in place of it.
+    ///
+    /// There is a back control but no forward one. `NavigationPath` is a single stack with no
+    /// forward history to restore, so a forward button would be permanently inert — the
+    /// reference's exists because its navigation model tracks one.
+    private var navigationPill: some View {
+        HStack(spacing: 4) {
+            if navigationPillShowsBack {
+                pillButton("chevron.left", help: "Back") {
+                    // `NavigationPath` is a `RangeReplaceableCollection` over its elements, so
+                    // going back is dropping the last one. Written back through the same
+                    // dictionary the tab's `NavigationStack` is bound to.
+                    var path = navigationState.tabPaths[navigationState.selectedTab] ?? NavigationPath()
+                    guard !path.isEmpty else { return }
+                    path.removeLast()
+                    navigationState.tabPaths[navigationState.selectedTab] = path
+                }
+            }
+
+            ForEach(TabItem.allCases, id: \.self) { tab in
+                pillButton(
+                    tab.icon,
+                    help: tab.title,
+                    isActive: navigationState.selectedTab == tab
+                ) {
+                    navigationState.selectedTab = tab
+                }
+            }
+        }
+        .padding(.horizontal, 5)
+        .padding(.vertical, 5)
+        .background { navigationPillSurface }
+    }
+
+    /// Whether the current tab has somewhere to go back to.
+    private var navigationPillShowsBack: Bool {
+        (navigationState.tabPaths[navigationState.selectedTab]?.count ?? 0) > 0
+    }
+
+    private var navigationPillSurface: some View {
+        let shape = Capsule(style: .continuous)
+        return Group {
+            if #available(macOS 26.0, *) {
+                shape.glassEffect(.regular, in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+        }
+        // Same scrim as the sidebar and the transport, so all three floating surfaces sit at
+        // one key instead of the pill reading lighter than the bar directly above it.
+        .overlay {
+            shape.fill(Color.cisumBg.opacity(0.4))
+        }
+        .overlay {
+            shape.strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
+        }
+    }
+
+    private func pillButton(
+        _ symbol: String,
+        help: String,
+        isActive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isActive ? Color.cisumPrimaryText : Color.cisumSecondaryText)
+                .frame(width: 30, height: 26)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
     #endif
 
@@ -582,9 +752,16 @@ public struct RootView: View {
             selectedTabContent
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        // Clears the floating search field. The transport lives in the band above rather
-        // than floating over this, so there is nothing to clear at the bottom.
-        .contentMargins(.top, 56)
+        // Clears the floating search field — but only on Search, where that field is drawn.
+        //
+        // The reservation is tied to the same condition as the overlay below because an
+        // unconditional one would leave a 56pt empty strip above the content on Home,
+        // Discover, Library and any pushed detail: the space would still be held open for a
+        // field that is no longer there. Search lays its own results out independently, so
+        // removing the reservation where the field is absent changes nothing there.
+        .contentMargins(.top, navigationState.selectedTab == .search ? 56 : 0)
+        // The transport lives in the band above rather than floating over this, so there is
+        // nothing to clear at the bottom.
         .contentMargins(.trailing, isDynamicPlayerExpanded.wrappedValue ? 430 : 0)
         .animation(.playerExpandAnimation, value: isDynamicPlayerExpanded.wrappedValue)
     }

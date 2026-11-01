@@ -22,6 +22,14 @@ public struct IncomingTrack: Sendable, Hashable {
     public let spotifyTrackURI: String?
     public let spotifyPreviewURLString: String?
 
+    /// Structured version evidence, when the importing adapter can supply it.
+    ///
+    /// **No adapter supplies this yet** — none of the seven sources reports a structured version,
+    /// so it is `nil` in production and reconciliation falls back to title inference. It is here so
+    /// the first adapter that can report one has somewhere to put it, without fabricating evidence
+    /// for the sources that cannot.
+    public let version: VersionEvidence?
+
     public init(
         provider: MediaProvider,
         providerTrackID: String,
@@ -33,7 +41,8 @@ public struct IncomingTrack: Sendable, Hashable {
         artworkURLString: String? = nil,
         isExplicit: Bool = false,
         spotifyTrackURI: String? = nil,
-        spotifyPreviewURLString: String? = nil
+        spotifyPreviewURLString: String? = nil,
+        version: VersionEvidence? = nil
     ) {
         self.provider = provider
         self.providerTrackID = providerTrackID
@@ -46,5 +55,6 @@ public struct IncomingTrack: Sendable, Hashable {
         self.isExplicit = isExplicit
         self.spotifyTrackURI = spotifyTrackURI
         self.spotifyPreviewURLString = spotifyPreviewURLString
+        self.version = version
     }
 }

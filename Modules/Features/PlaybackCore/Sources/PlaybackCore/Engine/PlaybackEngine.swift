@@ -47,9 +47,36 @@ public final class PlaybackEngine {
     /// lacked a parseable timestamp (common with YouTube Music results).
     public var onReadyForPlayback: (@MainActor (AVPlayerItem) -> Void)?
 
+    /// Fires at most once per loaded item, the first time that item is observed advancing.
+    ///
+    /// This is the earliest programmatic evidence that playback has begun rendering for the item —
+    /// a **proxy**, not proof of audible output. See `FirstAdvanceDetector`. The callback is
+    /// item-scoped: replacing the item re-arms it, and a callback is never delivered for an item the
+    /// player has already moved past.
+    public var onFirstTimeAdvance: (@MainActor () -> Void)?
+
+    /// Fires when the *playing* item stops rendering and has to wait for more data.
+    ///
+    /// The producer the stall metric was missing. Deliberately not fired during initial loading:
+    /// `AVPlayerItemPlaybackStalled` on an item that never started is just a slow start, which the
+    /// startup proxy already measures. Only a stall after the item began advancing counts.
+    public var onStalled: (@MainActor () -> Void)?
+
+    /// Fires on every periodic time tick (4 Hz) with the position in seconds.
+    ///
+    /// For listeners that need the clock but must not observe `ProgressState` — the lyric-line
+    /// index, which changes about once a line rather than once a tick.
+    public var onTick: (@MainActor (Double) -> Void)?
+
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    private var stalledObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
+
+    /// The item the current `onFirstTimeAdvance` re-arm belongs to. Guards against a periodic tick
+    /// being attributed to the wrong item while a replacement is mid-flight.
+    private var trackedItem: AVPlayerItem?
+    private var hasReportedFirstAdvance = false
 
     public init(progress: ProgressState, transport: TransportState) {
         self.progress = progress
@@ -74,6 +101,12 @@ public final class PlaybackEngine {
         // Both of these existed on the old engine and were lost. The buffer duration is what makes
         // playback start promptly instead of after a full prefetch.
         item.preferredForwardBufferDuration = 2.0
+        // End where the service says the file ends. AVFoundation estimates a fragmented MP4's length
+        // (measured at up to twice the real one), so the item never reached its *own* end: the clock
+        // ran on past the last byte, no did-play-to-end arrived, and the queue never advanced.
+        if let duration = stream.durationSeconds, duration > 0 {
+            item.forwardPlaybackEndTime = CMTime(seconds: duration, preferredTimescale: 600)
+        }
         player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
 
         observe(item)
@@ -112,9 +145,16 @@ public final class PlaybackEngine {
 
     public func stop() {
         player.pause()
+        // Observers are torn down *before* the item is detached. `replaceCurrentItem(with: nil)` can
+        // make the outgoing item report a failure, and a stopped player has no current item to fail.
+        removeItemObservers()
         player.replaceCurrentItem(with: nil)
         transport.isPlaying = false
+        transport.isBuffering = false
         progress.currentTime = 0
+        // Never report an advancement for a stopped item.
+        trackedItem = nil
+        hasReportedFirstAdvance = false
     }
 
     // MARK: - Observation
@@ -127,28 +167,88 @@ public final class PlaybackEngine {
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             MainActor.assumeIsolated {
-                self?.progress.currentTime = time.seconds
+                guard let self else { return }
+                self.progress.currentTime = time.seconds
+                self.onTick?(time.seconds)
+                self.reportFirstAdvanceIfNeeded(seconds: time.seconds)
+                self.clearBufferingIfRecovered()
             }
         }
     }
 
+    /// Clears the buffering flag once the current item is rendering again.
+    ///
+    /// Without this the flag set by a stall would stay on until the next track, which is worse than
+    /// not reporting the stall at all.
+    private func clearBufferingIfRecovered() {
+        guard transport.isBuffering, player.timeControlStatus == .playing else { return }
+        transport.isBuffering = false
+    }
+
+    /// Reports the first advancement for the tracked item, at most once per item.
+    ///
+    /// The item-identity check is what makes a periodic callback safe: the observer belongs to the
+    /// player, not the item, so without it a tick arriving while a replacement is in flight could be
+    /// attributed to the outgoing item.
+    private func reportFirstAdvanceIfNeeded(seconds: Double) {
+        guard let trackedItem, player.currentItem === trackedItem else { return }
+        let qualifies = FirstAdvanceDetector.qualifies(
+            seconds: seconds,
+            isPlaying: player.timeControlStatus == .playing,
+            alreadyReported: hasReportedFirstAdvance
+        )
+        guard qualifies else { return }
+        hasReportedFirstAdvance = true
+        onFirstTimeAdvance?()
+    }
+
     private func observe(_ item: AVPlayerItem) {
-        endObserver.map(NotificationCenter.default.removeObserver)
-        statusObservation?.invalidate()
+        // Nothing observed for the outgoing item survives: an item that is no longer current must not
+        // be able to report an end, a failure or a stall.
+        removeItemObservers()
+
+        // Re-arm the first-advance proxy for this item.
+        trackedItem = item
+        hasReportedFirstAdvance = false
 
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self, weak item] _ in
             MainActor.assumeIsolated {
-                self?.onPlaybackEnded?()
+                guard let self, self.isCurrent(item) else { return }
+                self.onPlaybackEnded?()
+            }
+        }
+
+        stalledObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: item,
+            queue: .main
+        ) { [weak self, weak item] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isCurrent(item) else { return }
+                // A stall before the item ever advanced is a slow start, not a stall mid-playback.
+                guard self.hasReportedFirstAdvance else { return }
+                // A stall in the last seconds before the stated end is the end of the data: the
+                // stated length runs a fraction past the last audio sample, so playback waits there
+                // for bytes that do not exist and `forwardPlaybackEndTime` is never reached.
+                if let item, item.forwardPlaybackEndTime.isNumeric,
+                   self.player.currentTime().seconds >= item.forwardPlaybackEndTime.seconds - 2
+                {
+                    self.onPlaybackEnded?()
+                    return
+                }
+                self.transport.isBuffering = true
+                PerfLog.warning("Playback stalled; waiting for more data")
+                self.onStalled?()
             }
         }
 
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                guard let self, self.isCurrent(item) else { return }
                 switch item.status {
                 case .readyToPlay:
                     self.transport.isBuffering = false
@@ -157,13 +257,47 @@ public final class PlaybackEngine {
                     self.transport.isBuffering = false
                     self.transport.isPlaying = false
                     let error = item.error ?? PlaybackError.unknown
-                    PerfLog.error("Playback failed: \(error.localizedDescription)")
+                    // AVFoundation reports most stream failures as -11800 "unknown error"; the cause
+                    // (an OSStatus such as -12660 for HTTP 403) is only in the underlying error and the
+                    // item's error log, so both are logged. Host only — the URL is a signed credential.
+                    let ns = error as NSError
+                    let underlying = (ns.userInfo[NSUnderlyingErrorKey] as? NSError).map { "\($0.domain) \($0.code)" } ?? "none"
+                    let event = item.errorLog()?.events.last
+                    PerfLog.error(
+                        "Playback failed: \(ns.domain) \(ns.code) underlying=\(underlying)"
+                            + " http=\(event?.errorStatusCode ?? 0) \(event?.errorDomain ?? "")"
+                            + " \(event?.errorComment ?? "") host=\((item.asset as? AVURLAsset)?.url.host ?? "?")"
+                    )
                     self.onPlaybackFailed?(error)
                 default:
                     self.transport.isBuffering = true
                 }
             }
         }
+    }
+
+    /// Whether an event for `item` still belongs to the item playback is using.
+    ///
+    /// The observers are created per item, but an item can be detached *while it is still loading* —
+    /// by `stop()`, or by a replacement racing that item's first `readyToPlay` — and a detached item
+    /// still reports its status and its failures. Without this check an outgoing item's late failure
+    /// is indistinguishable from the current item failing: it would re-resolve the track the user
+    /// just asked for, or write a duration for a track that is no longer playing.
+    private func isCurrent(_ item: AVPlayerItem?) -> Bool {
+        PlaybackItemScope.isCurrent(eventItem: item, currentItem: player.currentItem)
+    }
+
+    private func removeItemObservers() {
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+            self.endObserver = nil
+        }
+        if let stalledObserver {
+            NotificationCenter.default.removeObserver(stalledObserver)
+            self.stalledObserver = nil
+        }
+        statusObservation?.invalidate()
+        statusObservation = nil
     }
 
     /// Tears down observers.
@@ -176,13 +310,21 @@ public final class PlaybackEngine {
             player.removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-            self.endObserver = nil
-        }
-        statusObservation?.invalidate()
-        statusObservation = nil
         stop()
+    }
+}
+
+/// Whether a player-item event belongs to the item playback is using.
+///
+/// A value type with one pure function, separated from `PlaybackEngine` so the rule that makes the
+/// item-scoped callbacks safe is testable without a running player. It is the guard behind three
+/// requirements at once: an outgoing item's failure cannot disturb newer playback, an outgoing
+/// item's readiness cannot rewrite the current timeline, and a stall is only ever reported for the
+/// item that is actually playing.
+enum PlaybackItemScope {
+    static func isCurrent(eventItem: AVPlayerItem?, currentItem: AVPlayerItem?) -> Bool {
+        guard let eventItem, let currentItem else { return false }
+        return eventItem === currentItem
     }
 }
 

@@ -80,6 +80,11 @@ struct NowPlayingSongInfo: View, Equatable {
                     .font(.headline)
                     .foregroundColor(Color.white.opacity(0.8))
                     .fontWeight(.semibold)
+
+                // The stream actually playing, as opposed to the track that was asked for.
+                // Reads the environment directly, so a fallback updating mid-track does not need
+                // this view's own `Equatable` inputs to change.
+                ActiveStreamLabel()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

@@ -223,15 +223,24 @@ public final class AppServices {
     public let playerPresentationController: PlayerPresentationController
     public let searchOverlayController: SearchOverlayController
 
+    /// Set when the persistent library could not be opened.
+    ///
+    /// Non-nil means the running container is a **in-memory placeholder** and the UI must present
+    /// an explicit failure rather than the normal shell — otherwise a failed store open would look
+    /// exactly like an empty library. See `AppBootstrap.makeDependenciesOrFallback`.
+    public let libraryOpenFailure: LibraryOpenFailure?
+
     public init(
         router: Router,
         modelContainer: ModelContainer,
         playerPresentationController: PlayerPresentationController,
-        searchOverlayController: SearchOverlayController
+        searchOverlayController: SearchOverlayController,
+        libraryOpenFailure: LibraryOpenFailure? = nil
     ) {
         self.router = router
         self.modelContainer = modelContainer
         self.playerPresentationController = playerPresentationController
         self.searchOverlayController = searchOverlayController
+        self.libraryOpenFailure = libraryOpenFailure
     }
 }

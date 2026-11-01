@@ -275,11 +275,7 @@ public final class cisumModule {
     }
 
     public func artistDetailView(for id: String) -> some View {
-        #if os(iOS)
         ArtistDetailWrapper(artistID: id)
-        #else
-        EmptyView()
-        #endif
     }
 
     public func albumDetailView(for id: String) -> some View {
@@ -334,6 +330,11 @@ public final class cisumModule {
         player.vinylBackdrop()
     }
 
+    /// The current track's artwork behind the macOS record band.
+    public func artworkBackdrop() -> some View {
+        player.artworkBackdrop()
+    }
+
     #if os(iOS) || os(macOS)
     public var systemVolumeController: SystemVolumeController {
         SystemVolumeController.shared
@@ -386,6 +387,18 @@ public final class cisumModule {
 
     @ViewBuilder
     public var rootView: some View {
+        // A failed store open is presented as an explicit failure, never as the normal shell. The
+        // in-memory container exists only so the environment has something to hold; showing the
+        // library backed by it is the exact "my library is empty" lie this branch prevents.
+        if let failure = container.appServices.libraryOpenFailure {
+            LibraryUnavailableView(failure: failure) { AppBootstrap.retryLibraryOpen() }
+        } else {
+            authenticatedRootView
+        }
+    }
+
+    @ViewBuilder
+    private var authenticatedRootView: some View {
         let authService = container.userServices.authService
         // Show home immediately (it has its own loading placeholders). Only fall back to login
         // once the initial session check confirms there's genuinely no session — this avoids the

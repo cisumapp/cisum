@@ -33,7 +33,9 @@ public extension FederatedSearchItem {
                 title: track.title,
                 artist: track.artistName,
                 artworkURL: track.artworkURL,
-                durationSeconds: track.durationSeconds
+                durationSeconds: track.durationSeconds,
+                isrc: track.isrc,
+                album: track.albumName
             )
 
         case let .providerSDK(ref):

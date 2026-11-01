@@ -26,6 +26,7 @@
 //
 
 import Foundation
+import OSLog
 
 /// Minimal performance logger that captures file/function/line and timing.
 public enum PerfLog {
@@ -217,12 +218,9 @@ public enum PerfLog {
 
     // MARK: - Internal Implementation
 
-    @usableFromInline
-    static func currentCPUTimeMs() -> Double {
-        var spec = timespec()
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &spec)
-        return Double(spec.tv_sec) * 1000.0 + Double(spec.tv_nsec) / 1_000_000.0
-    }
+    /// The subsystem every cisum log line is filed under — the app's bundle id, which is also what
+    /// the SDKs' loggers use, so one `subsystem == "<bundle id>"` filter shows app and SDK together.
+    public static let subsystem = Bundle.main.bundleIdentifier ?? "cisum"
 
     @usableFromInline
     static func log(
@@ -234,26 +232,44 @@ public enum PerfLog {
     ) {
         guard level >= minLevel else { return }
 
+        // `#fileID` is "Module/File.swift": the module is the category, so Console.app can filter to
+        // one feature (`category:PlaybackCore`) without any call site naming itself.
+        let module = file.split(separator: "/").first.map(String.init) ?? "cisum"
         let fileName = (file as NSString).lastPathComponent
-        let cpuTime = String(format: "%.2f", currentCPUTimeMs())
-        let msg = message()
+        let text = "[\(fileName):\(line) \(function)] \(message())"
 
-        let formatted = """
-        [\(cpuTime)] [\(fileName):\(line) | \(function)]
-         ↳ \(msg)
-        """
-        print(formatted)
+        // The unified log rather than stdout: `print` never reaches Console.app, `log show`, or a
+        // device sysdiagnose, and it interleaved with nothing the SDKs wrote. Messages are written to
+        // keep signed URLs and tokens out, so they are logged as public.
+        let logger = Logger(subsystem: subsystem, category: module)
+        switch level {
+        case .trace, .debug: logger.debug("\(text, privacy: .public)")
+        case .info: logger.notice("\(text, privacy: .public)")
+        case .warning: logger.warning("\(text, privacy: .public)")
+        case .error: logger.error("\(text, privacy: .public)")
+        }
     }
 
     // MARK: - Diagnostics
 
-    /// Provides a URL to the log file (currently a dummy file since PerfLog uses console print).
-    /// Used by ProfileView to share app diagnostics.
+    /// This launch's cisum log, app and SDKs together, written to a file for the share sheet.
+    ///
+    /// Read back from the unified log, so it holds exactly what Console.app shows for this process.
+    /// ponytail: synchronous read of the whole process log; move off the main thread if the Profile
+    /// screen ever stutters building its share link.
     public static func getLogFileURL() -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cisum_perf_logs.txt")
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try? "Performance Logger uses console printing. To enable file logging, implement a FileHandle within PerfLog.".write(to: url, atomically: true, encoding: .utf8)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("cisum-diagnostics.log")
+        let lines: [String]
+        do {
+            let store = try OSLogStore(scope: .currentProcessIdentifier)
+            lines = try store.getEntries()
+                .compactMap { $0 as? OSLogEntryLog }
+                .filter { $0.subsystem == subsystem }
+                .map { "\($0.date.formatted(.iso8601)) [\($0.category)] \($0.composedMessage)" }
+        } catch {
+            lines = ["Could not read the log: \(error.localizedDescription)"]
         }
+        try? lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
         return url
     }
 }

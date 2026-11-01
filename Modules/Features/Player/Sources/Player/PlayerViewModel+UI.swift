@@ -58,8 +58,14 @@ public extension PlayerViewModel {
         transport.isPlaying
     }
 
+    /// The length of the timeline the scrubber and the counters measure against.
+    ///
+    /// The loaded item's own duration when it is known, else the catalogue's — see
+    /// `PlaybackTimeline`. Falls back to `0`, which `MusicProgressScrubber` already treats as "no
+    /// known length" and renders as an empty timeline, because this is read by views that cannot
+    /// show an optional without inventing a placeholder.
     var duration: Double {
-        nowPlaying.duration
+        nowPlaying.timelineDuration ?? 0
     }
 
     var canSkipForward: Bool {
@@ -135,6 +141,52 @@ public extension PlayerViewModel {
     var nextQueuePreviewItem: QueuePreviewItem? {
         guard let position = queue.position else { return nil }
         return queuePreviewItems[safe: position + 1]
+    }
+
+    /// Played entries, oldest first — the queue view's History.
+    var queueHistory: [QueueRow] {
+        guard let position = queue.position else { return [] }
+        return rows(in: 0 ..< position)
+    }
+
+    /// What the user queued, still to come.
+    var queuePlayingNext: [QueueRow] {
+        upcomingRows.filter { !$0.isAutoplay }
+    }
+
+    /// What the station added, still to come.
+    var queueAutoplay: [QueueRow] {
+        upcomingRows.filter(\.isAutoplay)
+    }
+
+    private var upcomingRows: [QueueRow] {
+        guard let position = queue.position else { return [] }
+        return rows(in: (position + 1) ..< queue.entries.count)
+    }
+
+    private func rows(in range: Range<Int>) -> [QueueRow] {
+        range.map { index in
+            let ref = queue.entries[index]
+            let key = Self.queueKey(ref)
+            return QueueRow(
+                id: "\(index)-\(key)",
+                index: index,
+                title: ref.title,
+                subtitle: ref.artist,
+                artworkURL: ref.artworkURL,
+                isAutoplay: autoplayKeys.contains(key)
+            )
+        }
+    }
+
+    /// One row of the queue view. `index` is the entry's position in the whole queue.
+    struct QueueRow: Identifiable, Equatable {
+        public let id: String
+        public let index: Int
+        public let title: String
+        public let subtitle: String
+        public let artworkURL: URL?
+        public let isAutoplay: Bool
     }
 
     func playQueueEntry(at index: Int) {

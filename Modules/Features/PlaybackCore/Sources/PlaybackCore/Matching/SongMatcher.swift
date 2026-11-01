@@ -116,10 +116,14 @@ public struct SongMatcher: Sendable {
         let requestedVariants = VariantDetector.detect(in: target.title)
 
         let scored = candidates.compactMap { candidate -> MatchResult? in
-            guard VariantDetector.isAcceptable(
-                candidateTitle: candidate.title,
-                queryVariants: requestedVariants
-            ) else { return nil }
+            // A fan upload matches title and often artist perfectly — the channel names itself after
+            // the band — so no score can be trusted to reject it. The service's own label can.
+            guard candidate.recordingKind != .userUpload,
+                  VariantDetector.isAcceptable(
+                      candidateTitle: candidate.title,
+                      queryVariants: requestedVariants
+                  )
+            else { return nil }
 
             let score = score(candidate, against: target)
             guard score >= minimumScore else { return nil }
@@ -132,7 +136,27 @@ public struct SongMatcher: Sendable {
             )
         }
 
-        return scored.max { $0.score < $1.score }
+        // The official audio beats a music video of the same song even when the video's title scores
+        // higher. The score only gates acceptance; among accepted matches, the publisher's label is
+        // stronger evidence of "the album version" than a few points of title similarity.
+        return scored.max { lhs, rhs in
+            let lhsKind = Self.kindRank(lhs.track.recordingKind)
+            let rhsKind = Self.kindRank(rhs.track.recordingKind)
+            if lhsKind != rhsKind {
+                return lhsKind < rhsKind
+            }
+            return lhs.score < rhs.score
+        }
+    }
+
+    /// Official audio first, then services that do not label uploads (catalogue services, whose
+    /// tracks are all releases), then music videos.
+    static func kindRank(_ kind: RecordingKind?) -> Int {
+        switch kind {
+        case .officialAudio: 2
+        case nil: 1
+        case .musicVideo, .userUpload: 0
+        }
     }
 
     /// Scores a candidate 0...1.
@@ -143,12 +167,27 @@ public struct SongMatcher: Sendable {
     /// single most important rule here.
     func score(_ candidate: SourceTrack, against target: MatchTarget) -> Double {
         let artistScore = max(
-            TextNormalizer.tokenOverlap(expected: target.artist, candidate: candidate.artist),
+            TextNormalizer.nameOverlap(expected: target.artist, candidate: candidate.artist),
             TextNormalizer.similarity(target.artist, candidate.artist)
         )
 
         // Hard gate. No amount of title agreement rescues the wrong performer.
         guard artistScore >= 0.5 else { return 0 }
+
+        // A video is only an *official* video when the artist's own channel published it. On a video
+        // site the "artist" is the uploading channel, so this is where a talk-show performance or a
+        // fan re-upload of the right song is refused.
+        // Both directions: "The Weeknd Fan Edits" contains the artist but is not the artist.
+        if candidate.recordingKind == .musicVideo {
+            let channelIsArtist = max(
+                min(
+                    TextNormalizer.nameOverlap(expected: target.artist, candidate: candidate.artist),
+                    TextNormalizer.nameOverlap(expected: candidate.artist, candidate: target.artist)
+                ),
+                TextNormalizer.similarity(target.artist, candidate.artist)
+            )
+            guard channelIsArtist >= 0.8 else { return 0 }
+        }
 
         let titleScore = max(
             TextNormalizer.tokenOverlap(

@@ -190,7 +190,9 @@ public final class Song {
             title: title,
             artist: primaryArtistName ?? "",
             artworkURL: artworkURLString.flatMap(URL.init(string:)),
-            durationSeconds: durationSeconds
+            durationSeconds: durationSeconds,
+            isrc: isrc,
+            album: albumTitle
         )
     }
 }
