@@ -4,23 +4,12 @@ import Observation
 @Observable
 @MainActor
 public final class StreamingProviderSettings {
-    public enum RecommendationSource: String, CaseIterable, Identifiable {
-        case youtube = "YouTube Music"
-        case spotify = "Spotify"
-        case hybrid = "Hybrid (Both)"
-
-        public var id: String {
-            rawValue
-        }
-    }
-
     public static let shared = StreamingProviderSettings()
 
     private enum Keys {
         static let spotifyClientID = "streaming.spotify.client_id"
         static let spotifyClientSecret = "streaming.spotify.client_secret"
         static let spotifyPreferAnonymousFallback = "streaming.spotify.prefer_anonymous_fallback"
-        static let recommendationSource = "streaming.recommendation_source"
     }
 
     private let defaults: UserDefaults
@@ -43,11 +32,7 @@ public final class StreamingProviderSettings {
         }
     }
 
-    public var recommendationSource: RecommendationSource {
-        didSet {
-            defaults.set(recommendationSource.rawValue, forKey: Keys.recommendationSource)
-        }
-    }
+
 
     public var hasSpotifyCredentials: Bool {
         !spotifyClientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -64,13 +49,6 @@ public final class StreamingProviderSettings {
         self.spotifyClientSecret = defaults.string(forKey: Keys.spotifyClientSecret) ?? ""
         self.spotifyPreferAnonymousFallback = defaults.object(forKey: Keys.spotifyPreferAnonymousFallback) as? Bool ?? true
 
-        if let sourceRaw = defaults.string(forKey: Keys.recommendationSource),
-           let source = RecommendationSource(rawValue: sourceRaw)
-        {
-            self.recommendationSource = source
-        } else {
-            self.recommendationSource = .youtube
-        }
     }
 
     public func clearSpotifyCredentials() {

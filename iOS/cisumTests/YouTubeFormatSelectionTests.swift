@@ -163,48 +163,33 @@ final class YouTubeFormatSelectionTests: XCTestCase {
 
     // MARK: - Manifest
 
-    func testManifestIsAdaptiveAndNeedsTheProxyLoaderOnlyForGooglevideo() {
-        let proxied = YouTubeFormatSelection.candidates(
+    func testManifestIsAnAdaptiveCandidate() {
+        let candidates = YouTubeFormatSelection.candidates(
             hlsURL: URL(string: "https://manifest.googlevideo.com/api/manifest/hls_variant/x"),
             formats: [],
             expiry: nil
         )
-        XCTAssertEqual(proxied.count, 1)
-        XCTAssertEqual(proxied.first?.kind, .hls)
-        XCTAssertEqual(proxied.first?.requiresProxyLoader, true)
-
-        let plain = YouTubeFormatSelection.candidates(
-            hlsURL: URL(string: "https://example.com/playlist.m3u8"),
-            formats: [],
-            expiry: nil
-        )
-        XCTAssertEqual(plain.first?.requiresProxyLoader, false)
-        XCTAssertEqual(plain.first?.kind, .hls)
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidates.first?.kind, .hls)
     }
 
     // MARK: - Headers
 
-    /// The CDN checks the User-Agent the URL was signed for, and a mismatch fails silently. The muxed
-    /// candidate is the one resolved through the Android client, so it is the one that must carry the
-    /// Android agent.
-    func testEachCandidateCarriesTheUserAgentOfItsClient() {
+    /// The CDN checks the User-Agent the URL was signed for, and a mismatch is refused (403). The
+    /// signing client is named in the URL's `c=`, so that — not the format's kind — picks the agent.
+    func testEachCandidateCarriesTheUserAgentOfItsSigningClient() {
         let candidates = YouTubeFormatSelection.candidates(
-            hlsURL: URL(string: "https://example.com/playlist.m3u8"),
+            hlsURL: nil,
             formats: [
-                format(itag: 140, mimeType: "audio/mp4", url: "https://cdn.example.com/audio", bitrate: 128_000),
-                format(itag: 18, mimeType: "video/mp4; codecs=\"avc1.42001E, mp4a.40.2\"", url: "https://cdn.example.com/muxed"),
+                format(itag: 140, mimeType: "audio/mp4", url: "https://cdn.example.com/audio?c=VISIONOS", bitrate: 128_000),
+                format(itag: 18, mimeType: "video/mp4; codecs=\"avc1.42001E, mp4a.40.2\"", url: "https://cdn.example.com/muxed?c=ANDROID"),
             ],
             expiry: nil
         )
 
-        XCTAssertEqual(candidates.count, 3)
-        let userAgents = candidates.compactMap { $0.headers["User-Agent"] }
-        XCTAssertEqual(userAgents.count, 3)
-        XCTAssertEqual(Set(userAgents).count, 2, "audio/manifest share one client, muxed another")
-        XCTAssertNotEqual(
-            candidates.first(where: { $0.url.lastPathComponent == "muxed" })?.headers["User-Agent"],
-            candidates.first(where: { $0.url.lastPathComponent == "audio" })?.headers["User-Agent"]
-        )
+        let agent = { (path: String) in candidates.first { $0.url.lastPathComponent == path }?.headers["User-Agent"] }
+        XCTAssertEqual(agent("audio"), InnerTubeClients.VisionOS.userAgent)
+        XCTAssertEqual(agent("muxed"), InnerTubeClients.Android.userAgent)
     }
 
     // MARK: - Expiry

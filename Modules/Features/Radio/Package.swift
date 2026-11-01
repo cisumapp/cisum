@@ -16,27 +16,11 @@ let package = Package(
             targets: ["Radio"]
         ),
     ],
-    dependencies: [
-        .package(path: "../../Shared/Models"),
-        .package(path: "../../Shared/Utilities"),
-        .package(path: "../../Shared/Aesthetics"),
-        .package(path: "../../../Packages/StreamingKit/ProviderSDK"),
-        .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
-        .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
-    ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "Radio",
-            dependencies: [
-                .product(name: "Models", package: "Models"),
-                .product(name: "Utilities", package: "Utilities"),
-                .product(name: "Aesthetics", package: "Aesthetics"),
-                .product(name: "ProviderSDK", package: "ProviderSDK"),
-                .product(name: "SpotifySDK", package: "SpotifySDK"),
-                .product(name: "YouTubeSDK", package: "YouTubeSDK"),
-            ]
+            name: "Radio"
         ),
 
     ],

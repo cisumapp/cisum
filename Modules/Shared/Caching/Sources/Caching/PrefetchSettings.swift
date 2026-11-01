@@ -34,7 +34,6 @@ public final class PrefetchSettings {
         static let cellularCount = "prefetch.cellular.count"
         static let wifiConcurrency = "prefetch.wifi.concurrency"
         static let cellularConcurrency = "prefetch.cellular.concurrency"
-        static let metricsEnabled = "prefetch.metrics.enabled"
         static let suggestionPipelineEnabled = "prefetch.suggestions.pipeline.enabled"
     }
 
@@ -64,10 +63,6 @@ public final class PrefetchSettings {
         didSet { schedulePersistence() }
     }
 
-    public var metricsEnabled: Bool {
-        didSet { schedulePersistence() }
-    }
-
     public var suggestionPipelineEnabled: Bool {
         didSet { schedulePersistence() }
     }
@@ -83,7 +78,6 @@ public final class PrefetchSettings {
         self.cellularPrefetchCount = defaults.object(forKey: Keys.cellularCount) as? Int ?? 2
         self.wifiPrefetchConcurrency = defaults.object(forKey: Keys.wifiConcurrency) as? Int ?? 3
         self.cellularPrefetchConcurrency = defaults.object(forKey: Keys.cellularConcurrency) as? Int ?? 1
-        self.metricsEnabled = defaults.object(forKey: Keys.metricsEnabled) as? Bool ?? true
         self.suggestionPipelineEnabled = defaults.object(forKey: Keys.suggestionPipelineEnabled) as? Bool ?? true
     }
 
@@ -105,7 +99,6 @@ public final class PrefetchSettings {
         defaults.set(cellularPrefetchCount, forKey: Keys.cellularCount)
         defaults.set(wifiPrefetchConcurrency, forKey: Keys.wifiConcurrency)
         defaults.set(cellularPrefetchConcurrency, forKey: Keys.cellularConcurrency)
-        defaults.set(metricsEnabled, forKey: Keys.metricsEnabled)
         defaults.set(suggestionPipelineEnabled, forKey: Keys.suggestionPipelineEnabled)
     }
 }

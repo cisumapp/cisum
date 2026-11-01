@@ -60,20 +60,7 @@ public final class PlaybackResolver {
     /// Persists a newly-discovered binding, so step 3 never runs again for this pair.
     public var persist: (@MainActor (PlayableRef, SourceTrack, SourceStream) -> Void)?
 
-    /// Reports how a stream was obtained, for the playback-resolution metrics.
-    ///
-    /// Instrumentation only — called on the success paths and changing no resolution behaviour.
-    /// Carries the documented warm/cold classification (`PlaybackResolutionPath`) and the elapsed
-    /// milliseconds. Failures and empty results are deliberately not reported here; they surface as
-    /// a thrown error and are counted by the caller.
-    public var onResolveOutcome: (@MainActor (PlaybackResolutionPath, Double) -> Void)?
 
-    /// How much cisum trusts a source, for the ranking policy's trust dimension.
-    ///
-    /// **Injected, not self-declared.** A provider cannot promote itself by claiming anything, and a
-    /// plugin cisum has never seen cannot answer this by existing. When the composition root does
-    /// not supply it, the answer is `.unknown` and ranking falls through to its other tiers.
-    public var sourceTrust: (@MainActor (String) -> SourceTrust)?
 
     /// How long the request is willing to wait for candidates. See `ResolutionBudget`.
     ///
@@ -104,7 +91,6 @@ public final class PlaybackResolver {
         defer { CisumSignpost.resolver.end("stream-resolve", state: span) }
 
         PerfLog.info("PlaybackResolver.resolve(): starting for sourceID='\(ref.sourceID)' trackID='\(ref.sourceTrackID)' title='\(ref.title)'")
-        let resolveStart = ContinuousClock.now
 
         // Local, not resolver state: two requests can be in flight at once and each must classify
         // its own failure rather than whatever the other one happened to record.
@@ -143,7 +129,6 @@ public final class PlaybackResolver {
                 trust: trust(for: binding.sourceID),
                 qualityEvidence: .advertised
             )
-            reportResolveOutcome(.cachedStreamURL, since: resolveStart)
             return ranking.rank([candidate]).ranked
         }
         CisumSignpost.cache.event("cache-miss", "\(ref.sourceID) \(ref.title)")
@@ -162,7 +147,6 @@ public final class PlaybackResolver {
             let ranked = rank(reports)
             log(ranked, reports: reports, stage: "by stored id")
             if let selected = ranked.selected {
-                reportResolveOutcome(.directProviderID, since: resolveStart)
                 // Stale-write guard: a superseded request must not overwrite newer binding state.
                 // `loadTask?.cancel()` runs the moment the user selects another track, so a cancelled
                 // resolve persists nothing. The **selected** stream is what is persisted, since that
@@ -201,7 +185,6 @@ public final class PlaybackResolver {
             log(ranked, reports: reports, stage: "searched")
             if let selected = ranked.selected {
                 PerfLog.info("PlaybackResolver: Step 3 — resolved '\(ref.title)' from '\(selected.sourceID)' (host=\(selected.stream.url.host ?? "unknown"))")
-                reportResolveOutcome(.matchedProvider, since: resolveStart)
                 if !Task.isCancelled {
                     persist(selected, ref: ref)
                 }
@@ -343,7 +326,9 @@ public final class PlaybackResolver {
     }
 
     private func trust(for sourceID: String) -> SourceTrust {
-        sourceTrust?(sourceID) ?? .unknown
+        // cisum's own judgement, not the provider's claim: native sources are first-party, a
+        // registered plugin third-party, anything else unknown.
+        SourceTrustPolicy.trust(for: sourceID, isRegistered: sources.displayName(for: sourceID) != nil)
     }
 
     // MARK: - Candidate building and ranking
@@ -445,10 +430,6 @@ public final class PlaybackResolver {
         persist?(playbackRef, track, candidate.stream)
     }
 
-    private func reportResolveOutcome(_ path: PlaybackResolutionPath, since start: ContinuousClock.Instant) {
-        guard let onResolveOutcome else { return }
-        onResolveOutcome(path, start.duration(to: ContinuousClock.now).milliseconds)
-    }
 
     /// The first provider failure, for the thrown error.
     ///

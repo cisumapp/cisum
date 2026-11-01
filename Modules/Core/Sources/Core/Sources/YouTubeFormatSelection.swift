@@ -52,8 +52,7 @@ enum YouTubeFormatSelection {
                 mimeType: "application/x-mpegURL",
                 qualityLabel: "Adaptive",
                 expiresAt: expiry,
-                headers: [userAgentHeader: userAgent(for: hlsURL)],
-                requiresProxyLoader: hlsURL.absoluteString.contains("manifest.googlevideo.com")
+                headers: [userAgentHeader: userAgent(for: hlsURL)]
             ))
         }
 

@@ -2,13 +2,6 @@ import Foundation
 import Observation
 import SwiftUI
 
-public enum ArtworkVideoProcessingStatus: Equatable, Sendable {
-    case idle
-    case processing
-    case ready
-    case failed
-}
-
 /// Single cycling playback mode surfaced in the now-playing menu (Apple Music style).
 /// Shuffle and repeat are mutually exclusive here; cycling order is off → shuffle → repeatAll → repeatOne.
 public enum PlaybackMode: String, Sendable, CaseIterable {

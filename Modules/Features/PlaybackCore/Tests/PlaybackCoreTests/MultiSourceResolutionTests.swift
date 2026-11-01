@@ -369,8 +369,6 @@ struct MultiProviderCandidateTests {
         let older = binding(sourceID: "youtube_music", trackID: "v1", cachedAt: Date().addingTimeInterval(-120))
         let newer = binding(sourceID: "tidal", trackID: "t-9", cachedAt: Date().addingTimeInterval(-10))
         let resolver = resolver([lowQualityProvider(), highQualityProvider()], bindings: [older, newer])
-        var paths: [PlaybackResolutionPath] = []
-        resolver.onResolveOutcome = { path, _ in paths.append(path) }
 
         let ranked = try await resolver.resolve(requestedRef())
 
@@ -378,7 +376,6 @@ struct MultiProviderCandidateTests {
         #expect(ranked.first?.sourceID == "tidal")
         #expect(ranked.first?.stream.url.lastPathComponent == "cached-tidal.m4a")
         #expect(ranked.first?.identity == .confirmed(.establishedBinding))
-        #expect(paths == [.cachedStreamURL])
     }
 
     @Test("the requested provider wins the warm race when both were resolved together")

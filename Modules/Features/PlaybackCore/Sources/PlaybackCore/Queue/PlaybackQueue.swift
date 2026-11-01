@@ -64,13 +64,6 @@ public final class PlaybackQueue {
         return mode == .repeatAll ? entries.first : nil
     }
 
-    /// The next few entries, for the queue preview UI.
-    public func preview(limit: Int = 20) -> [PlayableRef] {
-        guard let position else { return [] }
-        let start = min(position + 1, entries.count)
-        return Array(entries[start...].prefix(limit))
-    }
-
     public var canSkipForward: Bool {
         guard let position else { return false }
         return mode != .off || position + 1 < entries.count
@@ -119,15 +112,6 @@ public final class PlaybackQueue {
             return
         }
         replace(with: [ref])
-    }
-
-    public func insertNext(_ ref: PlayableRef) {
-        guard let position else {
-            replace(with: [ref])
-            return
-        }
-        entries.insert(ref, at: min(position + 1, entries.count))
-        unshuffled.append(ref)
     }
 
     public func append(_ refs: [PlayableRef]) {

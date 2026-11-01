@@ -383,15 +383,6 @@ struct PlaybackResolverRankingTests {
         #expect(forward.first?.stream.url == reversed.first?.stream.url)
     }
 
-    @Test("the resolver still reports a cold direct resolve for a multi-candidate set")
-    func metricsPathPreserved() async throws {
-        let resolver = resolver(streams: youTubeOrderedStreams())
-        var paths: [PlaybackResolutionPath] = []
-        resolver.onResolveOutcome = { path, _ in paths.append(path) }
-
-        _ = try await resolver.resolve(ref())
-        #expect(paths == [.directProviderID])
-    }
 
     /// The binding must cache the URL that will actually play, or the warm path would hand back the
     /// candidate ranking already rejected.
@@ -415,14 +406,11 @@ struct PlaybackResolverRankingTests {
         )
         let resolver = resolver(streams: youTubeOrderedStreams())
         resolver.bindings = { _ in [binding] }
-        var paths: [PlaybackResolutionPath] = []
-        resolver.onResolveOutcome = { path, _ in paths.append(path) }
 
         let resolved = try await resolver.resolve(ref())
         #expect(resolved.count == 1)
         #expect(resolved.first?.stream.url.lastPathComponent == "cached.m4a")
         #expect(resolved.first?.identity == .confirmed(.establishedBinding))
-        #expect(paths == [.cachedStreamURL])
     }
 
     @Test("an ad-hoc play resolves as unconfirmed identity, and still plays")
@@ -441,17 +429,9 @@ struct PlaybackResolverRankingTests {
         #expect(resolved.first?.stream.mimeType == "audio/mp4")
     }
 
-    @Test("source trust reaches the ranking, and defaults to unknown")
+    @Test("a native source is ranked as first-party")
     func trustReachesRanking() async throws {
-        let resolver = resolver(streams: youTubeOrderedStreams())
-        var seen: [String] = []
-        resolver.sourceTrust = { id in
-            seen.append(id)
-            return .firstParty
-        }
-
-        let resolved = try await resolver.resolve(ref())
-        #expect(seen.contains("youtube_music"))
+        let resolved = try await resolver(streams: youTubeOrderedStreams()).resolve(ref())
         #expect(resolved.first?.trust == .firstParty)
     }
 }

@@ -14,10 +14,12 @@ import Utilities
 import Playlists // SpotifyPlaylistURLParser
 import SpotifySDK
 
-/// Stable synthetic id for the user's Liked Songs collection.
-private let spotifyLikedSongsPlaylistID = "spotify:collection:tracks"
+
 
 public final class SpotifyImportService: ImportService {
+    /// Stable synthetic id for the user's Liked Songs collection.
+    public static let likedSongsPlaylistID = "spotify:collection:tracks"
+
     public let provider: ImportProvider = .spotify
     public let capabilities: ImportCapabilities = [.listsUserPlaylists, .importByLink, .likedSongs, .carriesISRC]
 
@@ -54,7 +56,7 @@ public final class SpotifyImportService: ImportService {
 
         // ponytail: heart fallback (nil artwork) rendered by the picker row; Liked Songs has no cover URL.
         let liked = ImportablePlaylistRef(
-            id: spotifyLikedSongsPlaylistID,
+            id: Self.likedSongsPlaylistID,
             title: "Liked Songs",
             ownerName: nil,
             artworkURL: nil,
@@ -87,10 +89,10 @@ public final class SpotifyImportService: ImportService {
     public func fetchMetadata(playlistID: String) async throws -> ImportPlaylistMetadata {
         PerfLog.info("SpotifyImportService: fetchMetadata(\(playlistID))")
         let sdk = try await currentSDK()
-        if playlistID == spotifyLikedSongsPlaylistID {
+        if playlistID == Self.likedSongsPlaylistID {
             let page = try await sdk.account.likedSongs(limit: 1)
             return ImportPlaylistMetadata(
-                sourcePlaylistID: spotifyLikedSongsPlaylistID,
+                sourcePlaylistID: Self.likedSongsPlaylistID,
                 title: "Liked Songs",
                 totalTrackCount: page.totalCount ?? page.items.count
             )
@@ -112,7 +114,7 @@ public final class SpotifyImportService: ImportService {
         let sdk = try await currentSDK()
 
         // Liked Songs is genuinely paged (cursor = next offset as string).
-        if playlistID == spotifyLikedSongsPlaylistID {
+        if playlistID == Self.likedSongsPlaylistID {
             let pageSize = 100
             let page = try await sdk.account.likedSongs(offset: offset, limit: pageSize)
             let tracks = page.items.map(\.track).map(Self.incoming(from:))
@@ -148,6 +150,50 @@ public final class SpotifyImportService: ImportService {
             spotifyTrackURI: track.uri,
             spotifyPreviewURLString: track.previewURL?.absoluteString
         )
+    }
+}
+
+
+// MARK: - Spotify Playlist URL Parser
+
+enum SpotifyPlaylistURLParser {
+    /// Extracts a Spotify playlist ID from any supported format:
+    /// - https://open.spotify.com/playlist/{id}
+    /// - spotify:playlist:{id}
+    /// - Raw playlist ID (22-char base62)
+    public static func extractPlaylistID(from input: String) -> String? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // spotify:playlist:{id}
+        if trimmed.hasPrefix("spotify:playlist:") {
+            let id = String(trimmed.dropFirst("spotify:playlist:".count))
+                .components(separatedBy: "?").first ?? ""
+            return id.isEmpty ? nil : id
+        }
+
+        // https://open.spotify.com/playlist/{id}?...
+        if let url = URL(string: trimmed),
+           let host = url.host,
+           host.contains("spotify.com")
+        {
+            let pathComponents = url.pathComponents
+            if let idx = pathComponents.firstIndex(of: "playlist"),
+               idx + 1 < pathComponents.count
+            {
+                let id = pathComponents[idx + 1]
+                return id.isEmpty ? nil : id
+            }
+        }
+
+        // Raw ID: 20–28 base62 characters
+        let base62 = CharacterSet.alphanumerics
+        if trimmed.count >= 20, trimmed.count <= 28,
+           trimmed.unicodeScalars.allSatisfy({ base62.contains($0) })
+        {
+            return trimmed
+        }
+
+        return nil
     }
 }
 #endif

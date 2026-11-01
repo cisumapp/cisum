@@ -20,7 +20,6 @@ import Player
 import Playlists
 import Plugins
 import Profile
-import Radio
 import Search
 import SwiftData
 import Utilities
@@ -196,8 +195,6 @@ enum AppBootstrap {
         }
 
         let searchCache = SearchResultsCache.shared
-        let radioSessionStore = RadioSessionStore.shared
-        let playbackMetricsStore = PlaybackMetricsStore.shared
         let lastFMSettings = LastFMSettings.shared
         let authService = AuthService()
         let supabaseService = SupabaseService()
@@ -324,18 +321,6 @@ enum AppBootstrap {
             await stationMixer.nextPage(seed: seed, continuation: continuation)
         }
 
-        player.configureSourceTrust { sourceID in
-            SourceTrustPolicy.trust(
-                for: sourceID,
-                isRegistered: sourceRegistry.displayName(for: sourceID) != nil
-            )
-        }
-
-        // How long another provider may take to improve on a candidate cisum already has. A policy
-        // value, not a measurement: Phase 4 owns measured startup budgets and is blocked on U-1, so
-        // this is the bound that keeps cross-provider resolution from waiting on a slow provider.
-        player.configureResolutionBudget(ResolutionBudget())
-
         let searchViewModel = SearchViewModel(
             youtube: youtube,
             settings: prefetchSettings,
@@ -351,12 +336,10 @@ enum AppBootstrap {
 
         let playbackServices = PlaybackServices(
             playbackControlSettings: playbackControlSettings,
-            playbackMetricsStore: playbackMetricsStore,
             lastFMSettings: lastFMSettings,
             lastFMScrobbler: lastFMScrobbler,
             listeningHistoryStore: listeningHistoryStore,
             streamingProviderSettings: streamingProviderSettings,
-            radioSessionStore: radioSessionStore,
             player: player
         )
 
