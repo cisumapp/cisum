@@ -164,6 +164,10 @@ public final class PlayerViewModel: PlaybackCommands {
     /// updates the UI instantly even when resolution takes a moment.
     private func start(_ ref: PlayableRef, keepingLadder: Bool = false) {
         loadTask?.cancel()
+        // A new request ends the previous track's play; a retry of the same request does not.
+        if !keepingLadder {
+            finishPlaySession()
+        }
         // A retry of the current failure keeps its ladder, because the ladder is what bounds the
         // retries. `FallbackLadder` documents why resetting it here was an unbounded loop.
         if !keepingLadder {
@@ -226,6 +230,10 @@ public final class PlayerViewModel: PlaybackCommands {
                     artworkURL: ref.artworkURL,
                     durationSeconds: ref.durationSeconds
                 )
+                if playSession == nil, let playingSeed {
+                    playSession = (playingSeed, Date(), 0)
+                    lastTickSeconds = nil
+                }
                 refillRadioIfNeeded()
                 publishNowPlaying()
             } catch {
@@ -260,7 +268,7 @@ public final class PlayerViewModel: PlaybackCommands {
             publishNowPlaying()
         }
         engine.onTick = { [weak self] seconds in
-            self?.updateLyricIndex(at: seconds)
+            self?.tick(seconds)
         }
     }
 
@@ -324,6 +332,7 @@ public final class PlayerViewModel: PlaybackCommands {
 
     /// Clears the now-playing track and both of its durations.
     private func clearNowPlaying() {
+        finishPlaySession()
         nowPlaying.ref = nil
         nowPlaying.duration = 0
         nowPlaying.observedItemDuration = nil
@@ -335,6 +344,33 @@ public final class PlayerViewModel: PlaybackCommands {
         lyrics.plainText = nil
         lyrics.currentIndex = nil
         lyrics.attribution = nil
+    }
+
+    // MARK: - Listening history
+
+    /// Called once per finished play with the recording that played, when it started, and how long
+    /// it was actually heard. Injected: where plays are kept is the composition root's decision.
+    public var onPlayFinished: (@MainActor (_ ref: PlayableRef, _ startedAt: Date, _ listenedSeconds: Double) -> Void)?
+
+    /// The play in progress: the resolved recording, its start, and the seconds actually heard.
+    @ObservationIgnored private var playSession: (ref: PlayableRef, startedAt: Date, listened: Double)?
+    @ObservationIgnored private var lastTickSeconds: Double?
+
+    /// Advances lyrics and counts heard time. Listened time grows only while playing, by the gap
+    /// between ticks — a seek is a jump, not listening, so gaps over a second are not counted.
+    private func tick(_ seconds: Double) {
+        updateLyricIndex(at: seconds)
+        if let last = lastTickSeconds, transport.isPlaying, seconds > last, seconds - last <= 1 {
+            playSession?.listened += seconds - last
+        }
+        lastTickSeconds = seconds
+    }
+
+    private func finishPlaySession() {
+        guard let session = playSession else { return }
+        playSession = nil
+        lastTickSeconds = nil
+        onPlayFinished?(session.ref, session.startedAt, session.listened)
     }
 
     // MARK: - Radio

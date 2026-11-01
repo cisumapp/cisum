@@ -312,10 +312,21 @@ enum AppBootstrap {
         // The endless queue: a station mixed from YouTube Music radio and Spotify's taste-aware
         // recommendations (see `StationMixer`). Seeded by a YouTube video id — the seed's own for a
         // YouTube ref, otherwise the binding playback already resolved and persisted for it.
-        let stationMixer = StationMixer(youtube: youtube) { seed in
-            seed.sourceID.hasPrefix("youtube")
-                ? seed.sourceTrackID
-                : songSourceStore.knownRepresentations(for: seed).first { $0.sourceID.hasPrefix("youtube") }?.sourceTrackID
+        let stationMixer = StationMixer(
+            youtube: youtube,
+            youtubeVideoID: { seed in
+                seed.sourceID.hasPrefix("youtube")
+                    ? seed.sourceTrackID
+                    : songSourceStore.knownRepresentations(for: seed).first { $0.sourceID.hasPrefix("youtube") }?.sourceTrackID
+            },
+            localHistory: { await listeningHistoryStore.recentPlays() }
+        )
+
+        // Every finished play is kept, so cisum's own listening feeds the station too. Under a
+        // second is a failed start, not a play.
+        player.onPlayFinished = { ref, startedAt, listened in
+            guard listened >= 1 else { return }
+            Task { await listeningHistoryStore.recordPlay(ref, startedAt: startedAt, listenedSeconds: listened) }
         }
         player.fetchRadio = { seed, continuation in
             await stationMixer.nextPage(seed: seed, continuation: continuation)

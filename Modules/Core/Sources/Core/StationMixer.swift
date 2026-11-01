@@ -24,8 +24,8 @@ import SpotifySDK
 /// - **Spotify** — the recommendation engine, which scores candidates against the user's own top
 ///   artists and tracks. Each later page is seeded by one of Spotify's previous picks, so the
 ///   station drifts outward instead of circling the first song. Only when a Spotify session exists.
-/// - **Your music** — the user's own listening: YouTube Music liked songs and history, Spotify liked
-///   songs and top tracks, from whichever of the two is signed in. Each page mixes in the user's
+/// - **Your music** — the user's own listening: plays in cisum itself, YouTube Music liked songs and
+///   history, Spotify liked songs and top tracks, from whichever services are signed in. Each page mixes in the user's
 ///   tracks by artists already on the station, or a couple of favourites when none are.
 ///
 /// Picks are plain `PlayableRef`s: a Spotify pick plays through the same resolver as a tapped
@@ -39,6 +39,8 @@ final class StationMixer {
     private let youtube: YouTube
     /// The seed's YouTube video id: its own for a YouTube ref, otherwise the persisted binding.
     private let youtubeVideoID: @MainActor (PlayableRef) -> String?
+    /// Tracks the user listened to in cisum itself, most recent first.
+    private let localHistory: @MainActor () async -> [PlayableRef]
 
     private var seedKey: String?
     private var seen = Set<String>()
@@ -51,9 +53,14 @@ final class StationMixer {
     private var profileLoadedAt: Date?
     private static let profileLifetime: TimeInterval = 30 * 60
 
-    init(youtube: YouTube, youtubeVideoID: @escaping @MainActor (PlayableRef) -> String?) {
+    init(
+        youtube: YouTube,
+        youtubeVideoID: @escaping @MainActor (PlayableRef) -> String?,
+        localHistory: @escaping @MainActor () async -> [PlayableRef]
+    ) {
         self.youtube = youtube
         self.youtubeVideoID = youtubeVideoID
+        self.localHistory = localHistory
     }
 
     /// The station's next page. The continuation is opaque to the caller: non-nil while any source
@@ -125,10 +132,11 @@ final class StationMixer {
 
         async let fromYouTube = youtubeProfile()
         async let fromSpotify = spotifyProfile()
-        let (youtubeTracks, spotifyTracks) = await (fromYouTube, fromSpotify)
+        async let fromCisum = localHistory()
+        let (youtubeTracks, spotifyTracks, cisumTracks) = await (fromYouTube, fromSpotify, fromCisum)
         var keys = Set<String>()
-        profile = (youtubeTracks + spotifyTracks).filter { keys.insert(PlaybackQueue.songKey($0)).inserted }
-        PerfLog.info("StationMixer: listening profile — YouTube Music \(youtubeTracks.count), Spotify \(spotifyTracks.count), \(profile.count) unique")
+        profile = (cisumTracks + youtubeTracks + spotifyTracks).filter { keys.insert(PlaybackQueue.songKey($0)).inserted }
+        PerfLog.info("StationMixer: listening profile — cisum \(cisumTracks.count), YouTube Music \(youtubeTracks.count), Spotify \(spotifyTracks.count), \(profile.count) unique")
     }
 
     private func youtubeProfile() async -> [PlayableRef] {
