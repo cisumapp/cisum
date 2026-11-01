@@ -68,16 +68,14 @@ struct LyricLineView: View {
     let isActive: Bool
     let distance: Int
     @Environment(PlayerViewModel.self) private var playerViewModel
-    /// The playback clock. Only the active line reads it (see the guard in `body`), so a tick
-    /// redraws that one line rather than every line in the `ForEach`.
-    @Environment(ProgressState.self) private var progress
 
     var body: some View {
         Group {
-            // ponytail: read currentTime only when active — keeps the per-tick
-            // re-render scoped to this one line instead of the whole ForEach.
+            // Only the active line runs a per-frame clock, so the sweep never redraws the whole ForEach.
             if isActive, let syllables = line.syllables, !syllables.isEmpty {
-                syllablesText(currentTime: progress.currentTime)
+                TimelineView(.animation) { _ in
+                    syllablesText(currentTime: playerViewModel.playbackTime)
+                }
             } else {
                 Text(line.text)
                     .foregroundStyle(.primary.opacity(isActive ? 1.0 : opacityForDistance))
@@ -102,8 +100,10 @@ struct LyricLineView: View {
 
         var combinedText = Text("")
         for (index, syllable) in syllables.enumerated() {
-            let isSyllableActive = currentTime >= syllable.timestamp
-            let color = isSyllableActive ? Color.primary : Color.primary.opacity(0.3)
+            // Each syllable fills over the time it is sung, rather than snapping on at its start.
+            let length = max(syllable.endTime - syllable.timestamp, 0.05)
+            let sung = min(max((currentTime - syllable.timestamp) / length, 0), 1)
+            let color = Color.primary.opacity(0.3 + 0.7 * sung)
 
             var sylText = Text(syllable.text).foregroundStyle(color)
             if !syllable.isPartOfWord, index < syllables.count - 1 {
