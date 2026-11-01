@@ -21,6 +21,7 @@ public struct SearchView: View {
     @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     @Environment(\.centralMediaStore) private var centralMediaStore
+    @Environment(\.importDownloadManager) private var importDownloadManager
 
     private var searchViewModel: any SearchViewModelInterface {
         searchViewModelOptional!
@@ -194,24 +195,6 @@ public struct SearchView: View {
         }
     }
 
-    #if canImport(SpotifySDK)
-    private var spotifyPlaylistImportService: SpotifyPlaylistImportService? {
-        guard let sdk = spotifyCoordinator.sdk,
-              let playlistLibraryStore,
-              let centralMediaStore
-        else { return nil }
-        return SpotifyPlaylistImportService(
-            sdk: sdk,
-            playlistStore: playlistLibraryStore,
-            onSpotifyPlaylistImported: { playlist in
-                Task {
-                    _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
-                }
-            }
-        )
-    }
-    #endif
-
     private func playSpotifyTrack(_ item: FederatedSearchItem) async {
         do {
             // No pre-resolution here any more. The view supplies an identity; the player resolves
@@ -262,7 +245,7 @@ public struct SearchView: View {
             return
         }
 
-        guard let importService = spotifyPlaylistImportService else {
+        guard spotifyCoordinator.sdk != nil, let importDownloadManager else {
             viewModel.actionAlertMessage =
                 "Spotify is not connected. Open Settings and sign in first."
             viewModel.showActionAlert = true
@@ -272,11 +255,11 @@ public struct SearchView: View {
         viewModel.isImportingSpotifyPlaylistID = playlist.id
         defer { viewModel.isImportingSpotifyPlaylistID = nil }
 
-        do {
-            let playlistID = try await importService.importPlaylist(id: playlist.id)
+        let ref = ImportablePlaylistRef(id: playlist.id, title: playlist.name)
+        if let playlistID = await importDownloadManager.importAndWait(provider: .spotify, playlistRef: ref) {
             router.navigate(to: .playlist(id: playlistID))
-        } catch {
-            viewModel.actionAlertMessage = error.localizedDescription
+        } else {
+            viewModel.actionAlertMessage = "Couldn't import \(playlist.name) from Spotify."
             viewModel.showActionAlert = true
         }
         #else

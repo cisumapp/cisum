@@ -20,7 +20,6 @@ import YouTubeSDK
 public protocol VideoMetadataCaching: Actor {
     func resolve(
         id: String,
-        metricsEnabled: Bool,
         fetcher: @Sendable @escaping (String) async throws -> YouTubeVideo
     ) async throws -> VideoMetadataCache.Entry
 
@@ -28,7 +27,6 @@ public protocol VideoMetadataCaching: Actor {
         ids: [String],
         maxConcurrent: Int,
         mode: PrefetchModeOverride,
-        metricsEnabled: Bool,
         fetcher: @Sendable @escaping (String) async throws -> YouTubeVideo
     ) async
 

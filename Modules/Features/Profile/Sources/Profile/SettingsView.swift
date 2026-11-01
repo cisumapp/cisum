@@ -14,14 +14,9 @@ public struct SettingsView: View {
     #if os(iOS)
     @Environment(PlayerThemeSettings.self) private var playerThemeSettings
     #endif
-    @Environment(StreamingProviderSettings.self) private var streamingProviderSettings
     @Environment(AuthService.self) private var authService
-
-    @State private var snapshot = PlaybackMetricsStore.Snapshot.empty
-
-    /// The stream playback is using right now, read from the shared playback observability store.
-    /// The player surfaces show the same thing as a compact label; this is the full detail.
-    @State private var activeStream: ActiveStreamState = .idle
+    /// The stream playback is using right now — the full detail behind the player's compact label.
+    @Environment(PlayerViewModel.self) private var player
 
     @State private var isSigningOut: Bool = false
 
@@ -159,65 +154,12 @@ public struct SettingsView: View {
             }
             #endif
 
-            Section("Streaming Sources") {
-                Picker("Radio Recommendations", selection: Bindable(streamingProviderSettings).recommendationSource) {
-                    ForEach(StreamingProviderSettings.RecommendationSource.allCases) { source in
-                        Text(source.rawValue).tag(source)
-                    }
-                }
-            }
-
             Section("Diagnostics") {
-                Toggle("Enable Metrics", isOn: Bindable(settings).metricsEnabled)
-
                 // The active stream: the resolved candidate playback was handed, including a
                 // fallback that replaced the ranked first choice. Unknown fields say so rather
                 // than showing a default.
-                ForEach(ActiveStreamDiagnostic.rows(activeStream)) { row in
+                ForEach(ActiveStreamDiagnostic.rows(player.activeStreamState)) { row in
                     LabeledContent(row.label, value: row.value)
-                }
-
-                // Search metadata cache domain.
-                LabeledContent(
-                    "Search Cache Hit %", value: String(format: "%.1f%%", snapshot.searchCacheHitRate * 100)
-                )
-                LabeledContent(
-                    "Avg Search Resolve", value: String(format: "%.0f ms", snapshot.avgSearchMetadataResolveMs)
-                )
-                LabeledContent("Search Resolve Samples", value: "\(snapshot.searchResolveSampleCount)")
-
-                // Playback stream-resolution domain.
-                LabeledContent(
-                    "Avg Playback Resolve", value: String(format: "%.0f ms", snapshot.avgPlaybackResolveMs)
-                )
-                LabeledContent("Playback Resolves", value: "\(snapshot.playbackResolveSampleCount)")
-                LabeledContent(
-                    "Warm / Cold", value: "\(snapshot.warmPlaybackResolveCount) / \(snapshot.coldPlaybackResolveCount)"
-                )
-
-                // Playback startup domain — first-time-advancing proxy, not audible audio.
-                LabeledContent(
-                    "Avg Startup (advance proxy)", value: String(format: "%.0f ms", snapshot.avgStartupProxyMs)
-                )
-                LabeledContent("Startup Samples", value: "\(snapshot.startupCompletedCount)")
-                LabeledContent(
-                    "Startup Failed / Cancelled", value: "\(snapshot.startupFailedCount) / \(snapshot.startupCancelledCount)"
-                )
-                LabeledContent("Fallbacks", value: "\(snapshot.fallbackCount)")
-
-                // Continuity only — NOT startup, NOT first audio.
-                LabeledContent(
-                    "Avg Intent → play()", value: String(format: "%.0f ms", snapshot.avgIntentToPlayCallMs)
-                )
-
-                Button("Refresh Metrics") {
-                    Task { await refreshMetrics() }
-                }
-                Button("Reset Metrics", role: .destructive) {
-                    Task {
-                        await PlaybackMetricsStore.shared.reset()
-                        await refreshMetrics()
-                    }
                 }
             }
         }
@@ -225,14 +167,6 @@ public struct SettingsView: View {
         .background(Color.cisumBg.ignoresSafeArea())
         .navigationTitle("Settings")
         .contentMargins(.bottom, 50)
-        .task {
-            await refreshMetrics()
-        }
-    }
-
-    private func refreshMetrics() async {
-        snapshot = await PlaybackMetricsStore.shared.snapshot()
-        activeStream = await PlaybackMetricsStore.shared.currentActiveStream()
     }
 }
 

@@ -16,10 +16,6 @@ import SpotifySDK
 @Observable
 @MainActor
 public class SearchViewModel: SearchViewModelInterface {
-    private enum CachePolicy {
-        nonisolated static let persistentHintMaxAge: TimeInterval = 60 * 60 * 24 * 7
-    }
-
     private enum UnifiedTopResultsPolicy {
         nonisolated static let limit: Int = 10
         // All four service types participate in unified top results
@@ -1460,13 +1456,11 @@ public class SearchViewModel: SearchViewModelInterface {
         let youtube = youtube
         let mode = effectivePrefetchMode
         let concurrency = currentPrefetchConcurrency
-        let metricsEnabled = settings.metricsEnabled
         prefetchTask = Task(priority: .utility) {
             await self.metadataCache.prefetch(
                 ids: ids,
                 maxConcurrent: concurrency,
-                mode: mode,
-                metricsEnabled: metricsEnabled
+                mode: mode
             ) { id in
                 try await youtube.main.video(id: id)
             }
@@ -1484,7 +1478,6 @@ public class SearchViewModel: SearchViewModelInterface {
 
         let youtube = youtube
         let mode = effectivePrefetchMode
-        let metricsEnabled = settings.metricsEnabled
         let concurrency = max(1, min(2, currentPrefetchConcurrency))
 
         inlinePrefetchDrainTask = Task(priority: .utility) {
@@ -1504,8 +1497,7 @@ public class SearchViewModel: SearchViewModelInterface {
             await self.metadataCache.prefetch(
                 ids: ids,
                 maxConcurrent: concurrency,
-                mode: mode,
-                metricsEnabled: metricsEnabled
+                mode: mode
             ) { key in
                 try await youtube.main.video(id: key)
             }
@@ -1607,7 +1599,6 @@ public class SearchViewModel: SearchViewModelInterface {
 
         let scope = searchScope
         let mode = effectivePrefetchMode
-        let metricsEnabled = settings.metricsEnabled
         let youtube = youtube
 
         do {
@@ -1646,8 +1637,7 @@ public class SearchViewModel: SearchViewModelInterface {
             await metadataCache.prefetch(
                 ids: ids,
                 maxConcurrent: min(3, currentPrefetchConcurrency),
-                mode: mode,
-                metricsEnabled: metricsEnabled
+                mode: mode
             ) { id in
                 try await youtube.main.video(id: id)
             }
@@ -1759,10 +1749,10 @@ public class SearchViewModel: SearchViewModelInterface {
                 guard shouldKeepVideoResult(v) else { return nil }
                 return .video(v)
             case let .channel(c):
-                guard shouldKeepMusicChannel(c) else { return nil }
+                guard isLikelyArtistChannelName(c.title) else { return nil }
                 return .channel(c)
             case let .playlist(p):
-                guard shouldKeepMusicPlaylist(p) else { return nil }
+                guard isLikelyMusicMetadata(title: p.title, secondaryText: p.author) else { return nil }
                 return .playlist(p)
             default: return nil
             }
@@ -1783,7 +1773,7 @@ public class SearchViewModel: SearchViewModelInterface {
     }
 
     private func shouldKeepVideoResult(_ video: YouTubeVideo) -> Bool {
-        shouldKeepMusicVideoResult(video)
+        isLikelyMusicMetadata(title: video.title, secondaryText: video.author)
     }
 
     private func resetVideoPagination() {

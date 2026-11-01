@@ -606,3 +606,19 @@ extension YouTubeChartItem {
         return .musicSong(song)
     }
 }
+
+/// Whether a YouTube home-feed entry is music rather than a podcast, trailer or interview.
+private nonisolated func shouldKeepMusicHomeItem(_ item: YouTubeItem) -> Bool {
+    switch item {
+    case .song:
+        true
+    case let .video(video):
+        isLikelyMusicMetadata(title: video.title, secondaryText: video.author)
+    case let .channel(channel):
+        isLikelyArtistChannelName(channel.title)
+    case let .playlist(playlist):
+        isLikelyMusicMetadata(title: playlist.title, secondaryText: playlist.author)
+    case let .shelf(shelf):
+        isLikelyMusicMetadata(title: shelf.title, secondaryText: nil)
+    }
+}

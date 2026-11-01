@@ -16,8 +16,6 @@ public final class LibraryViewModel {
     }
 
     public var isPresentingImportPicker: Bool = false
-    public var isPresentingYouTubeImport: Bool = false
-    public var isPresentingSpotifyImport: Bool = false
     public var spotifySnapshot = SpotifyLibrarySnapshot.empty
     public var isLoadingSpotifySnapshot = false
     public var isSyncingLikedSongs = false

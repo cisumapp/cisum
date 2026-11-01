@@ -80,18 +80,12 @@ public actor VideoMetadataCache {
 
     public func resolve(
         id: String,
-        metricsEnabled: Bool = true,
         fetcher: @Sendable @escaping (String) async throws -> YouTubeVideo
     ) async throws -> Entry {
         let resolveSpid = cacheSP.begin("metadata-resolve", "id=\(id)")
         let startedAt = Date()
         if let cached = get(id, allowStale: false) {
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=cache")
-            if metricsEnabled {
-                let elapsed = Date().timeIntervalSince(startedAt) * 1000
-                // Search metadata cache domain — never a playback-resolution counter.
-                await PlaybackMetricsStore.shared.recordSearchMetadataCache(hit: true, milliseconds: elapsed)
-            }
             return cached
         }
 
@@ -141,12 +135,7 @@ public actor VideoMetadataCache {
             touch(id)
             await evictIfNeeded()
             inFlight[id] = nil
-            if metricsEnabled {
-                let elapsed = Date().timeIntervalSince(startedAt) * 1000
-                // Search metadata cache domain — never a playback-resolution counter.
-                await PlaybackMetricsStore.shared.recordSearchMetadataCache(hit: false, milliseconds: elapsed)
-                PerfLog.info("Metadata fetched id=\(id) latency=\(elapsed)ms")
-            }
+            PerfLog.info("Metadata fetched id=\(id) latency=\(Date().timeIntervalSince(startedAt) * 1000)ms")
             cacheSP.end("metadata-resolve", state: resolveSpid, "id=\(id) source=network")
             return entry
         } catch {
@@ -160,7 +149,6 @@ public actor VideoMetadataCache {
         ids: [String],
         maxConcurrent: Int,
         mode: PrefetchModeOverride,
-        metricsEnabled: Bool = true,
         fetcher: @Sendable @escaping (String) async throws -> YouTubeVideo
     ) async {
         let unique = Array(Set(ids)).filter { !($0.isEmpty) }
@@ -173,8 +161,8 @@ public actor VideoMetadataCache {
                 guard nextIndex < unique.count else { return }
                 let id = unique[nextIndex]
                 nextIndex += 1
-                group.addTask { [self, id, metricsEnabled, fetcher, mode] in
-                    if let entry = try? await resolve(id: id, metricsEnabled: metricsEnabled, fetcher: fetcher),
+                group.addTask { [self, id, fetcher, mode] in
+                    if let entry = try? await resolve(id: id, fetcher: fetcher),
                        mode == .aggressiveWarmup
                     {
                         await warmupItem(for: id, url: entry.resolvedURL)

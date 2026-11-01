@@ -123,41 +123,27 @@ public final class cisumModule {
                 return await store.importEmbeddedPlaylist(name: name, tracks: tracks)
             case let .imported(provider, sourceID, _):
                 guard let link = providerShareURL(provider: provider, id: sourceID) else { return nil }
+                let importProvider: ImportProvider
                 switch provider {
                 case .youtube, .youtubeMusic:
-                    let service = YouTubePlaylistImportService(youtube: YouTube.shared, playlistStore: store)
-                    return try await service.importPlaylist(fromLink: link)
+                    importProvider = .youtube
                 case .spotify:
-                    return try await importSharedSpotifyPlaylist(link: link, store: store)
+                    await container.userServices.spotifySessionCoordinator.restoreSessionIfNeeded()
+                    importProvider = .spotify
                 default:
                     return nil
                 }
+                // The same pipeline as the Library's importer: resolve the link with the provider's
+                // import service, then import and wait for the local playlist to open.
+                let manager = container.libraryServices.importDownloadManager
+                guard let service = await manager.service(for: importProvider) else { return nil }
+                let ref = try await service.resolve(link: link)
+                return await manager.importAndWait(provider: importProvider, playlistRef: ref)
             }
         } catch {
             PerfLog.warning("Shared playlist import failed: \(error.localizedDescription)")
             return nil
         }
-    }
-
-    private func importSharedSpotifyPlaylist(link: String, store: PlaylistLibraryStore) async throws -> String {
-        #if canImport(SpotifySDK)
-        let coordinator = container.userServices.spotifySessionCoordinator
-        await coordinator.restoreSessionIfNeeded()
-        guard let sdk = coordinator.sdk ?? coordinator.session.map({ SpotifySDK(session: $0) }) else {
-            throw FederatedSearchError.spotifyCredentialsMissing
-        }
-        let centralMediaStore = container.libraryServices.centralMediaStore
-        let service = SpotifyPlaylistImportService(
-            sdk: sdk,
-            playlistStore: store,
-            onSpotifyPlaylistImported: { playlist in
-                Task { _ = await centralMediaStore.upsertSpotifyPlaylist(playlist) }
-            }
-        )
-        return try await service.importPlaylist(fromLink: link)
-        #else
-        throw FederatedSearchError.providerUnavailable("Spotify is unavailable on this platform.")
-        #endif
     }
 
     /// Resolves a shortened playlist link by fetching its payload from the shortener.
@@ -364,6 +350,7 @@ public final class cisumModule {
             // takes only what it reads. That is the entire payoff of the frequency-based split in
             // PlayerState.swift — injecting a single object would put the 30 Hz fan-out straight
             // back.
+            .environment(container.playbackServices.player)
             .environment(container.playbackServices.nowPlayingState)
             .environment(container.playbackServices.transportState)
             .environment(container.playbackServices.progressState)

@@ -144,15 +144,6 @@ struct PlaybackQueueTests {
         #expect(queue.current == nil)
     }
 
-    @Test("insertNext places a track immediately after the current one")
-    func insertNext() {
-        let queue = PlaybackQueue()
-        queue.replace(with: [a, c])
-        queue.insertNext(b)
-
-        #expect(queue.entries == [a, b, c])
-        #expect(queue.current == a)
-    }
 
     @Test("playing with preserveQueue jumps to the track when it is already queued")
     func playPreservingQueue() {
@@ -184,15 +175,6 @@ struct PlaybackQueueTests {
         queue.cycleMode(); #expect(queue.mode == .repeatAll)
         queue.cycleMode(); #expect(queue.mode == .repeatOne)
         queue.cycleMode(); #expect(queue.mode == .off)
-    }
-
-    @Test("the preview shows what comes next, without the current entry")
-    func preview() {
-        let queue = PlaybackQueue()
-        queue.replace(with: [a, b, c, d])
-
-        #expect(queue.preview() == [b, c, d])
-        #expect(queue.preview(limit: 2) == [b, c])
     }
 
     /// Identity is the (source, track) pair — not the display strings, which differ between

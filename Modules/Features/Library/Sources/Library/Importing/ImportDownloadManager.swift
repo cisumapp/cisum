@@ -34,6 +34,7 @@ public actor ImportDownloadManager {
     private var runningCount = 0
     private var tasks: [String: Task<Void, Never>] = [:]
     private var cancelled: Set<String> = []
+    private var waiters: [String: [CheckedContinuation<String?, Never>]] = [:]
 
     public nonisolated let completions: AsyncStream<ImportCompletionEvent>
     private nonisolated let continuation: AsyncStream<ImportCompletionEvent>.Continuation
@@ -76,6 +77,16 @@ public actor ImportDownloadManager {
         PerfLog.info("ImportDownloadManager: enqueued job=\(jobID) provider=\(provider.rawValue) playlist=\(ref.title)")
         drain()
         return jobID
+    }
+
+    /// Imports one playlist and returns its local playlist id once the job finishes — `nil` if it
+    /// failed or was cancelled. For callers that open the playlist afterwards: a shared link, Liked
+    /// Songs, a playlist picked from search.
+    public func importAndWait(provider: ImportProvider, playlistRef ref: ImportablePlaylistRef) async -> String? {
+        let jobID = await enqueue(provider: provider, playlistRef: ref)
+        // No suspension between `enqueue` returning and registering here, so the job (which runs
+        // only once this actor is free) cannot finish before the waiter exists.
+        return await withCheckedContinuation { waiters[jobID, default: []].append($0) }
     }
 
     @discardableResult
@@ -282,6 +293,8 @@ public actor ImportDownloadManager {
 
     private func complete(jobID: String, title: String, destinationPlaylistID: String?, state: PlaylistImportJobState, matched: Int, failed: Int) async {
         continuation.yield(ImportCompletionEvent(jobID: jobID, title: title, destinationPlaylistID: destinationPlaylistID, state: state, matched: matched, failed: failed))
+        let opened = state == .completed || state == .partialFailure ? destinationPlaylistID : nil
+        waiters.removeValue(forKey: jobID)?.forEach { $0.resume(returning: opened) }
         await progress.remove(id: jobID)
     }
 

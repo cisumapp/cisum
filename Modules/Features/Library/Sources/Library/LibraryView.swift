@@ -19,15 +19,8 @@ public struct LibraryView: View {
     @Environment(\.router) private var envRouter
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     @Environment(\.centralMediaStore) private var centralMediaStore
+    @Environment(\.importDownloadManager) private var importDownloadManager
     @Query(sort: \Playlist.updatedAt, order: .reverse) private var playlists: [Playlist]
-
-    enum ImportProvider: String, CaseIterable, Identifiable {
-        case youtube = "YouTube"
-        case spotify = "Spotify"
-        var id: String {
-            rawValue
-        }
-    }
 
     @State private var viewModel = LibraryViewModel()
     #if os(iOS)
@@ -133,21 +126,6 @@ public struct LibraryView: View {
         // Clears the floating mini player, which sits over the content on iOS. The macOS
         // transport lives in the band above the content, so nothing floats here.
         .safeAreaPadding(.bottom, 140)
-        #endif
-        // YouTube import sheet
-        .sheet(isPresented: $viewModel.isPresentingYouTubeImport) {
-            YouTubePlaylistImportSheet { importedPlaylistID in
-                envRouter.navigate(to: .playlist(id: importedPlaylistID))
-            }
-        }
-        // Spotify import sheet
-        #if canImport(SpotifySDK)
-        .sheet(isPresented: $viewModel.isPresentingSpotifyImport) {
-            SpotifyPlaylistImportSheet { importedPlaylistID in
-                envRouter.navigate(to: .playlist(id: importedPlaylistID))
-            }
-            .environment(spotifyCoordinator)
-        }
         #endif
         // Unified import sheet (service picker → multi-select → background import).
         .sheet(isPresented: $viewModel.isPresentingImportPicker) {
@@ -346,42 +324,26 @@ public struct LibraryView: View {
         }
     }
 
+    /// Imports (or refreshes) Spotify Liked Songs through the shared import pipeline, then opens it.
     private func openLikedSongs() async {
         #if canImport(SpotifySDK)
-        guard let service = spotifyImportService else {
-            viewModel.libraryActionErrorMessage = SpotifyImportError.sdkUnavailable.errorDescription
-            return
-        }
-
+        guard let importDownloadManager else { return }
         viewModel.isSyncingLikedSongs = true
         defer { viewModel.isSyncingLikedSongs = false }
 
-        do {
-            let playlistID = try await service.importLikedSongs()
-            envRouter.navigate(to: .playlist(id: playlistID))
-        } catch {
-            viewModel.libraryActionErrorMessage = error.localizedDescription
-        }
-        #endif
-    }
-
-    private var spotifyImportService: SpotifyPlaylistImportService? {
-        #if canImport(SpotifySDK)
-        guard let sdk = spotifyCoordinator.sdk,
-              let playlistLibraryStore,
-              let centralMediaStore
-        else { return nil }
-        return SpotifyPlaylistImportService(
-            sdk: sdk,
-            playlistStore: playlistLibraryStore,
-            onSpotifyPlaylistImported: { playlist in
-                Task {
-                    _ = await centralMediaStore.upsertSpotifyPlaylist(playlist)
-                }
-            }
+        let likedSongs = ImportablePlaylistRef(
+            id: SpotifyImportService.likedSongsPlaylistID,
+            title: "Liked Songs",
+            subtitle: nil,
+            ownerName: nil,
+            artworkURL: nil,
+            trackCount: nil
         )
-        #else
-        return nil
+        guard let playlistID = await importDownloadManager.importAndWait(provider: .spotify, playlistRef: likedSongs) else {
+            viewModel.libraryActionErrorMessage = "Couldn't import your Spotify Liked Songs. Check that Spotify is connected."
+            return
+        }
+        envRouter.navigate(to: .playlist(id: playlistID))
         #endif
     }
 
@@ -548,116 +510,6 @@ public struct LibraryView: View {
     }
 }
 
-private struct LibraryMetricCard: View {
-    let title: String
-    let value: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.cisumSurface.opacity(0.92))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
-                }
-        )
-    }
-}
-
-private struct SpotifyShelfCard: View {
-    let playlist: SpotifyLibraryPlaylistSummary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            artwork
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(playlist.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                Text(playlist.ownerDisplayName ?? playlist.ownerUsername ?? "Spotify")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Text(trackCountLabel)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(12)
-        .frame(width: 180, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.cisumSurface.opacity(0.92))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
-                }
-        )
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let artworkURL = playlist.artworkURL {
-            KFImage(artworkURL)
-                .placeholder {
-                    fallbackArtwork
-                }
-                .resizable()
-                .scaledToFill()
-                .frame(height: 132)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        } else {
-            fallbackArtwork
-                .frame(height: 132)
-        }
-    }
-
-    private var fallbackArtwork: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [Color.green.opacity(0.9), Color.black.opacity(0.8)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay {
-                Image(systemName: "music.note.list")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.88))
-            }
-    }
-
-    private var trackCountLabel: String {
-        if let trackCount = playlist.trackCount {
-            return "\(trackCount) tracks"
-        }
-
-        return "Spotify playlist"
-    }
-}
-
 private struct EmptyStateCard: View {
     let title: String
     let subtitle: String
@@ -696,36 +548,6 @@ private struct EmptyStateCard: View {
                 }
         )
     }
-}
-
-private struct LoadingShelfCard: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .tint(.primary)
-            Text("Loading your Spotify library…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.cisumSurface.opacity(0.92))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
-                }
-        )
-    }
-}
-
-private struct LibraryTileData {
-    let title: String
-    let secondaryText: String?
-    let artworkURL: URL?
-    let fallbackSymbol: String
-    let fallbackGradient: LinearGradient
 }
 
 #if canImport(SpotifySDK)

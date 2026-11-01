@@ -265,7 +265,7 @@ public struct PlaybackCandidate: Sendable, Equatable {
             expiresAt: stream.expiresAt,
             isCacheable: stream.isCacheable,
             headers: stream.headers,
-            requiresProxyLoader: stream.requiresProxyLoader
+            durationSeconds: stream.durationSeconds
         )
     }
 

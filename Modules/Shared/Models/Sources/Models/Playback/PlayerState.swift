@@ -181,30 +181,3 @@ public protocol PlaybackCommands: AnyObject, Sendable {
     func setQueue(_ refs: [PlayableRef], startIndex: Int, shuffled: Bool)
 }
 
-/// Everything the player publishes, grouped for injection.
-///
-/// A view takes the one object it needs — `@Environment(ProgressState.self)` for the scrubber,
-/// `@Environment(NowPlayingState.self)` for artwork — rather than the whole player. This type is a
-/// convenience for wiring at the composition root, not something a view should observe wholesale.
-@MainActor
-public struct PlayerStates {
-    public let nowPlaying: NowPlayingState
-    public let transport: TransportState
-    public let progress: ProgressState
-    public let lyrics: LyricsPresentation
-    public let commands: any PlaybackCommands
-
-    public init(
-        nowPlaying: NowPlayingState,
-        transport: TransportState,
-        progress: ProgressState,
-        lyrics: LyricsPresentation,
-        commands: any PlaybackCommands
-    ) {
-        self.nowPlaying = nowPlaying
-        self.transport = transport
-        self.progress = progress
-        self.lyrics = lyrics
-        self.commands = commands
-    }
-}

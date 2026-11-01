@@ -56,18 +56,4 @@ struct NowPlayingFooter: View {
     }
 }
 
-struct NowPlayingInfoBadge: View {
-    let title: String
-    let systemImage: String
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .lineLimit(1)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.cisumChromeSubtle, in: Capsule())
-            .foregroundStyle(.primary)
-    }
-}
 #endif

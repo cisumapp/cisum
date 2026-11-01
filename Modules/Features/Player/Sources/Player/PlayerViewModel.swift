@@ -46,9 +46,6 @@ public final class PlayerViewModel: PlaybackCommands {
     private let resolver: PlaybackResolver
     private var nowPlayingCenter: NowPlayingCenter?
 
-    /// The app-wide metrics store. Domain semantics live in `PlaybackMetricsAccumulator`.
-    private let metrics: PlaybackMetricsStore
-
     /// The source registry, kept so diagnostics can name the source that actually served a stream.
     /// Which source plays a track is decided during resolution, so it cannot be read from the ref.
     private let sources: SourceRegistry
@@ -56,14 +53,11 @@ public final class PlayerViewModel: PlaybackCommands {
     /// Guards against an in-flight resolve for a track the user has already skipped past.
     private var loadTask: Task<Void, Never>?
 
-    /// Monotonic id for the current playback request. A first-advance callback for an older id is
-    /// ignored, which is what stops a stale observer from completing a newer request's measurement.
+    /// Monotonic id for the current playback request, so a slow resolve for a track the user has
+    /// already left cannot describe the active stream.
     @ObservationIgnored private var loadGeneration = 0
 
-    /// Exactly-once accounting for the first-time-advancing startup proxy.
-    @ObservationIgnored private var startup = PlaybackStartupTracker()
-
-    /// What playback is actually using, guarded by the same request id as the startup proxy.
+    /// What playback is actually using, guarded by the request id.
     ///
     /// Observed (not `@ObservationIgnored`) so `activeStreamState` below can be a computed property
     /// that SwiftUI tracks — the macro instruments the stored struct, and reading it through the
@@ -79,10 +73,7 @@ public final class PlayerViewModel: PlaybackCommands {
         activeStream.state
     }
 
-    public init(
-        sources: SourceRegistry,
-        metrics: PlaybackMetricsStore = .shared
-    ) {
+    public init(sources: SourceRegistry) {
         let nowPlaying = NowPlayingState()
         let transport = TransportState()
         let progress = ProgressState()
@@ -95,11 +86,9 @@ public final class PlayerViewModel: PlaybackCommands {
         self.engine = PlaybackEngine(progress: progress, transport: transport)
         self.resolver = PlaybackResolver(sources: sources)
         self.sources = sources
-        self.metrics = metrics
 
         AudioSession.configure()
         wireEngineCallbacks()
-        wireResolverCallbacks()
 
         let center = NowPlayingCenter(commands: self)
         center.registerCommands()
@@ -116,11 +105,8 @@ public final class PlayerViewModel: PlaybackCommands {
     public func skipToNext() {
         guard let next = queue.advance() else {
             engine.stop()
-            // Nothing follows, so the pending startup attempt is cancelled rather than left dangling.
-            report(startup.cancel(requestID: loadGeneration))
-            // And there is no active stream to describe any more.
+            // There is no active stream to describe any more.
             activeStream.stop()
-            publishActiveStream()
             // Nothing is playing, so there is no item length to report either. Leaving the last
             // track's observed duration here would describe audio that is no longer loaded.
             clearNowPlaying()
@@ -184,18 +170,12 @@ public final class PlayerViewModel: PlaybackCommands {
             ladder.reset()
         }
 
-        // Each play is a new startup request. The previous one, if still unmeasured, is reported as
-        // cancelled rather than silently dropped.
         loadGeneration &+= 1
         let generation = loadGeneration
-        let begun = startup.begin(requestID: generation)
-        report(begun.superseded)
-        let intent = begun.intent
 
         // A new request resolves the previous request's stream state too, so a slow resolve for
         // the track the user just left cannot end up describing it.
         activeStream.begin(requestID: generation)
-        publishActiveStream()
 
         nowPlaying.ref = ref
         nowPlaying.title = ref.title
@@ -248,21 +228,14 @@ public final class PlayerViewModel: PlaybackCommands {
                 )
                 refillRadioIfNeeded()
                 publishNowPlaying()
-
-                // Continuity metric only: intent → engine.play() return. It is NOT the startup
-                // measurement — that completes when the engine reports the first time advance.
-                let milliseconds = intent.duration(to: ContinuousClock.now).milliseconds
-                await metrics.recordIntentToPlayCall(milliseconds: milliseconds)
             } catch {
                 guard !Task.isCancelled, nowPlaying.ref == ref else { return }
                 transport.isBuffering = false
                 transport.isPlaying = false
                 PerfLog.error("Could not play \(ref.title): \(error.localizedDescription)")
-                report(startup.fail(requestID: generation))
                 // Ignored when a newer request has already taken over — the tracker holds the
                 // request id, so a stale failure cannot blank the current stream.
                 activeStream.fail(requestID: generation)
-                publishActiveStream()
             }
         }
     }
@@ -286,35 +259,9 @@ public final class PlayerViewModel: PlaybackCommands {
             nowPlaying.observedItemDuration = PlaybackTimeline.usable(item.duration.isNumeric ? item.duration.seconds : nil)
             publishNowPlaying()
         }
-        // The startup proxy completes here, once, for the current request only — a callback for a
-        // superseded request finds no pending measurement and records nothing.
-        engine.onFirstTimeAdvance = { [weak self] in
-            guard let self else { return }
-            report(startup.completeFirstAdvance(requestID: loadGeneration))
-        }
-        // A stall after playback began. The metric existed with no producer; this is the producer,
-        // and the engine only reports it for the item that is actually playing.
         engine.onTick = { [weak self] seconds in
             self?.updateLyricIndex(at: seconds)
         }
-        engine.onStalled = { [weak self] in
-            guard let self else { return }
-            Task { await self.metrics.recordStall() }
-        }
-    }
-
-    /// Routes the resolver's warm/cold outcome into the playback stream-resolution metric.
-    private func wireResolverCallbacks() {
-        resolver.onResolveOutcome = { [weak self] path, milliseconds in
-            guard let self else { return }
-            Task { await self.metrics.recordPlaybackResolution(path: path, milliseconds: milliseconds) }
-        }
-    }
-
-    /// Publishes the tracker's current state to Observation and to the shared store Settings reads.
-    private func publishActiveStream() {
-        let state = activeStream.state
-        Task { await metrics.recordActiveStream(state) }
     }
 
     /// Records the stream that `PlaybackEngine` was just handed.
@@ -325,20 +272,6 @@ public final class PlayerViewModel: PlaybackCommands {
             sourceDisplayName: sources.displayName(for: candidate.sourceID),
             isFallback: isFallback
         )
-        publishActiveStream()
-    }
-
-    /// Records a startup outcome. The proxy is labelled as a proxy — it is not audible first audio.
-    private func report(_ outcome: PlaybackStartupTracker.Outcome?) {
-        guard let outcome else { return }
-        switch outcome {
-        case let .firstAdvance(measurement):
-            Task { await metrics.recordStartupFirstAdvance(milliseconds: measurement.milliseconds) }
-        case .failed:
-            Task { await metrics.recordStartupFailure() }
-        case .cancelled:
-            Task { await metrics.recordStartupCancellation() }
-        }
     }
 
     /// The current request's ranked alternatives and its bounded re-resolve.
@@ -364,7 +297,6 @@ public final class PlayerViewModel: PlaybackCommands {
         // URL sitting behind it plays. The order is the ranker's, not the adapter's.
         if let next = ladder.next() {
             PerfLog.warning("Playback failed; falling back to \(next.stream.mimeType ?? next.stream.kind.rawValue)")
-            Task { await metrics.recordFallback() }
             AudioSession.activate()
             engine.play(next.stream)
             nowPlaying.reportedStreamDuration = PlaybackTimeline.usable(next.stream.durationSeconds)
@@ -381,18 +313,10 @@ public final class PlayerViewModel: PlaybackCommands {
         guard ladder.beginResolveRetry() else {
             // Every candidate failed and the fresh resolve failed too; the track is genuinely
             // unplayable, so move on rather than looping.
-            report(startup.fail(requestID: loadGeneration))
             activeStream.fail(requestID: loadGeneration)
-            publishActiveStream()
             skipToNext()
             return
         }
-
-        // The attempt that got here genuinely failed — its candidates were exhausted and its stream
-        // stopped playing. Reporting it as *cancelled* (which `begin` would do for it once the retry
-        // starts) would undercount failures and overcount cancellations, so it is recorded as what it
-        // was before the retry opens a new request.
-        report(startup.fail(requestID: loadGeneration))
 
         invalidateCachedStream?(ref)
         start(ref, keepingLadder: true)
@@ -632,20 +556,6 @@ public final class PlayerViewModel: PlaybackCommands {
         resolver.bindings = bindings
         resolver.persist = persist
         invalidateCachedStream = invalidate
-    }
-
-    /// Supplies the runtime source-trust policy the ranking uses.
-    ///
-    /// The composition root answers this because it is the only layer that knows which sources cisum
-    /// ships and which arrived as user-installed plugins. Without it every candidate is `.unknown`
-    /// trust and ranking falls through to its other tiers — an honest unknown, never a guess.
-    public func configureSourceTrust(_ trust: @escaping @MainActor (String) -> SourceTrust) {
-        resolver.sourceTrust = trust
-    }
-
-    /// Bounds how long any single provider may take to contribute to one playback request.
-    public func configureResolutionBudget(_ budget: ResolutionBudget) {
-        resolver.budget = budget
     }
 
     // MARK: - Lifecycle

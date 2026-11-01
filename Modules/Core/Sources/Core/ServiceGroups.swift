@@ -9,7 +9,6 @@ import Player
 import Playlists
 import Plugins
 import Profile
-import Radio
 import Search
 import SwiftData
 import Utilities
@@ -34,12 +33,10 @@ public final class CoreServices {
 @MainActor
 public final class PlaybackServices {
     public let playbackControlSettings: PlaybackControlSettings
-    public let playbackMetricsStore: PlaybackMetricsStore
     public let lastFMSettings: LastFMSettings
     public let lastFMScrobbler: LastFMScrobbler
     public let listeningHistoryStore: ListeningHistoryStore
     public let streamingProviderSettings: StreamingProviderSettings
-    public let radioSessionStore: RadioSessionStore
     // ArtworkVideoProcessor (729 LOC of FFmpeg) left Player during the architecture reset —
     // generating animated artwork is not a playback concern. The code is preserved at
     // .reset-reference/Player-Sources/ for when animated artwork is rebuilt as its own module.
@@ -74,21 +71,17 @@ public final class PlaybackServices {
 
     public init(
         playbackControlSettings: PlaybackControlSettings,
-        playbackMetricsStore: PlaybackMetricsStore,
         lastFMSettings: LastFMSettings,
         lastFMScrobbler: LastFMScrobbler,
         listeningHistoryStore: ListeningHistoryStore,
         streamingProviderSettings: StreamingProviderSettings,
-        radioSessionStore: RadioSessionStore,
         player: PlayerViewModel
     ) {
         self.playbackControlSettings = playbackControlSettings
-        self.playbackMetricsStore = playbackMetricsStore
         self.lastFMSettings = lastFMSettings
         self.lastFMScrobbler = lastFMScrobbler
         self.listeningHistoryStore = listeningHistoryStore
         self.streamingProviderSettings = streamingProviderSettings
-        self.radioSessionStore = radioSessionStore
         self.player = player
     }
 }
