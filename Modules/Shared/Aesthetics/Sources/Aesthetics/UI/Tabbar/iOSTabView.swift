@@ -152,17 +152,21 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
 
     /// Composite key so rotation, search, tab-bar visibility *and* width changes
     /// (iPad multitasking) each retrigger the publish.
+    ///
+    /// The bottom safe area is deliberately not part of it. This key is computed in `body`,
+    /// and reading `UIWindow.safeAreaInsets` there makes UIKit ask SwiftUI for the status-bar
+    /// preference mid-update — an AttributeGraph cycle that froze every tab not shown at
+    /// launch (state changes and pushes stopped rendering). The inset only changes with
+    /// rotation, which `state` already covers, so the publish reads it instead, in `.task`.
     private struct AccessoryPublishKey: Equatable {
         let state: ResponsiveLayout.AccessoryState
         let screenWidth: CGFloat
-        let safeAreaBottom: CGFloat
     }
 
     private var accessoryPublishKey: AccessoryPublishKey {
         .init(
             state: accessoryState,
-            screenWidth: currentScreenWidth,
-            safeAreaBottom: currentSafeAreaBottom
+            screenWidth: currentScreenWidth
         )
     }
 
