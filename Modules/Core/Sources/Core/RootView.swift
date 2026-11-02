@@ -100,7 +100,7 @@ public struct RootView: View {
                         })
                     }
 
-                    Tab("Search", systemImage: "magnifyinglass", value: TabItem.search, role: .search) {
+                    Tab("Search", systemImage: "magnifyingglass", value: TabItem.search, role: .search) {
                         cisum.applyEnvironment(to: tabRoot(for: .search) {
                             cisum.searchView
                         })
@@ -155,7 +155,7 @@ public struct RootView: View {
                         })
                     }
 
-                    Tab("Search", systemImage: "magnifyinglass", value: TabItem.search, role: .search) {
+                    Tab("Search", systemImage: "magnifyingglass", value: TabItem.search, role: .search) {
                         cisum.applyEnvironment(to: tabRoot(for: .search) {
                             cisum.searchView
                         })
