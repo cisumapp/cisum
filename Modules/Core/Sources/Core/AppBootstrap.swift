@@ -157,6 +157,15 @@ enum AppBootstrap {
         let searchCacheHintStore = SearchCacheHintStore(modelContainer: modelContainer)
         let playlistLibraryStore = PlaylistLibraryStore(modelContainer: modelContainer)
         let savedLibrary = SavedLibraryService(store: playlistLibraryStore)
+        // One-time: clear the empty playlists search used to save into the Library.
+        let cleanupKey = "library.removedSearchPlaylists"
+        if !UserDefaults.standard.bool(forKey: cleanupKey) {
+            Task {
+                let removed = await playlistLibraryStore.removeEmptyProviderPlaylists()
+                UserDefaults.standard.set(true, forKey: cleanupKey)
+                PerfLog.info("Library: removed \(removed) empty playlists saved by search")
+            }
+        }
         let playlistImportJobStore = PlaylistImportJobStore(modelContainer: modelContainer)
         let centralMediaStore = CentralMediaStore(modelContainer: modelContainer)
         let metadataCache = VideoMetadataCache.shared

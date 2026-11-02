@@ -1288,7 +1288,8 @@ public class SearchViewModel: SearchViewModelInterface {
             if let centralMediaStore {
                 _ = await centralMediaStore.upsertSpotifyTracks(sourceTracks)
                 _ = await centralMediaStore.upsertSpotifyArtists(sourceArtists)
-                _ = await centralMediaStore.upsertSpotifyPlaylists(sourcePlaylists)
+                // Playlists are not saved: a Playlist row is the user's Library, and a search
+                // result is not something they added. Tapping one imports it.
             }
 
             // Tracks
