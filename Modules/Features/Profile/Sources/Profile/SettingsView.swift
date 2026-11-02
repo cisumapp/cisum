@@ -92,6 +92,7 @@ public struct SettingsView: View {
                         ? "Off" : "\(Int(playbackControlSettings.crossfadeSeconds)) s"
                 )
                 Slider(value: Bindable(playbackControlSettings).crossfadeSeconds, in: 0 ... 12, step: 1)
+                NavigationLink("Equalizer") { EqualizerView() }
             } header: {
                 Text("Playback")
             } footer: {

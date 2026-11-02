@@ -146,6 +146,8 @@ public final class PlaybackEngine {
         if let duration = stream.durationSeconds, duration > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: duration, preferredTimescale: 600)
         }
+        // Always tapped, even with the equalizer off, so switching it on applies mid-track.
+        Task { await Equalizer.shared.attach(to: item) }
         return item
     }
 
