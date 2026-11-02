@@ -18,6 +18,7 @@ struct NowPlayingSongInfo: View, Equatable {
     let videoId: String?
 
     @State private var isAddToPlaylistPresented = false
+    @State private var isEqualizerPresented = false
     @Environment(PlayerViewModel.self) private var playerViewModel
     @Environment(\.savedLibrary) private var savedLibrary
     @State private var isSaved = false
@@ -122,11 +123,24 @@ struct NowPlayingSongInfo: View, Equatable {
                         Label("Add to Playlist", systemImage: "text.badge.plus")
                     }
                     .disabled(videoId == nil)
+
+                    Button {
+                        isEqualizerPresented = true
+                    } label: {
+                        Label("Equalizer", systemImage: "slider.vertical.3")
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
                 .sheet(isPresented: $isAddToPlaylistPresented) {
                     AddToPlaylistSheet(track: savableTrack)
+                }
+                .sheet(isPresented: $isEqualizerPresented) {
+                    NavigationStack { EqualizerView() }
+                        // The player's white title2 styling would otherwise carry into the sheet.
+                        .foregroundStyle(Color.primary)
+                        .font(.body)
+                        .presentationDetents([.medium, .large])
                 }
             }
             .foregroundStyle(Color.white)

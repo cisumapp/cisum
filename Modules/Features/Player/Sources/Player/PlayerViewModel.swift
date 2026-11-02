@@ -88,6 +88,8 @@ public final class PlayerViewModel: PlaybackCommands {
         self.sources = sources
 
         AudioSession.configure()
+        // Loads the stored equalizer settings into the taps before the first track plays.
+        _ = EqualizerSettings.shared
         wireEngineCallbacks()
 
         let center = NowPlayingCenter(commands: self)
