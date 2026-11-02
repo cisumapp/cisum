@@ -222,18 +222,11 @@ public struct LibraryView: View {
     // MARK: - Actions
 
     private func deletePlaylist(_ playlist: Playlist) {
-        let id = playlist.playlistID
-        Task { await playlistLibraryStore?.deletePlaylist(playlistID: id) }
+        LibraryActions.delete(playlist, store: playlistLibraryStore)
     }
 
-    /// Fetches a service playlist again, in the background, into the same Library playlist.
     private func reimport(_ playlist: Playlist) {
-        guard let provider = playlist.sourceProvider?.importProvider,
-              let sourceID = playlist.sourcePlaylistID,
-              let importDownloadManager
-        else { return }
-        let ref = ImportablePlaylistRef(id: sourceID, title: playlist.title)
-        Task { _ = await importDownloadManager.enqueue(provider: provider, playlistRef: ref) }
+        LibraryActions.reimport(playlist, importer: importDownloadManager)
     }
 
     /// Imports Spotify Liked Songs through the shared import pipeline, then opens them.

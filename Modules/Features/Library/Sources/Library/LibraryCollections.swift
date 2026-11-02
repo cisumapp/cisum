@@ -8,8 +8,67 @@
 import Aesthetics
 import Kingfisher
 import Models
+import Playlists
+import SwiftData
 import SwiftUI
 import Utilities
+
+// MARK: - Entry point
+
+/// One Library page on its own, for places outside the Library tab — the macOS sidebar links
+/// straight to these. Reads its own data, so callers pass only which page.
+public struct LibraryPage: View {
+    public enum Kind: Hashable, Sendable {
+        case songs, albums, artists, playlists
+    }
+
+    let kind: Kind
+
+    @Query private var items: [PlaylistItem]
+    @Query(sort: \Playlist.updatedAt, order: .reverse) private var allPlaylists: [Playlist]
+    @Environment(\.playlistLibraryStore) private var store
+    @Environment(\.importDownloadManager) private var importer
+
+    public init(_ kind: Kind) {
+        self.kind = kind
+    }
+
+    public var body: some View {
+        switch kind {
+        case .songs:
+            LibrarySongsView(songs: LibraryIndex(items: items).songs)
+        case .albums:
+            LibraryAlbumsView(albums: LibraryIndex(items: items).albums)
+        case .artists:
+            LibraryArtistsView(artists: LibraryIndex(items: items).artists)
+        case .playlists:
+            LibraryPlaylistsView(
+                playlists: allPlaylists.filter { $0.playlistID != PlaylistLibraryStore.savedPlaylistID },
+                likedSongs: nil,
+                onDelete: { LibraryActions.delete($0, store: store) },
+                onReimport: { LibraryActions.reimport($0, importer: importer) }
+            )
+        }
+    }
+}
+
+@MainActor
+enum LibraryActions {
+    static func delete(_ playlist: Playlist, store: PlaylistLibraryStore?) {
+        let id = playlist.playlistID
+        Task { await store?.deletePlaylist(playlistID: id) }
+    }
+
+    /// Fetches a service playlist again, in the background, into the same Library playlist.
+    static func reimport(_ playlist: Playlist, importer: ImportDownloadManager?) {
+        guard let provider = playlist.sourceProvider?.importProvider,
+              let sourceID = playlist.sourcePlaylistID,
+              let importer
+        else { return }
+        let ref = ImportablePlaylistRef(id: sourceID, title: playlist.title)
+        Task { _ = await importer.enqueue(provider: provider, playlistRef: ref) }
+    }
+}
 
 // MARK: - Playlists
 

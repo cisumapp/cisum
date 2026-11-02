@@ -1,5 +1,6 @@
 import Aesthetics
 import Combine
+import Library
 import Models
 import Networking
 import Player
@@ -26,6 +27,7 @@ public struct RootView: View {
     /// transitions, so it ignores this — but routing it through `PlayerModule.miniPlayer`
     /// keeps a single entry point that is guaranteed to inject the player environment.
     @Namespace private var playerAnimationNamespace
+    @Namespace private var tabPillNamespace
 
     #if os(iOS)
     @State private var isScrollingDown = false
@@ -275,13 +277,7 @@ public struct RootView: View {
     /// The navigation column: a native sidebar list with the window's traffic lights
     /// drawn inside it.
     private var sidebarColumn: some View {
-        List(selection: selectedTabBinding) {
-            ForEach(TabItem.allCases, id: \.self) { tab in
-                Label(tab.title, systemImage: tab.icon)
-                    .tag(tab)
-            }
-        }
-        .listStyle(.sidebar)
+        MacSidebar(navigationState: navigationState)
         // The list draws its own sidebar material, which would sit *on top of* the glass
         // surface behind it and make the translucency invisible. Hiding it lets the glass
         // through while keeping the native rows, metrics and selection — the surface below
@@ -398,151 +394,164 @@ public struct RootView: View {
     #endif
 
     #if !os(iOS)
-    /// The shell every macOS tab sits in: a record band with the transport floating over
-    /// it, and the tab's content permanently underneath.
+    /// The shell every macOS tab sits in: the tab's content filling the window over the record,
+    /// with the transport and the navigation row floating above it.
     ///
-    /// Living here rather than in each tab is the point — the band and the bar are chrome,
-    /// not content, so Home, Discover, Library and Search all get the same structure without
-    /// any of them knowing about it.
+    /// Living here rather than in each tab is the point — the chrome is not content, so Home,
+    /// Discover, Library and Search all get the same structure without any of them knowing
+    /// about it. Content scrolls up under the chrome, softened by a fade, rather than stopping
+    /// at a band below it.
     private var detailColumn: some View {
-        GeometryReader { proxy in
-            // Bound once here so the band and its backdrop layers cannot disagree about it.
-            let bandHeight = Self.vinylBandHeight(for: proxy.size.height, width: proxy.size.width)
-
-            VStack(spacing: 0) {
-                // ── The record band ──────────────────────────────────────────
-                // The band is the window's imagery: the current track's artwork
-                // washed out behind the transport, falling back to the record
-                // when nothing is loaded. The transport and the navigation pill
-                // both float inside it; everything below is opaque content, so
-                // the imagery reads as peeking out from behind the interface
-                // rather than as wallpaper behind it.
+        ZStack(alignment: .top) {
+            // The record, tinted by the current track's artwork. Sized from the geometry
+            // because both layers are scaled-to-fill images with no size of their own.
+            GeometryReader { proxy in
                 ZStack {
-                    // Both backdrops are pinned to the band's exact bounds, and that pin is
-                    // load-bearing rather than tidy.
-                    //
-                    // `ArtworkImage` is `.scaledToFill()` with no frame of its own, so an
-                    // unpinned artwork layer offers the stack the *decoded image's* natural size
-                    // — thousands of points. The stack grows to that, `.frame(height:)` below
-                    // centres the overflow around the band, and `.clipped()` removes the top
-                    // and bottom, which took the transport and the pill with them the moment a
-                    // track loaded. Nothing was ever hidden; it was laid out off-screen.
-                    //
-                    // Giving the layers a concrete size removes them from the stack's size
-                    // negotiation entirely: the stack's ideal height becomes the band's height,
-                    // and the transport keeps the topmost slot in the ZStack's draw order.
+                    backgroundFill
                     cisum.artworkBackdrop()
-                        .frame(width: proxy.size.width, height: bandHeight)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .opacity(0.55)
                     cisum.vinylBackdrop()
-                        .frame(width: proxy.size.width, height: bandHeight)
-
-                    VStack(spacing: 10) {
-                        Spacer(minLength: 0)
-                        cisum.playerBar()
-                        navigationPill
-                    }
-                    .padding(.top, 12)
-                    .padding(.bottom, 12)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                 }
-                .frame(height: bandHeight)
                 .clipped()
-                // The band's bottom edge is where one continuous canvas should stop looking
-                // like a strip of wallpaper with a rule under it, so it dissolves into the
-                // content below instead of ending on a hard horizontal line.
-                .overlay(alignment: .bottom) {
-                    LinearGradient(
-                        colors: [.clear, Color.cisumBg],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: Self.bandFadeHeight)
-                    .allowsHitTesting(false)
-                }
+            }
+            .ignoresSafeArea()
 
-                // ── Opaque content ───────────────────────────────────────────
-                // The fill is applied at the shell rather than in each tab, so no view can
-                // end up transparent over the window.
-                tabSurface
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background { backgroundFill }
-                    .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
-                        searchOverlay.updateContext(newContext)
-                    }
-                    .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
-                    .usingRouter(cisum.router)
-                    // Only over Search. On every other tab this is dead
-                    // weight sitting on the canvas — the reference keeps search inside the
-                    // search surface, and a floating field over Home or the Library competes
-                    // with the content for the eye. The overlay, its controller and the
-                    // context plumbing above are untouched; only where it is drawn changes.
-                    .overlay(alignment: .top) {
+            tabSurface
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
+                    searchOverlay.updateContext(newContext)
+                }
+                .environment(\.isDynamicPlayerExpanded, isDynamicPlayerExpanded)
+                .usingRouter(cisum.router)
+                // Content starts below the chrome and scrolls up under it. A safe-area inset
+                // rather than content margins: margins reach every nested scroll view, which
+                // would push each horizontal shelf down by the same amount.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    VStack(spacing: 8) {
+                        Color.clear.frame(height: Self.chromeHeight)
+                        // The search field sits on the Search surface only.
                         if navigationState.selectedTab == .search {
                             SearchOverlayBar()
-                                .padding(.top, 8)
                         }
                     }
+                }
 
-                spotifyBackgroundRefresh
+            // Keeps the chrome legible over whatever scrolls beneath it.
+            LinearGradient(
+                stops: [
+                    .init(color: Color.cisumBg.opacity(0.85), location: 0),
+                    .init(color: Color.cisumBg.opacity(0.6), location: 0.6),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: Self.chromeHeight + 40)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 14) {
+                cisum.playerBar()
+                navigationRow
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
-            .clipped()
+            .padding(.top, 12)
+            .padding(.horizontal, 36)
+
+            spotifyBackgroundRefresh
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Height of the strip the record is visible in.
-    ///
-    /// Sized to clear the floating transport plus a band of record above it, and clamped
-    /// against the window height so a short window doesn't hand most of the screen to the
-    /// backdrop and starve the content below.
-    private static func vinylBandHeight(for windowHeight: CGFloat, width windowWidth: CGFloat = 0) -> CGFloat {
-        min(max(300, windowWidth * 0.1), max(180, windowHeight * 0.28))
-    }
+    /// Height of the floating chrome — the transport, the navigation row and the gaps around
+    /// them — which content starts below.
+    private static let chromeHeight: CGFloat = 128
 
-    /// How far the band's lower edge dissolves into the canvas.
-    ///
-    /// Short on purpose — this is a seam softener, not a gradient. Long enough that the
-    /// transition can't be seen as an edge, short enough that the band still reads as a
-    /// distinct region of the window.
-    private static let bandFadeHeight: CGFloat = 48
-
-    /// The floating navigation pill.
-    ///
-    /// Purely a second *presentation* of navigation that already exists: it binds to the same
-    /// `NavigationState` the sidebar does and mutates the same `NavigationPath` the tab's
-    /// `NavigationStack` is already bound to, so there is no second route stack and nothing to
-    /// keep in sync. Added alongside the search overlay rather than in place of it.
-    ///
-    /// There is a back control but no forward one. `NavigationPath` is a single stack with no
-    /// forward history to restore, so a forward button would be permanently inert — the
-    /// reference's exists because its navigation model tracks one.
-    private var navigationPill: some View {
-        HStack(spacing: 4) {
-            if navigationPillShowsBack {
-                pillButton("chevron.left", help: "Back") {
-                    // `NavigationPath` is a `RangeReplaceableCollection` over its elements, so
-                    // going back is dropping the last one. Written back through the same
-                    // dictionary the tab's `NavigationStack` is bound to.
-                    var path = navigationState.tabPaths[navigationState.selectedTab] ?? NavigationPath()
-                    guard !path.isEmpty else { return }
-                    path.removeLast()
-                    navigationState.tabPaths[navigationState.selectedTab] = path
-                }
-            }
-
-            ForEach(TabItem.allCases, id: \.self) { tab in
-                pillButton(
-                    tab.icon,
-                    help: tab.title,
-                    isActive: navigationState.selectedTab == tab
-                ) {
-                    navigationState.selectedTab = tab
-                }
+    /// Back and forward at the leading edge, the tabs in the middle.
+    private var navigationRow: some View {
+        ZStack {
+            tabPill
+            HStack {
+                historyPill
+                Spacer()
             }
         }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 5)
+    }
+
+    /// Back, and a forward that stays dimmed: `NavigationPath` keeps no forward history, so
+    /// the control is there for the layout's balance and shows it has nowhere to go.
+    private var historyPill: some View {
+        HStack(spacing: 6) {
+            Button {
+                // `NavigationPath` is a `RangeReplaceableCollection` over its elements, so going
+                // back is dropping the last one, written back through the same dictionary the
+                // tab's `NavigationStack` is bound to.
+                var path = navigationState.tabPaths[navigationState.selectedTab] ?? NavigationPath()
+                guard !path.isEmpty else { return }
+                path.removeLast()
+                navigationState.tabPaths[navigationState.selectedTab] = path
+            } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 20, height: 32)
+                    .contentShape(.rect)
+            }
+            .disabled(!navigationPillShowsBack)
+            .help("Back")
+
+            Rectangle()
+                .fill(Color.cisumChromeSubtle)
+                .frame(width: 1, height: 15)
+
+            Image(systemName: "chevron.right")
+                .frame(width: 20, height: 32)
+                .foregroundStyle(.quaternary)
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 10)
         .background { navigationPillSurface }
+    }
+
+    /// One button per tab, with a highlight that slides to the selected one.
+    private var tabPill: some View {
+        HStack(spacing: 0) {
+            ForEach(TabItem.allCases, id: \.self) { tab in
+                let isActive = navigationState.selectedTab == tab
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 1)) {
+                        navigationState.selectedTab = tab
+                    }
+                } label: {
+                    Image(systemName: Self.pillIcon(for: tab))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(isActive ? Color.cisumPrimaryText : Color.cisumSecondaryText)
+                        .frame(width: 60, height: 37)
+                        .background {
+                            if isActive {
+                                Capsule(style: .continuous)
+                                    .fill(Color.cisumChromeSubtle)
+                                    .matchedGeometryEffect(id: "tab-highlight", in: tabPillNamespace)
+                            }
+                        }
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .help(tab.title)
+            }
+        }
+        .padding(4)
+        .background { navigationPillSurface }
+    }
+
+    /// The design's glyphs for the pill, which are outline symbols unlike the iOS tab bar's.
+    private static func pillIcon(for tab: TabItem) -> String {
+        switch tab {
+        case .home: "house"
+        case .discover: "flame"
+        case .library: "music.note.square.stack"
+        case .search: "magnifyingglass"
+        }
     }
 
     /// Whether the current tab has somewhere to go back to.
@@ -569,22 +578,6 @@ public struct RootView: View {
         }
     }
 
-    private func pillButton(
-        _ symbol: String,
-        help: String,
-        isActive: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isActive ? Color.cisumPrimaryText : Color.cisumSecondaryText)
-                .frame(width: 30, height: 26)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .help(help)
-    }
     #endif
 
     private func sharedPlaylistMessage(_ playlist: SharedPlaylist) -> String {
@@ -705,6 +698,14 @@ public struct RootView: View {
                         cisum.applyEnvironment(to: cisum.libraryView)
                     case .recents:
                         cisum.applyEnvironment(to: cisum.libraryView)
+                    case .librarySongs:
+                        cisum.applyEnvironment(to: LibraryPage(.songs))
+                    case .libraryAlbums:
+                        cisum.applyEnvironment(to: LibraryPage(.albums))
+                    case .libraryArtists:
+                        cisum.applyEnvironment(to: LibraryPage(.artists))
+                    case .libraryPlaylists:
+                        cisum.applyEnvironment(to: LibraryPage(.playlists))
                     }
                 }
                 .onScrollOffsetChange { oldValue, newValue in
@@ -759,7 +760,6 @@ public struct RootView: View {
         // Discover, Library and any pushed detail: the space would still be held open for a
         // field that is no longer there. Search lays its own results out independently, so
         // removing the reservation where the field is absent changes nothing there.
-        .contentMargins(.top, navigationState.selectedTab == .search ? 56 : 0)
         // The transport lives in the band above rather than floating over this, so there is
         // nothing to clear at the bottom.
         .contentMargins(.trailing, isDynamicPlayerExpanded.wrappedValue ? 430 : 0)
@@ -816,6 +816,14 @@ public struct RootView: View {
                         cisum.applyEnvironment(to: cisum.libraryView)
                     case .recents:
                         cisum.applyEnvironment(to: cisum.libraryView)
+                    case .librarySongs:
+                        cisum.applyEnvironment(to: LibraryPage(.songs))
+                    case .libraryAlbums:
+                        cisum.applyEnvironment(to: LibraryPage(.albums))
+                    case .libraryArtists:
+                        cisum.applyEnvironment(to: LibraryPage(.artists))
+                    case .libraryPlaylists:
+                        cisum.applyEnvironment(to: LibraryPage(.playlists))
                     }
                 }
         }
