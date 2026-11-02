@@ -115,72 +115,48 @@ public struct LibraryView: View {
 
     private var categories: some View {
         VStack(spacing: 0) {
-            if !playlists.isEmpty || canImportLikedSongs {
-                NavigationLink {
-                    LibraryPlaylistsView(
-                        playlists: playlists,
-                        likedSongs: canImportLikedSongs ? .init(isSyncing: isSyncingLikedSongs) { Task { await openLikedSongs() } } : nil,
-                        onDelete: deletePlaylist,
-                        onReimport: reimport
-                    )
-                } label: {
-                    LibraryCategoryRow(title: "Playlists", systemImage: "music.note.list", count: playlists.count)
-                }
+            if !playlists.isEmpty {
+                categoryRow("Playlists", "music.note.list", playlists.count, .libraryPlaylists)
             }
-
             if !index.songs.isEmpty {
-                NavigationLink {
-                    LibrarySongsView(songs: index.songs)
-                } label: {
-                    LibraryCategoryRow(title: "Songs", systemImage: "music.note", count: index.songs.count)
-                }
+                categoryRow("Songs", "music.note", index.songs.count, .librarySongs)
             }
-
             if !index.albums.isEmpty {
-                NavigationLink {
-                    LibraryAlbumsView(albums: index.albums)
-                } label: {
-                    LibraryCategoryRow(title: "Albums", systemImage: "square.stack", count: index.albums.count)
-                }
+                categoryRow("Albums", "square.stack", index.albums.count, .libraryAlbums)
             }
-
             if !index.artists.isEmpty {
-                NavigationLink {
-                    LibraryArtistsView(artists: index.artists)
-                } label: {
-                    LibraryCategoryRow(title: "Artists", systemImage: "music.mic", count: index.artists.count)
-                }
+                categoryRow("Artists", "music.mic", index.artists.count, .libraryArtists)
             }
-
             if let savedPlaylist {
-                Button {
-                    router.navigate(to: .playlist(id: savedPlaylist.playlistID))
-                } label: {
-                    LibraryCategoryRow(title: "Saved", systemImage: "star", count: savedPlaylist.itemCount)
-                }
+                categoryRow("Saved", "star", savedPlaylist.itemCount, .playlist(id: savedPlaylist.playlistID))
             }
         }
-        .buttonStyle(.plain)
+    }
+
+    /// A row that opens one of the Library's pages through the router, the same routes the
+    /// macOS sidebar uses.
+    private func categoryRow(_ title: String, _ symbol: String, _ count: Int, _ route: AppRoute) -> some View {
+        Button {
+            router.navigate(to: route)
+        } label: {
+            LibraryCategoryRow(title: title, systemImage: symbol, count: count)
+        }
+        .buttonStyle(MediaPressStyle())
     }
 
     private var recentlyAddedGrid: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recently Added")
-                .font(.title2.bold())
+            MediaSectionHeader("Recently Added")
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 20) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 26, alignment: .top)], spacing: 30) {
                 ForEach(recentlyAdded, id: \.playlistID) { playlist in
-                    Button {
+                    MediaTile(
+                        url: playlist.artworkURLString.flatMap(URL.init(string:)),
+                        title: playlist.title,
+                        subtitle: playlist.sourceProvider?.libraryName ?? "Playlist"
+                    ) {
                         router.navigate(to: .playlist(id: playlist.playlistID))
-                    } label: {
-                        LibraryTile(
-                            url: playlist.artworkURLString.flatMap(URL.init(string:)),
-                            symbol: "music.note.list",
-                            title: playlist.title,
-                            subtitle: playlist.sourceProvider?.libraryName ?? "Playlist"
-                        )
                     }
-                    .buttonStyle(.plain)
                     .contextMenu {
                         Button("Delete", systemImage: "trash", role: .destructive) { deletePlaylist(playlist) }
                     }

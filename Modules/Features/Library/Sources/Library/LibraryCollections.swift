@@ -241,21 +241,25 @@ struct LibrarySongsView: View {
 struct LibraryAlbumsView: View {
     let albums: [LibraryIndex.Album]
 
+    @State private var openAlbumID: String?
+
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 20) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 26, alignment: .top)], spacing: 30) {
                 ForEach(albums) { album in
-                    NavigationLink {
-                        LibraryAlbumView(album: album)
-                    } label: {
-                        LibraryTile(url: album.artworkURL, symbol: "square.stack", title: album.title, subtitle: album.artist)
+                    MediaTile(url: album.artworkURL, title: album.title, subtitle: album.artist) {
+                        openAlbumID = album.id
                     }
-                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal)
         }
         .libraryPage(title: "Albums")
+        .navigationDestination(item: $openAlbumID) { id in
+            if let album = albums.first(where: { $0.id == id }) {
+                LibraryAlbumView(album: album)
+            }
+        }
     }
 }
 
@@ -287,52 +291,61 @@ struct LibraryAlbumView: View {
 struct LibraryArtistsView: View {
     let artists: [LibraryIndex.Artist]
 
+    @State private var openArtistID: String?
+
     var body: some View {
-        List(artists) { artist in
-            NavigationLink {
-                LibraryArtistView(artist: artist)
-            } label: {
-                LibraryListRow(
-                    artwork: LibraryArtwork(url: artist.artworkURL, symbol: "music.mic", cornerRadius: 28),
-                    title: artist.name,
-                    subtitle: artist.songs.count == 1 ? "1 song" : "\(artist.songs.count) songs"
-                )
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 26, alignment: .top)], spacing: 30) {
+                ForEach(artists) { artist in
+                    MediaTile(
+                        url: artist.artworkURL,
+                        title: artist.name,
+                        subtitle: artist.songs.count == 1 ? "1 song" : "\(artist.songs.count) songs",
+                        shape: .round
+                    ) {
+                        openArtistID = artist.id
+                    }
+                }
             }
-            .libraryRow()
+            .padding(.horizontal)
         }
         .libraryPage(title: "Artists")
+        .navigationDestination(item: $openArtistID) { id in
+            if let artist = artists.first(where: { $0.id == id }) {
+                LibraryArtistView(artist: artist)
+            }
+        }
     }
 }
 
 struct LibraryArtistView: View {
     let artist: LibraryIndex.Artist
 
+    @State private var openAlbumID: String?
+
     var body: some View {
         LibrarySongList(songs: artist.songs, showsArtwork: true) {
             if !artist.albums.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Albums")
-                        .font(.title3.bold())
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 14) {
-                            ForEach(artist.albums) { album in
-                                NavigationLink {
-                                    LibraryAlbumView(album: album)
-                                } label: {
-                                    LibraryTile(url: album.artworkURL, symbol: "square.stack", title: album.title, subtitle: nil)
-                                        .frame(width: 140)
-                                }
-                                .buttonStyle(.plain)
+                VStack(alignment: .leading, spacing: 14) {
+                    MediaSectionHeader("Albums")
+                    MediaShelf {
+                        ForEach(artist.albums) { album in
+                            MediaTile(url: album.artworkURL, title: album.title) {
+                                openAlbumID = album.id
                             }
                         }
                     }
-                    Text("Songs")
-                        .font(.title3.bold())
-                        .padding(.top, 8)
+                    MediaSectionHeader("Songs")
+                        .padding(.top, 16)
                 }
             }
         }
         .libraryPage(title: artist.name)
+        .navigationDestination(item: $openAlbumID) { id in
+            if let album = artist.albums.first(where: { $0.id == id }) {
+                LibraryAlbumView(album: album)
+            }
+        }
     }
 }
 
@@ -352,31 +365,32 @@ struct LibrarySongList<Header: View>: View {
             header
                 .libraryRow()
 
-            HStack(spacing: 12) {
-                Button { play(from: 0, shuffled: false) } label: {
-                    Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
-                }
-                Button { play(from: 0, shuffled: true) } label: {
-                    Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .tint(.primary)
+            PlayShufflePill(
+                onPlay: { play(from: 0, shuffled: false) },
+                onShuffle: { play(from: 0, shuffled: true) }
+            )
             .disabled(songs.isEmpty)
             .libraryRow()
 
             ForEach(Array(songs.enumerated()), id: \.element.id) { offset, song in
-                Button { play(from: offset, shuffled: false) } label: {
-                    LibraryListRow(
-                        artwork: showsArtwork ? LibraryArtwork(url: song.artworkURL) : nil,
-                        title: song.title,
-                        subtitle: [song.artist, song.album].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
-                    )
-                }
+                MediaSongRow(
+                    title: song.title,
+                    subtitle: [showsArtwork ? song.artist : nil, song.album]
+                        .compactMap { $0?.isEmpty == false ? $0 : nil }
+                        .joined(separator: " • "),
+                    duration: song.item.durationSeconds.map(Self.duration),
+                    artworkURL: song.artworkURL,
+                    onPlay: { play(from: offset, shuffled: false) }
+                )
                 .libraryRow()
+                .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
             }
         }
+    }
+
+    static func duration(_ seconds: Double) -> String {
+        let total = Int(seconds.rounded())
+        return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
 
     /// Queues the songs that can play — a row whose import never found it on any service cannot —
@@ -421,31 +435,6 @@ struct LibraryArtwork: View {
         Image(systemName: symbol)
             .font(.title2)
             .foregroundStyle(.secondary)
-    }
-}
-
-/// A square cover with a title and subtitle under it.
-struct LibraryTile: View {
-    let url: URL?
-    let symbol: String
-    let title: String
-    let subtitle: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            LibraryArtwork(url: url, symbol: symbol, cornerRadius: 10)
-                .padding(.bottom, 4)
-            Text(title)
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-        .contentShape(Rectangle())
     }
 }
 
