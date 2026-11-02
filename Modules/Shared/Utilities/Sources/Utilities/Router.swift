@@ -12,6 +12,11 @@ public enum AppRoute: Hashable {
     case playlist(id: String)
     case artist(id: String)
     case album(id: String)
+    /// One of the Library's own pages, e.g. from the macOS sidebar.
+    case librarySongs
+    case libraryAlbums
+    case libraryArtists
+    case libraryPlaylists
     case login
     case spotifyLogin
     case youtubeLogin
