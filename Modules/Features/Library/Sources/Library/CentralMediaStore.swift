@@ -100,34 +100,6 @@ public actor CentralMediaStore {
         }
     }
 
-    public struct PlaylistSnapshot: Sendable {
-        public let name: String
-        public let normalizedName: String
-        public let subtitle: String?
-        public let descriptionText: String?
-        public let ownerName: String?
-        public let artworkURLString: String?
-        public let spotifyPlaylistID: String?
-        public let spotifyPlaylistURI: String?
-        public let youtubePlaylistID: String?
-        public let appleMusicPlaylistID: String?
-        public let trackIDs: [String]
-
-        public init(name: String, normalizedName: String, subtitle: String?, descriptionText: String?, ownerName: String?, artworkURLString: String?, spotifyPlaylistID: String?, spotifyPlaylistURI: String?, youtubePlaylistID: String?, appleMusicPlaylistID: String?, trackIDs: [String]) {
-            self.name = name
-            self.normalizedName = normalizedName
-            self.subtitle = subtitle
-            self.descriptionText = descriptionText
-            self.ownerName = ownerName
-            self.artworkURLString = artworkURLString
-            self.spotifyPlaylistID = spotifyPlaylistID
-            self.spotifyPlaylistURI = spotifyPlaylistURI
-            self.youtubePlaylistID = youtubePlaylistID
-            self.appleMusicPlaylistID = appleMusicPlaylistID
-            self.trackIDs = trackIDs
-        }
-    }
-
     @discardableResult
     public func upsertArtist(_ snapshot: ArtistSnapshot) -> String {
         let entry = existingArtist(for: snapshot) ?? Artist(
@@ -228,44 +200,6 @@ public actor CentralMediaStore {
         return entry.songID
     }
 
-    @discardableResult
-    public func upsertPlaylist(_ snapshot: PlaylistSnapshot) -> String {
-        let entry = existingPlaylist(for: snapshot) ?? Playlist(
-            title: snapshot.name,
-            normalizedTitle: snapshot.normalizedName
-        )
-
-        if entry.modelContext == nil {
-            modelContext.insert(entry)
-        }
-
-        entry.title = snapshot.name
-        entry.normalizedTitle = snapshot.normalizedName
-        entry.subtitle = snapshot.subtitle
-        entry.descriptionText = snapshot.descriptionText
-        entry.ownerName = snapshot.ownerName
-        entry.artworkURLString = snapshot.artworkURLString
-
-        if let spotifyID = snapshot.spotifyPlaylistID {
-            entry.sourceProvider = .spotify
-            entry.sourcePlaylistID = spotifyID
-            entry.sourceURLString = snapshot.spotifyPlaylistURI
-        } else if let youtubeID = snapshot.youtubePlaylistID {
-            entry.sourceProvider = .youtube
-            entry.sourcePlaylistID = youtubeID
-        } else if let appleID = snapshot.appleMusicPlaylistID {
-            entry.sourceProvider = .appleMusic
-            entry.sourcePlaylistID = appleID
-        }
-
-        entry.itemCount = snapshot.trackIDs.count
-        entry.songIDs = encodeStringArray(snapshot.trackIDs)?.data(using: .utf8)
-        entry.updatedAt = .now
-
-        saveContext()
-        return entry.playlistID
-    }
-
     public func songBySpotifyTrackID(_ spotifyTrackID: String) -> Song? {
         let trimmedID = spotifyTrackID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedID.isEmpty else { return nil }
@@ -307,26 +241,6 @@ public actor CentralMediaStore {
         song.bind(sourceID: sourceID, sourceTrackID: mediaID)
         song.lastResolvedAt = .now
         saveContext()
-    }
-
-    public func playlistBySpotifyID(_ spotifyPlaylistID: String) -> Playlist? {
-        let trimmedID = spotifyPlaylistID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedID.isEmpty else { return nil }
-
-        let spotifyRaw = PlaylistSource.spotify.rawValue
-        var descriptor = FetchDescriptor<Playlist>(
-            predicate: #Predicate { $0.sourceProviderRawValue == spotifyRaw && $0.sourcePlaylistID == trimmedID }
-        )
-        descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
-    }
-
-    public func decodeTrackCanonicalIDs(for playlist: Playlist) -> [String] {
-        guard let data = playlist.songIDs else {
-            return []
-        }
-
-        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }
 
     // MARK: - Canonical reconciliation (ISRC-first, library-wide dedup)
@@ -600,25 +514,6 @@ public extension CentralMediaStore {
     }
 
     @discardableResult
-    func upsertSpotifyPlaylist(_ playlist: SpotifyPlaylist) -> String {
-        let snapshot = PlaylistSnapshot(
-            name: playlist.name,
-            normalizedName: normalizedRankingText(playlist.name),
-            subtitle: playlist.description,
-            descriptionText: playlist.description,
-            ownerName: playlist.owner?.displayName,
-            artworkURLString: playlist.images.first?.url.absoluteString,
-            spotifyPlaylistID: playlist.id,
-            spotifyPlaylistURI: playlist.uri,
-            youtubePlaylistID: nil,
-            appleMusicPlaylistID: nil,
-            trackIDs: playlist.tracks?.items.map { upsertSpotifyTrack($0) } ?? []
-        )
-
-        return upsertPlaylist(snapshot)
-    }
-
-    @discardableResult
     func upsertSpotifyTracks(_ tracks: [SpotifyTrack]) -> [String] {
         tracks.map { upsertSpotifyTrack($0) }
     }
@@ -628,10 +523,6 @@ public extension CentralMediaStore {
         artists.map { upsertSpotifyArtist($0) }
     }
 
-    @discardableResult
-    func upsertSpotifyPlaylists(_ playlists: [SpotifyPlaylist]) -> [String] {
-        playlists.map { upsertSpotifyPlaylist($0) }
-    }
 }
 #endif
 
@@ -733,32 +624,6 @@ private extension CentralMediaStore {
         return song(for: evidence)
     }
 
-    func existingPlaylist(for snapshot: PlaylistSnapshot) -> Playlist? {
-        if let spotifyPlaylistID = snapshot.spotifyPlaylistID {
-            let spotifyRaw = PlaylistSource.spotify.rawValue
-            if let match = fetchFirstPlaylist(predicate: #Predicate { $0.sourceProviderRawValue == spotifyRaw && $0.sourcePlaylistID == spotifyPlaylistID }) {
-                return match
-            }
-        }
-
-        if let youtubePlaylistID = snapshot.youtubePlaylistID {
-            let youtubeRaw = PlaylistSource.youtube.rawValue
-            if let match = fetchFirstPlaylist(predicate: #Predicate { $0.sourceProviderRawValue == youtubeRaw && $0.sourcePlaylistID == youtubePlaylistID }) {
-                return match
-            }
-        }
-
-        if let appleMusicPlaylistID = snapshot.appleMusicPlaylistID {
-            let appleRaw = PlaylistSource.appleMusic.rawValue
-            if let match = fetchFirstPlaylist(predicate: #Predicate { $0.sourceProviderRawValue == appleRaw && $0.sourcePlaylistID == appleMusicPlaylistID }) {
-                return match
-            }
-        }
-
-        let normalizedTitle = snapshot.normalizedName
-        return fetchFirstPlaylist(predicate: #Predicate { $0.normalizedTitle == normalizedTitle })
-    }
-
     func fetchFirstArtist(predicate: Predicate<Artist>) -> Artist? {
         var descriptor = FetchDescriptor<Artist>(predicate: predicate)
         descriptor.fetchLimit = 1
@@ -773,12 +638,6 @@ private extension CentralMediaStore {
 
     func fetchFirstSong(predicate: Predicate<Song>) -> Song? {
         var descriptor = FetchDescriptor<Song>(predicate: predicate)
-        descriptor.fetchLimit = 1
-        return try? modelContext.fetch(descriptor).first
-    }
-
-    func fetchFirstPlaylist(predicate: Predicate<Playlist>) -> Playlist? {
-        var descriptor = FetchDescriptor<Playlist>(predicate: predicate)
         descriptor.fetchLimit = 1
         return try? modelContext.fetch(descriptor).first
     }

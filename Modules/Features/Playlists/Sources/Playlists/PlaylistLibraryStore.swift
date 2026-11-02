@@ -288,6 +288,21 @@ public actor PlaylistLibraryStore {
         saveContext()
     }
 
+    /// Deletes service playlists that hold no tracks and never claimed any, returning how many.
+    ///
+    /// Search used to save every Spotify playlist result as a Playlist row, which made each one a
+    /// Library entry. Those stubs are recognisable: an import records the playlist's track count
+    /// from its metadata before fetching a single track, so only a search result has a count of 0
+    /// and no items. Created, Saved and shared playlists are never touched.
+    public func removeEmptyProviderPlaylists() -> Int {
+        let kept: Set<PlaylistSource> = [.local, .shared]
+        let stubs = ((try? modelContext.fetch(FetchDescriptor<Playlist>(predicate: #Predicate { $0.itemCount == 0 }))) ?? [])
+            .filter { $0.items.isEmpty && !kept.contains($0.sourceProvider ?? .unknown) && $0.playlistID != Self.savedPlaylistID }
+        stubs.forEach(modelContext.delete)
+        saveContext()
+        return stubs.count
+    }
+
     public func deletePlaylist(playlistID: String) {
         for item in items(for: playlistID) {
             modelContext.delete(item)
