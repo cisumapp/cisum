@@ -26,7 +26,9 @@ struct macOSApp: App {
         // its `styleMask` for `.windowStyle(.hiddenTitleBar)`, undoing `.fullSizeContentView`
         // and leaving a strip above the sidebar.
         Settings {
-            appDelegate.cisum.settingsView
+            // Its own scene, so nothing from the main window's environment reaches it: the shared
+            // services (AuthService, the Spotify session, the stores) have to be applied here too.
+            appDelegate.cisum.applyEnvironment(to: appDelegate.cisum.settingsView)
         }
     }
 }
