@@ -91,6 +91,7 @@ public final class PlayerViewModel: PlaybackCommands {
         // Loads the stored equalizer settings into the taps before the first track plays.
         _ = EqualizerSettings.shared
         wireEngineCallbacks()
+        followAudioSettings()
 
         let center = NowPlayingCenter(commands: self)
         center.registerCommands()
@@ -439,6 +440,43 @@ public final class PlayerViewModel: PlaybackCommands {
         let generation = beginRequest(prepared.ref, keepingLadder: false)
         ladder.replaceCandidates(prepared.candidates)
         didStartPlaying(prepared.ref, selected: prepared.candidates[0], requestID: generation)
+    }
+
+    // MARK: - Spatial audio and head gestures
+
+    @ObservationIgnored private lazy var headGestures = HeadGestureController { [weak self] gesture in
+        self?.perform(gesture)
+    }
+
+    /// Applies the spatial audio and head gesture settings now and again whenever they change.
+    /// Gestures listen while a track is loaded, paused too, so a gesture can resume playback.
+    private func followAudioSettings() {
+        let settings = PlaybackControlSettings.shared
+        withObservationTracking {
+            engine.spatializesStereo = settings.spatializesStereo
+            headGestures.setActive(
+                settings.headGesturesEnabled && nowPlaying.ref != nil,
+                sensitivity: settings.headGestureSensitivity
+            )
+        } onChange: {
+            Task { @MainActor [weak self] in self?.followAudioSettings() }
+        }
+    }
+
+    private func perform(_ gesture: HeadGesture) {
+        let settings = PlaybackControlSettings.shared
+        let action = gesture == .nod ? settings.nodAction : settings.shakeAction
+        PerfLog.info("Head gesture \(gesture.rawValue) → \(action.rawValue)")
+        guard action != .nothing else { return }
+        HeadGestureController.confirm()
+        switch action {
+        case .nothing: break
+        case .playPause: togglePlayPause()
+        case .next: skipToNext()
+        case .previous: skipToPrevious()
+        case .seekForward: seek(to: progress.currentTime + 15)
+        case .seekBackward: seek(to: max(progress.currentTime - 15, 0))
+        }
     }
 
     // MARK: - Listening history

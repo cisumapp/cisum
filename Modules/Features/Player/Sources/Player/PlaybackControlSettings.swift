@@ -54,6 +54,29 @@ public final class PlaybackControlSettings {
         didSet { scheduleWrite() }
     }
 
+    /// Lets the system spatialize stereo music (with head tracking on supported AirPods).
+    public var spatializesStereo: Bool {
+        didSet { scheduleWrite() }
+    }
+
+    /// Whether AirPods head gestures control playback.
+    public var headGesturesEnabled: Bool {
+        didSet { scheduleWrite() }
+    }
+
+    public var nodAction: HeadGestureAction {
+        didSet { scheduleWrite() }
+    }
+
+    public var shakeAction: HeadGestureAction {
+        didSet { scheduleWrite() }
+    }
+
+    /// Percent; over 100 a smaller movement counts.
+    public var headGestureSensitivity: Double {
+        didSet { scheduleWrite() }
+    }
+
     private let defaults: UserDefaults
     private var writeTask: Task<Void, Never>?
 
@@ -69,6 +92,12 @@ public final class PlaybackControlSettings {
         self.volumeButtonHoldRestoreVolume = defaults.object(forKey: Key.restoreVolume) as? Bool ?? true
         self.volumeButtonHoldUpSkipsForward = defaults.object(forKey: Key.upSkipsForward) as? Bool ?? true
         self.crossfadeSeconds = defaults.object(forKey: Key.crossfade) as? Double ?? 0
+        self.spatializesStereo = defaults.bool(forKey: Key.spatialStereo)
+        self.headGesturesEnabled = defaults.bool(forKey: Key.headGestures)
+        // Nodding along to music looks like a double nod, so the nod does nothing until chosen.
+        self.nodAction = defaults.string(forKey: Key.nodAction).flatMap(HeadGestureAction.init) ?? .nothing
+        self.shakeAction = defaults.string(forKey: Key.shakeAction).flatMap(HeadGestureAction.init) ?? .next
+        self.headGestureSensitivity = defaults.object(forKey: Key.headSensitivity) as? Double ?? 100
     }
 
     /// Writes any pending changes immediately.
@@ -98,6 +127,11 @@ public final class PlaybackControlSettings {
         defaults.set(volumeButtonHoldRestoreVolume, forKey: Key.restoreVolume)
         defaults.set(volumeButtonHoldUpSkipsForward, forKey: Key.upSkipsForward)
         defaults.set(crossfadeSeconds, forKey: Key.crossfade)
+        defaults.set(spatializesStereo, forKey: Key.spatialStereo)
+        defaults.set(headGesturesEnabled, forKey: Key.headGestures)
+        defaults.set(nodAction.rawValue, forKey: Key.nodAction)
+        defaults.set(shakeAction.rawValue, forKey: Key.shakeAction)
+        defaults.set(headGestureSensitivity, forKey: Key.headSensitivity)
     }
 
     private enum Key {
@@ -108,5 +142,10 @@ public final class PlaybackControlSettings {
         static let restoreVolume = "player.volumeHold.restoreVolume"
         static let upSkipsForward = "player.volumeHold.upSkipsForward"
         static let crossfade = "player.crossfadeSeconds"
+        static let spatialStereo = "player.spatializeStereo"
+        static let headGestures = "player.headGestures.enabled"
+        static let nodAction = "player.headGestures.nod"
+        static let shakeAction = "player.headGestures.shake"
+        static let headSensitivity = "player.headGestures.sensitivity"
     }
 }
