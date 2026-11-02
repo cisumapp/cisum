@@ -77,6 +77,23 @@ public final class PlaybackEngine {
     private var fadeTask: Task<Void, Never>?
 
     private var timeObservers: [Any] = []
+
+    /// Lets the system spatialize stereo tracks — and, on AirPods that support it, follow the head.
+    ///
+    /// By default AVPlayer leaves stereo alone and spatializes only multichannel audio, which
+    /// YouTube never serves. Head tracking itself is the user's choice in Control Center; an app can
+    /// only allow spatialization, not force it.
+    public var spatializesStereo = false {
+        didSet {
+            for deck in decks {
+                deck.currentItem?.allowedAudioSpatializationFormats = spatializationFormats
+            }
+        }
+    }
+
+    private var spatializationFormats: AVAudioSpatializationFormats {
+        spatializesStereo ? .monoStereoAndMultichannel : .multichannel
+    }
     private var endObserver: NSObjectProtocol?
     private var stalledObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
@@ -103,7 +120,7 @@ public final class PlaybackEngine {
         // The prepared track stays: if it is still next, the view model leaves it; if not, it is
         // replaced as soon as the queue says what is.
         finishFade()
-        let item = Self.item(for: stream)
+        let item = self.item(for: stream)
         observe(item)
 
         player.replaceCurrentItem(with: item)
@@ -119,7 +136,7 @@ public final class PlaybackEngine {
             pendingPrepare = (stream, crossfade)
             return
         }
-        idle.replaceCurrentItem(with: Self.item(for: stream))
+        idle.replaceCurrentItem(with: item(for: stream))
         preparedFade = crossfade
     }
 
@@ -131,7 +148,7 @@ public final class PlaybackEngine {
         idle.replaceCurrentItem(with: nil)
     }
 
-    private static func item(for stream: SourceStream) -> AVPlayerItem {
+    private func item(for stream: SourceStream) -> AVPlayerItem {
         let asset = stream.headers.isEmpty
             ? AVURLAsset(url: stream.url)
             : AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
@@ -146,6 +163,7 @@ public final class PlaybackEngine {
         if let duration = stream.durationSeconds, duration > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: duration, preferredTimescale: 600)
         }
+        item.allowedAudioSpatializationFormats = spatializationFormats
         // Always tapped, even with the equalizer off, so switching it on applies mid-track.
         Task { await Equalizer.shared.attach(to: item) }
         return item

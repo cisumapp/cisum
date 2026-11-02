@@ -99,6 +99,30 @@ public struct SettingsView: View {
                 Text("Tracks always play without a gap. Songs from the same album never crossfade.")
             }
 
+            Section {
+                Toggle("Spatialize Stereo", isOn: Bindable(playbackControlSettings).spatializesStereo)
+            } header: {
+                Text("AirPods")
+            } footer: {
+                Text("Plays stereo music as spatial audio. Head tracking follows the setting in Control Center.")
+            }
+
+            Section {
+                Toggle("Head Gestures", isOn: Bindable(playbackControlSettings).headGesturesEnabled)
+                if playbackControlSettings.headGesturesEnabled {
+                    Picker("Double Nod", selection: Bindable(playbackControlSettings).nodAction) {
+                        ForEach(HeadGestureAction.allCases) { Text($0.title).tag($0) }
+                    }
+                    Picker("Shake", selection: Bindable(playbackControlSettings).shakeAction) {
+                        ForEach(HeadGestureAction.allCases) { Text($0.title).tag($0) }
+                    }
+                    LabeledContent("Sensitivity", value: "\(Int(playbackControlSettings.headGestureSensitivity))%")
+                    Slider(value: Bindable(playbackControlSettings).headGestureSensitivity, in: 50 ... 200, step: 10)
+                }
+            } footer: {
+                Text("With AirPods Pro, AirPods (3rd generation or later) or AirPods Max: nod twice or shake your head. Nodding along to music can look like a double nod.")
+            }
+
             Section("Network") {
                 LabeledContent("Profile", value: networkMonitor.profileName)
                 LabeledContent("Interface", value: networkMonitor.interface.rawValue)
