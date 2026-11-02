@@ -49,6 +49,11 @@ public final class PlaybackControlSettings {
         didSet { scheduleWrite() }
     }
 
+    /// Seconds one track fades into the next; 0 is a gapless cut.
+    public var crossfadeSeconds: Double {
+        didSet { scheduleWrite() }
+    }
+
     private let defaults: UserDefaults
     private var writeTask: Task<Void, Never>?
 
@@ -63,6 +68,7 @@ public final class PlaybackControlSettings {
         self.volumeButtonHoldReleaseTimeout = defaults.object(forKey: Key.releaseTimeout) as? Double ?? 0.35
         self.volumeButtonHoldRestoreVolume = defaults.object(forKey: Key.restoreVolume) as? Bool ?? true
         self.volumeButtonHoldUpSkipsForward = defaults.object(forKey: Key.upSkipsForward) as? Bool ?? true
+        self.crossfadeSeconds = defaults.object(forKey: Key.crossfade) as? Double ?? 0
     }
 
     /// Writes any pending changes immediately.
@@ -91,6 +97,7 @@ public final class PlaybackControlSettings {
         defaults.set(volumeButtonHoldReleaseTimeout, forKey: Key.releaseTimeout)
         defaults.set(volumeButtonHoldRestoreVolume, forKey: Key.restoreVolume)
         defaults.set(volumeButtonHoldUpSkipsForward, forKey: Key.upSkipsForward)
+        defaults.set(crossfadeSeconds, forKey: Key.crossfade)
     }
 
     private enum Key {
@@ -100,5 +107,6 @@ public final class PlaybackControlSettings {
         static let releaseTimeout = "player.volumeHold.releaseTimeout"
         static let restoreVolume = "player.volumeHold.restoreVolume"
         static let upSkipsForward = "player.volumeHold.upSkipsForward"
+        static let crossfade = "player.crossfadeSeconds"
     }
 }

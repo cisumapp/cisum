@@ -23,8 +23,14 @@ import Utilities
 @MainActor
 @Observable
 public final class PlaybackEngine {
-    /// The one and only `AVPlayer`.
-    public private(set) var player = AVPlayer()
+    /// Two players: one plays, the other holds the next track loaded so it can start the instant
+    /// this one ends, or fade in over its last seconds.
+    private let decks = [AVPlayer(), AVPlayer()]
+    private var live = 0
+
+    /// The player that is playing now. Changes at each handover.
+    public var player: AVPlayer { decks[live] }
+    private var idle: AVPlayer { decks[1 - live] }
 
     /// Published position, driven by the periodic time observer.
     public let progress: ProgressState
@@ -53,7 +59,24 @@ public final class PlaybackEngine {
     /// index, which changes about once a line rather than once a tick.
     public var onTick: (@MainActor (Double) -> Void)?
 
-    private var timeObserver: Any?
+    /// Fires when the prepared track has taken over, so the queue can move on without resolving it
+    /// again. `onPlaybackEnded` does not fire for that track.
+    public var onAdvancedToNext: (@MainActor () -> Void)?
+
+    /// Asked just before the prepared track takes over: whether it is still what plays next. The
+    /// queue can change after a track is prepared; on `false` the prepared track is dropped and the
+    /// end is reported through `onPlaybackEnded` as usual.
+    public var isPreparedStillNext: (@MainActor () -> Bool)?
+
+    /// The fade, in seconds, into the track waiting on the idle deck; `nil` when none is waiting.
+    private var preparedFade: Double?
+    /// A track to prepare once the running fade has finished with the idle deck.
+    private var pendingPrepare: (stream: SourceStream, crossfade: Double)?
+    /// The deck fading out, while a fade runs.
+    private var fadingOut: AVPlayer?
+    private var fadeTask: Task<Void, Never>?
+
+    private var timeObservers: [Any] = []
     private var endObserver: NSObjectProtocol?
     private var stalledObserver: NSObjectProtocol?
     private var statusObservation: NSKeyValueObservation?
@@ -77,6 +100,38 @@ public final class PlaybackEngine {
     /// them is silent — nothing throws, AVFoundation only logs `CRABS ... ReadError`, and the
     /// player sits at 0:00 looking paused.
     public func play(_ stream: SourceStream) {
+        // The prepared track stays: if it is still next, the view model leaves it; if not, it is
+        // replaced as soon as the queue says what is.
+        finishFade()
+        let item = Self.item(for: stream)
+        observe(item)
+
+        player.replaceCurrentItem(with: item)
+        player.play()
+        transport.isPlaying = true
+    }
+
+    /// Loads the track that plays next on the idle deck, so it starts with no gap when this one
+    /// ends — or fades in over this one's last `crossfade` seconds.
+    public func prepareNext(_ stream: SourceStream, crossfade: Double) {
+        // The idle deck is the one still fading out; it takes the next track once that is done.
+        guard fadingOut == nil else {
+            pendingPrepare = (stream, crossfade)
+            return
+        }
+        idle.replaceCurrentItem(with: Self.item(for: stream))
+        preparedFade = crossfade
+    }
+
+    /// Drops the prepared track, if any.
+    public func clearPrepared() {
+        pendingPrepare = nil
+        guard preparedFade != nil else { return }
+        preparedFade = nil
+        idle.replaceCurrentItem(with: nil)
+    }
+
+    private static func item(for stream: SourceStream) -> AVPlayerItem {
         let asset = stream.headers.isEmpty
             ? AVURLAsset(url: stream.url)
             : AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
@@ -91,13 +146,96 @@ public final class PlaybackEngine {
         if let duration = stream.durationSeconds, duration > 0 {
             item.forwardPlaybackEndTime = CMTime(seconds: duration, preferredTimescale: 600)
         }
-        player.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+        return item
+    }
 
-        observe(item)
+    /// Where an item stops: the service's stated length when it gave one, else the file's own.
+    private static func end(of item: AVPlayerItem) -> Double? {
+        if item.forwardPlaybackEndTime.isNumeric { return item.forwardPlaybackEndTime.seconds }
+        return item.duration.isNumeric ? item.duration.seconds : nil
+    }
 
-        player.replaceCurrentItem(with: item)
+    // MARK: - Handover
+
+    /// The current track reached its end: the prepared one takes over at once, or the queue is told.
+    private func trackEnded() {
+        if !handOver(fade: 0) {
+            onPlaybackEnded?()
+        }
+    }
+
+    /// Starts the fade into the prepared track once the current one is that close to its end.
+    private func startFadeIfDue(at seconds: Double) {
+        guard let fade = preparedFade, fade > 0, transport.isPlaying,
+              let item = player.currentItem, let end = Self.end(of: item)
+        else { return }
+        let length = Crossfade.length(fade, trackLength: end)
+        if seconds >= end - length {
+            // The remaining time, not the full length: a late tick must not fade past the end.
+            handOver(fade: max(end - seconds, 0))
+        }
+    }
+
+    /// Makes the prepared track the current one, fading over `fade` seconds. `false` when there was
+    /// nothing usable prepared.
+    @discardableResult
+    private func handOver(fade: Double) -> Bool {
+        guard preparedFade != nil else { return false }
+        preparedFade = nil
+        guard let next = idle.currentItem, next.status != .failed, isPreparedStillNext?() ?? true else {
+            idle.replaceCurrentItem(with: nil)
+            return false
+        }
+
+        PerfLog.info("Handing over to the prepared track (fade \(String(format: "%.1f", fade)) s)")
+        let outgoing = player
+        removeItemObservers()
+        live = 1 - live
+        player.volume = fade > 0 ? 0 : 1
         player.play()
         transport.isPlaying = true
+        progress.currentTime = player.currentTime().seconds
+        // Before observing the new item: the queue's bookkeeping for the new track has to be in
+        // place when that item's readiness (and its duration) is reported.
+        onAdvancedToNext?()
+        observe(next)
+
+        fadingOut = outgoing
+        guard fade > 0 else {
+            finishFade()
+            return true
+        }
+        fadeTask = Task { [weak self] in
+            let start = Date()
+            while !Task.isCancelled, let self {
+                let elapsed = Date().timeIntervalSince(start) / fade
+                let gains = Crossfade.gains(at: elapsed)
+                outgoing.volume = gains.outgoing
+                self.player.volume = gains.incoming
+                if elapsed >= 1 {
+                    self.finishFade()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+        }
+        return true
+    }
+
+    /// Ends a running fade at once: the outgoing track stops, the incoming one is at full volume.
+    private func finishFade() {
+        fadeTask?.cancel()
+        fadeTask = nil
+        guard let outgoing = fadingOut else { return }
+        fadingOut = nil
+        outgoing.pause()
+        outgoing.replaceCurrentItem(with: nil)
+        outgoing.volume = 1
+        player.volume = 1
+        if let pending = pendingPrepare {
+            pendingPrepare = nil
+            prepareNext(pending.stream, crossfade: pending.crossfade)
+        }
     }
 
     public func resume() {
@@ -106,6 +244,7 @@ public final class PlaybackEngine {
     }
 
     public func pause() {
+        finishFade()
         player.pause()
         transport.isPlaying = false
     }
@@ -119,6 +258,7 @@ public final class PlaybackEngine {
     }
 
     public func seek(to seconds: Double) {
+        finishFade()
         player.seek(
             to: CMTime(seconds: seconds, preferredTimescale: 600),
             toleranceBefore: .zero,
@@ -128,6 +268,8 @@ public final class PlaybackEngine {
     }
 
     public func stop() {
+        finishFade()
+        clearPrepared()
         player.pause()
         // Observers are torn down *before* the item is detached. `replaceCurrentItem(with: nil)` can
         // make the outgoing item report a failure, and a stopped player has no current item to fail.
@@ -147,15 +289,20 @@ public final class PlaybackEngine {
     /// what keeps a 30 Hz tick from invalidating the entire player UI — see `PlayerState.swift`.
     private func observeTimeUpdates() {
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.progress.currentTime = time.seconds
-                self.onTick?(time.seconds)
-                if time.seconds > 0, self.player.timeControlStatus == .playing {
-                    self.hasAdvanced = true
+        timeObservers = decks.map { deck in
+            deck.audiovisualBackgroundPlaybackPolicy = .continuesIfPossible
+            return deck.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self, weak deck] time in
+                MainActor.assumeIsolated {
+                    // Only the live deck drives the clock; the other is idle or fading out.
+                    guard let self, deck === self.player else { return }
+                    self.progress.currentTime = time.seconds
+                    self.onTick?(time.seconds)
+                    if time.seconds > 0, self.player.timeControlStatus == .playing {
+                        self.hasAdvanced = true
+                    }
+                    self.clearBufferingIfRecovered()
+                    self.startFadeIfDue(at: time.seconds)
                 }
-                self.clearBufferingIfRecovered()
             }
         }
     }
@@ -183,7 +330,7 @@ public final class PlaybackEngine {
         ) { [weak self, weak item] _ in
             MainActor.assumeIsolated {
                 guard let self, self.isCurrent(item) else { return }
-                self.onPlaybackEnded?()
+                self.trackEnded()
             }
         }
 
@@ -202,7 +349,7 @@ public final class PlaybackEngine {
                 if let item, item.forwardPlaybackEndTime.isNumeric,
                    self.player.currentTime().seconds >= item.forwardPlaybackEndTime.seconds - 2
                 {
-                    self.onPlaybackEnded?()
+                    self.trackEnded()
                     return
                 }
                 self.transport.isBuffering = true
@@ -210,7 +357,8 @@ public final class PlaybackEngine {
             }
         }
 
-        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+        // `.initial` too: a prepared item that takes over is often ready already.
+        statusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             MainActor.assumeIsolated {
                 guard let self, self.isCurrent(item) else { return }
                 switch item.status {
@@ -270,10 +418,10 @@ public final class PlaybackEngine {
     /// it cannot touch the stored observers at all. The owner calls this when playback is finished
     /// with — which is also the only point at which teardown ordering is actually knowable.
     public func teardown() {
-        if let timeObserver {
-            player.removeTimeObserver(timeObserver)
-            self.timeObserver = nil
+        for (deck, observer) in zip(decks, timeObservers) {
+            deck.removeTimeObserver(observer)
         }
+        timeObservers = []
         stop()
     }
 }
