@@ -292,8 +292,9 @@ public actor PlaylistLibraryStore {
     ///
     /// Search used to save every Spotify playlist result as a Playlist row, which made each one a
     /// Library entry. Those stubs are recognisable: an import records the playlist's track count
-    /// from its metadata before fetching a single track, so only a search result has a count of 0
-    /// and no items. Created, Saved and shared playlists are never touched.
+    /// from its metadata before fetching a single track, so only a search result has a count of 0.
+    /// (The `items` check is a second guard only: items are linked by id, so it is usually empty.)
+    /// Created, Saved and shared playlists are never touched.
     public func removeEmptyProviderPlaylists() -> Int {
         let kept: Set<PlaylistSource> = [.local, .shared]
         let stubs = ((try? modelContext.fetch(FetchDescriptor<Playlist>(predicate: #Predicate { $0.itemCount == 0 }))) ?? [])
