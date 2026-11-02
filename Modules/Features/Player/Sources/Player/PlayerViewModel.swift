@@ -169,6 +169,45 @@ public final class PlayerViewModel: PlaybackCommands {
     /// The display fields are painted from the ref before any network work, so tapping a track
     /// updates the UI instantly even when resolution takes a moment.
     private func start(_ ref: PlayableRef, keepingLadder: Bool = false) {
+        let generation = beginRequest(ref, keepingLadder: keepingLadder)
+
+        loadTask = Task { [weak self] in
+            guard let self else { return }
+            let span = CisumSignpost.playback.begin("tap-to-play", ref.title)
+            defer { CisumSignpost.playback.end("tap-to-play", state: span) }
+
+            do {
+                // Ranked best-first by the resolver: the adapter's own order is only its tie-break.
+                let candidates = try await resolver.resolve(ref)
+                guard !Task.isCancelled, nowPlaying.ref == ref else { return }
+                guard let selected = candidates.first else {
+                    throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title, underlying: nil)
+                }
+
+                // Keep the rest so a failure can fall through to the next one rather than
+                // skipping the track. YouTube legitimately returns an HLS manifest whose segments
+                // are then rejected, while the progressive URL for the same track plays fine —
+                // and ranking puts the progressive URL first, so that fallback is now the rare
+                // case rather than the expected one.
+                ladder.replaceCandidates(candidates)
+
+                AudioSession.activate()
+                engine.play(selected.stream)
+                didStartPlaying(ref, selected: selected, requestID: generation)
+            } catch {
+                guard !Task.isCancelled, nowPlaying.ref == ref else { return }
+                transport.isBuffering = false
+                transport.isPlaying = false
+                PerfLog.error("Could not play \(ref.title): \(error.localizedDescription)")
+                // Ignored when a newer request has already taken over — the tracker holds the
+                // request id, so a stale failure cannot blank the current stream.
+                activeStream.fail(requestID: generation)
+            }
+        }
+    }
+
+    /// Opens a playback request for `ref`: paints its metadata and returns the request id.
+    private func beginRequest(_ ref: PlayableRef, keepingLadder: Bool) -> Int {
         loadTask?.cancel()
         // A new request ends the previous track's play; a retry of the same request does not.
         if !keepingLadder {
@@ -202,57 +241,30 @@ public final class PlayerViewModel: PlaybackCommands {
         updateSkipAvailability()
         publishNowPlaying()
         loadLyrics(for: ref)
+        return generation
+    }
 
-        loadTask = Task { [weak self] in
-            guard let self else { return }
-            let span = CisumSignpost.playback.begin("tap-to-play", ref.title)
-            defer { CisumSignpost.playback.end("tap-to-play", state: span) }
-
-            do {
-                // Ranked best-first by the resolver: the adapter's own order is only its tie-break.
-                let candidates = try await resolver.resolve(ref)
-                guard !Task.isCancelled, nowPlaying.ref == ref else { return }
-                guard let selected = candidates.first else {
-                    throw ResolutionError.noMatch(source: ref.sourceID, title: ref.title, underlying: nil)
-                }
-
-                // Keep the rest so a failure can fall through to the next one rather than
-                // skipping the track. YouTube legitimately returns an HLS manifest whose segments
-                // are then rejected, while the progressive URL for the same track plays fine —
-                // and ranking puts the progressive URL first, so that fallback is now the rare
-                // case rather than the expected one.
-                ladder.replaceCandidates(candidates)
-
-                AudioSession.activate()
-                engine.play(selected.stream)
-                nowPlaying.reportedStreamDuration = PlaybackTimeline.usable(selected.stream.durationSeconds)
-                publishActiveStream(selected, isFallback: false, requestID: generation)
-                playingSeed = PlayableRef(
-                    songID: ref.songID,
-                    sourceID: selected.sourceID,
-                    sourceTrackID: selected.sourceTrackID,
-                    title: ref.title,
-                    artist: ref.artist,
-                    artworkURL: ref.artworkURL,
-                    durationSeconds: ref.durationSeconds
-                )
-                if playSession == nil, let playingSeed {
-                    playSession = (playingSeed, Date(), 0)
-                    lastTickSeconds = nil
-                }
-                refillRadioIfNeeded()
-                preResolveUpcoming()
-                publishNowPlaying()
-            } catch {
-                guard !Task.isCancelled, nowPlaying.ref == ref else { return }
-                transport.isBuffering = false
-                transport.isPlaying = false
-                PerfLog.error("Could not play \(ref.title): \(error.localizedDescription)")
-                // Ignored when a newer request has already taken over — the tracker holds the
-                // request id, so a stale failure cannot blank the current stream.
-                activeStream.fail(requestID: generation)
-            }
+    /// The engine has been handed `selected` for `ref`: record what plays and look ahead.
+    private func didStartPlaying(_ ref: PlayableRef, selected: PlaybackCandidate, requestID: Int) {
+        nowPlaying.reportedStreamDuration = PlaybackTimeline.usable(selected.stream.durationSeconds)
+        publishActiveStream(selected, isFallback: false, requestID: requestID)
+        playingSeed = PlayableRef(
+            songID: ref.songID,
+            sourceID: selected.sourceID,
+            sourceTrackID: selected.sourceTrackID,
+            title: ref.title,
+            artist: ref.artist,
+            artworkURL: ref.artworkURL,
+            durationSeconds: ref.durationSeconds
+        )
+        if playSession == nil, let playingSeed {
+            playSession = (playingSeed, Date(), 0)
+            lastTickSeconds = nil
         }
+        refillRadioIfNeeded()
+        preResolveUpcoming()
+        prepareUpcomingIfNeeded()
+        publishNowPlaying()
     }
 
     private func wireEngineCallbacks() {
@@ -276,6 +288,13 @@ public final class PlayerViewModel: PlaybackCommands {
         }
         engine.onTick = { [weak self] seconds in
             self?.tick(seconds)
+        }
+        engine.onAdvancedToNext = { [weak self] in
+            self?.advanceToPrepared()
+        }
+        engine.isPreparedStillNext = { [weak self] in
+            guard let self, let prepared else { return false }
+            return queue.mode != .repeatOne && queue.upcoming == prepared.ref
         }
     }
 
@@ -376,6 +395,50 @@ public final class PlayerViewModel: PlaybackCommands {
         }
     }
 
+    // MARK: - Gapless and crossfade
+
+    /// The track waiting on the engine's idle deck, with its ranked candidates for the ladder.
+    @ObservationIgnored private var prepared: (ref: PlayableRef, candidates: [PlaybackCandidate])?
+    /// What `prepared` is, or is being resolved, for. Compared every tick against the queue.
+    @ObservationIgnored private var preparingRef: PlayableRef?
+    @ObservationIgnored private var prepareTask: Task<Void, Never>?
+
+    /// Keeps the track after this one loaded on the engine's idle deck, so it plays with no gap or
+    /// fades in. Called every tick: any queue edit — a reorder, Play Next, a mode change — is picked
+    /// up within a quarter second with no hook in each of them.
+    private func prepareUpcomingIfNeeded() {
+        // Repeat-one restarts the same item through the ordinary end-of-track path.
+        let next = queue.mode == .repeatOne ? nil : queue.upcoming
+        guard next != preparingRef else { return }
+        preparingRef = next
+        prepared = nil
+        prepareTask?.cancel()
+        engine.clearPrepared()
+        guard let next, let current = nowPlaying.ref else { return }
+
+        // ponytail: the fade is fixed when the track is prepared; a settings change applies from the next pair.
+        let fade = Crossfade.seconds(requested: PlaybackControlSettings.shared.crossfadeSeconds, from: current, to: next)
+        prepareTask = Task { [weak self, resolver] in
+            // Usually the cached-URL path: `preResolveUpcoming` has resolved it already.
+            guard let candidates = try? await resolver.resolve(next), let first = candidates.first,
+                  !Task.isCancelled, let self, preparingRef == next
+            else { return }
+            prepared = (next, candidates)
+            engine.prepareNext(first.stream, crossfade: fade)
+        }
+    }
+
+    /// The engine started the prepared track: move the queue on and do what `start` does after
+    /// `engine.play`, without resolving again.
+    private func advanceToPrepared() {
+        guard let prepared else { return }
+        self.prepared = nil
+        _ = queue.advance()
+        let generation = beginRequest(prepared.ref, keepingLadder: false)
+        ladder.replaceCandidates(prepared.candidates)
+        didStartPlaying(prepared.ref, selected: prepared.candidates[0], requestID: generation)
+    }
+
     // MARK: - Listening history
 
     /// Called once per finished play with the recording that played, when it started, and how long
@@ -390,6 +453,7 @@ public final class PlayerViewModel: PlaybackCommands {
     /// between ticks — a seek is a jump, not listening, so gaps over a second are not counted.
     private func tick(_ seconds: Double) {
         updateLyricIndex(at: seconds)
+        prepareUpcomingIfNeeded()
         if let last = lastTickSeconds, transport.isPlaying, seconds > last, seconds - last <= 1 {
             playSession?.listened += seconds - last
         }

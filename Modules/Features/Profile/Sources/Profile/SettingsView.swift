@@ -85,6 +85,19 @@ public struct SettingsView: View {
                 )
             }
 
+            Section {
+                LabeledContent(
+                    "Crossfade",
+                    value: playbackControlSettings.crossfadeSeconds == 0
+                        ? "Off" : "\(Int(playbackControlSettings.crossfadeSeconds)) s"
+                )
+                Slider(value: Bindable(playbackControlSettings).crossfadeSeconds, in: 0 ... 12, step: 1)
+            } header: {
+                Text("Playback")
+            } footer: {
+                Text("Tracks always play without a gap. Songs from the same album never crossfade.")
+            }
+
             Section("Network") {
                 LabeledContent("Profile", value: networkMonitor.profileName)
                 LabeledContent("Interface", value: networkMonitor.interface.rawValue)
