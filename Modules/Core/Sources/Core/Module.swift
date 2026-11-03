@@ -42,6 +42,8 @@ public final class cisumModule {
     public let deepLinkCoordinator = DeepLinkCoordinator()
     /// Artist, album and playlist data from every source that needs no sign-in.
     public let catalog: Catalog
+    /// Artist pages kept on the device, refreshed overnight.
+    public let artistPageStore: ArtistPageStore
 
     public var router: Router {
         appRouter
@@ -345,6 +347,7 @@ public final class cisumModule {
             .environment(\.savedLibrary, container.libraryServices.savedLibrary)
             .environment(\.centralMediaStore, container.libraryServices.centralMediaStore)
             .environment(\.catalog, catalog)
+            .environment(\.artistPageStore, artistPageStore)
             .environment(container.userServices)
             .environment(container.providerServices)
             .environment(container.appServices)
@@ -446,6 +449,7 @@ public final class cisumModule {
         self.container = container
         // Public catalogue data only, so the signed-out client is enough even after sign-in.
         self.catalog = Catalog(youtube: youtube.music)
+        self.artistPageStore = ArtistPageStore(catalog: catalog, container: container.appServices.modelContainer)
 
         // Initialize Features
         self.home = HomeModule(youtube: youtube)

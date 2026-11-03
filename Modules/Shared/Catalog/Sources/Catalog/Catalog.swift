@@ -17,7 +17,7 @@ import YouTubeSDK
 
 // MARK: - Values
 
-public struct CatalogTrack: Identifiable, Sendable, Hashable {
+public struct CatalogTrack: Identifiable, Sendable, Hashable, Codable {
     public let id: String
     public let title: String
     public let artist: String
@@ -31,7 +31,7 @@ public struct CatalogTrack: Identifiable, Sendable, Hashable {
     public let isMusicVideo: Bool
 }
 
-public struct CatalogAlbum: Identifiable, Sendable, Hashable {
+public struct CatalogAlbum: Identifiable, Sendable, Hashable, Codable {
     public var id: String { youtubeBrowseID ?? itunesCollectionID.map { "itunes:\($0)" } ?? title }
     public let title: String
     public var artist: String?
@@ -43,7 +43,7 @@ public struct CatalogAlbum: Identifiable, Sendable, Hashable {
     public var itunesCollectionID: Int?
 }
 
-public struct CatalogPlaylist: Identifiable, Sendable, Hashable {
+public struct CatalogPlaylist: Identifiable, Sendable, Hashable, Codable {
     public var id: String { youtubeBrowseID }
     public let title: String
     public let owner: String?
@@ -63,7 +63,7 @@ public extension EnvironmentValues {
     @Entry var catalog: Catalog?
 }
 
-public struct CatalogArtistSummary: Identifiable, Sendable, Hashable {
+public struct CatalogArtistSummary: Identifiable, Sendable, Hashable, Codable {
     public var id: String { youtubeBrowseID }
     public let name: String
     public let photoURL: URL?
@@ -71,7 +71,7 @@ public struct CatalogArtistSummary: Identifiable, Sendable, Hashable {
     public let youtubeBrowseID: String
 }
 
-public struct CatalogArtist: Sendable {
+public struct CatalogArtist: Sendable, Codable {
     public let name: String
     public let youtubeBrowseID: String?
     public let about: String?

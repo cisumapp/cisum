@@ -5,6 +5,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>studio.cisum.spotify.refresh</string>
+		<string>studio.cisum.catalog.refresh</string>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>

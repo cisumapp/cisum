@@ -10,6 +10,7 @@ import ProviderSDK
 import Aesthetics
 import Authentication
 import Caching
+import Catalog
 import ClerkKit
 import Foundation
 import Library
@@ -34,6 +35,7 @@ private let lifecycleSP = CisumSignpost.lifecycle
 @MainActor
 enum AppBootstrap {
     nonisolated static let spotifyRefreshTaskID = "studio.cisum.spotify.refresh"
+    nonisolated static let catalogRefreshTaskID = "studio.cisum.catalog.refresh"
 
     /// Register the Spotify background-refresh task. Must be called during app launch (before
     /// launch completes). Best-effort: iOS schedules opportunistically — the real freshness
@@ -47,8 +49,39 @@ enum AppBootstrap {
             handleSpotifyBackgroundRefresh(task)
         }
         scheduleSpotifyBackgroundRefresh()
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: catalogRefreshTaskID, using: nil) { @Sendable task in
+            handleCatalogBackgroundRefresh(task)
+        }
+        scheduleCatalogBackgroundRefresh()
         #endif
     }
+
+    #if os(iOS)
+    /// Refreshes the saved pages of visited artists that have gone stale. Invoked by
+    /// BGTaskScheduler on a background queue — MUST stay `nonisolated`.
+    nonisolated static func handleCatalogBackgroundRefresh(_ task: BGTask) {
+        nonisolated(unsafe) let task = task
+        let work = Task { @MainActor in
+            await ArtistPageStore.shared?.refreshStale()
+        }
+        task.expirationHandler = { work.cancel() }
+        Task {
+            _ = await work.value
+            scheduleCatalogBackgroundRefresh()
+            task.setTaskCompleted(success: !work.isCancelled)
+        }
+    }
+
+    /// Asks for the next run from 3am: when the app is least likely to be in use. iOS still picks
+    /// the moment (charging, on Wi-Fi), so this is the earliest, not the time.
+    nonisolated static func scheduleCatalogBackgroundRefresh() {
+        let request = BGAppRefreshTaskRequest(identifier: catalogRefreshTaskID)
+        request.earliestBeginDate = Calendar.current.nextDate(
+            after: .now, matching: DateComponents(hour: 3), matchingPolicy: .nextTime
+        )
+        try? BGTaskScheduler.shared.submit(request)
+    }
+    #endif
 
     #if os(iOS)
     /// Invoked by BGTaskScheduler on a background queue — MUST stay `nonisolated`.

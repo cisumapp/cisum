@@ -23,6 +23,12 @@ public final class Artist {
     public var youtubeMusicBrowseID: String?
     public var appleMusicArtistID: String?
 
+    /// The best photo found for the artist page, kept so the next visit opens on it.
+    public var bannerURLString: String?
+    /// The artist page last fetched from the catalogue (JSON), so a visit opens instantly.
+    public var catalogPageData: Data?
+    public var catalogFetchedAt: Date?
+
     public var createdAt: Date
     public var updatedAt: Date
 
