@@ -1,4 +1,5 @@
 import Aesthetics
+import Catalog
 import Kingfisher
 import Models
 import Player
@@ -19,12 +20,35 @@ public struct PlaylistCard: View {
     @State private var viewModel = PlaylistViewModel()
     @Environment(\.playlistLibraryStore) private var playlistLibraryStore
     public let playlist: Models.Playlist
+    /// Set for a playlist that is not in the library: its tracks load when the card opens.
+    let remote: RemotePlaylist?
 
     @State var showAllImages: Bool = true
 
     public init(playlist: Models.Playlist, showAllImages: Bool = true) {
         self.playlist = playlist
+        self.remote = nil
         self.showAllImages = showAllImages
+    }
+
+    /// A playlist from YouTube Music that has not been imported. It looks and opens like a saved
+    /// one; its tracks are fetched the first time it opens, and nothing is saved unless the user
+    /// picks Add to Library.
+    ///
+    /// - Parameter onAddToLibrary: imports it; omitted, the menu offers no Add to Library.
+    public init(remote source: CatalogPlaylist, onAddToLibrary: (() async -> Void)? = nil) {
+        // Unsaved: SwiftData models work as plain values until they are inserted.
+        self.playlist = Models.Playlist(
+            playlistID: "remote:\(source.youtubeBrowseID)",
+            title: source.title,
+            normalizedTitle: source.title.lowercased(),
+            ownerName: source.owner,
+            artworkURLString: source.artworkURL?.absoluteString,
+            sourceProvider: .youtubeMusic,
+            sourcePlaylistID: source.youtubeBrowseID
+        )
+        self.remote = RemotePlaylist(source: source, onAddToLibrary: onAddToLibrary)
+        self.showAllImages = true
     }
 
     public var body: some View {
@@ -41,7 +65,7 @@ public struct PlaylistCard: View {
                     PlaylistCover(isCardExpanded: isCardExpanded, viewModel: viewModel, playlist: playlist, showAllImages: $showAllImages)
                 }
             } content: { _, _ in
-                PlaylistTrackListView(playlist: playlist)
+                PlaylistTrackListView(playlist: playlist, remote: remote)
             }
             .frame(width: 175 * scale, height: 175 * scale)
             .legibilityBackground(viewModel.backgroundColor)
@@ -53,8 +77,15 @@ public struct PlaylistCard: View {
     }
 }
 
+/// Where a remote card's tracks come from, and how to keep it.
+struct RemotePlaylist {
+    let source: CatalogPlaylist
+    let onAddToLibrary: (() async -> Void)?
+}
+
 struct PlaylistTrackListView: View {
     let playlist: Models.Playlist
+    var remote: RemotePlaylist?
     /// When true, renders as a full-screen scrolling detail (cover + tracks) instead of the card's
     /// expanded fullScreenCover content.
     var isDetail: Bool = false
@@ -73,13 +104,21 @@ struct PlaylistTrackListView: View {
     @State private var shareURL: IdentifiableURL?
     @State private var coverViewModel = PlaylistViewModel()
 
-    @Query private var tracks: [PlaylistItem]
+    @Environment(\.catalog) private var catalog
+    @Query private var savedTracks: [PlaylistItem]
+    @State private var remoteTracks: [PlaylistItem]?
 
-    init(playlist: Models.Playlist, isDetail: Bool = false) {
+    /// The saved tracks, or for a remote playlist the ones fetched when it opened.
+    private var tracks: [PlaylistItem] {
+        remote == nil ? savedTracks : remoteTracks ?? []
+    }
+
+    init(playlist: Models.Playlist, remote: RemotePlaylist? = nil, isDetail: Bool = false) {
         self.playlist = playlist
+        self.remote = remote
         self.isDetail = isDetail
         let playlistID = playlist.playlistID
-        _tracks = Query(
+        _savedTracks = Query(
             filter: #Predicate<PlaylistItem> { $0.playlistID == playlistID },
             sort: \.sortIndex
         )
@@ -117,6 +156,26 @@ struct PlaylistTrackListView: View {
                 }
             }
         }
+        .task {
+            guard let remote, remoteTracks == nil else { return }
+            let id = playlist.playlistID
+            let fetched = await catalog?.playlistTracks(youtubeBrowseID: remote.source.youtubeBrowseID) ?? []
+            remoteTracks = fetched.enumerated().map { index, track in
+                PlaylistItem(
+                    playlistID: id,
+                    sortIndex: index,
+                    sourceTrackID: track.youtubeVideoID,
+                    sourceTrackFingerprint: track.youtubeVideoID,
+                    title: track.title,
+                    artistName: track.artist,
+                    albumName: track.album,
+                    durationSeconds: track.durationSeconds,
+                    artworkURLString: track.artworkURL?.absoluteString,
+                    youtubeID: track.isMusicVideo ? track.youtubeVideoID : nil,
+                    youtubeMusicID: track.isMusicVideo ? nil : track.youtubeVideoID
+                )
+            }
+        }
         #if os(iOS)
         // `AddToPlaylistSheet` and `ShareSheet` are UIKit presentations that do not exist on
         // macOS yet. The buttons that would present them are gated to match, so macOS never
@@ -142,7 +201,11 @@ struct PlaylistTrackListView: View {
 
     private var trackList: some View {
         LazyVStack(alignment: .leading, spacing: 4) {
-            if tracks.isEmpty {
+            if remote != nil, remoteTracks == nil {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding()
+            } else if tracks.isEmpty {
                 Text("No tracks found")
                     .legibleForeground(.secondary)
                     .padding()
@@ -314,8 +377,16 @@ struct PlaylistTrackListView: View {
             }
             #endif
 
+            if let onAdd = remote?.onAddToLibrary {
+                Button {
+                    Task { await onAdd() }
+                } label: {
+                    Label("Add to Library", systemImage: "plus")
+                }
+            }
+
             // Opt-in merge: prepend the cisum "Saved" collection on top of an imported playlist.
-            if playlist.sourceProvider != .local {
+            if remote == nil, playlist.sourceProvider != .local {
                 Button {
                     let id = playlist.playlistID
                     Task { await playlistLibraryStore?.mergeSaved(into: id) }
@@ -384,6 +455,7 @@ struct PlaylistTrackListView: View {
     }
 
     private func markPlayed() {
+        guard remote == nil else { return }
         let id = playlist.playlistID
         Task { await playlistLibraryStore?.markPlaylistPlayed(playlistID: id) }
     }

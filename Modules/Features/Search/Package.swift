@@ -14,6 +14,7 @@ let package = Package(
     dependencies: [
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
+        .package(path: "../../Shared/Catalog"),
         .package(path: "../../Shared/Aesthetics"),
         .package(path: "../../Shared/Caching"),
         .package(path: "../../Shared/Networking"),
@@ -36,6 +37,7 @@ let package = Package(
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
+                .product(name: "Catalog", package: "Catalog"),
                 .product(name: "Aesthetics", package: "Aesthetics"),
                 .product(name: "Caching", package: "Caching"),
                 .product(name: "Networking", package: "Networking"),

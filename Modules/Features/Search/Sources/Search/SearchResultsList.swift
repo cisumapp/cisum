@@ -1,8 +1,10 @@
 import Aesthetics
 import Artists
+import Catalog
 import Kingfisher
 import Models
 import Player
+import Playlists
 import SwiftData
 import SwiftUI
 import Tracks
@@ -65,9 +67,12 @@ struct SearchResultsList: View {
                 case .songs:
                     songRows(songs.map(SearchSong.result))
                 case .playlists:
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 16)], spacing: 20) {
-                        ForEach(playlists) { playlistTile($0) }
+                    // One column: a PlaylistCard's stacked cover and side padding make it wider
+                    // than half a phone, so two per row overlap.
+                    LazyVStack(spacing: 8) {
+                        ForEach(playlists) { playlistCard($0) }
                     }
+                    .frame(maxWidth: .infinity)
                 }
 
                 if filter == .all, songs.isEmpty, artists.isEmpty, playlists.isEmpty {
@@ -98,8 +103,10 @@ struct SearchResultsList: View {
         searchViewModel.spotifyArtistResults.isEmpty ? searchViewModel.youtubeArtistResults : searchViewModel.spotifyArtistResults
     }
 
+    /// YouTube Music's first: those open as a `PlaylistCard` with their tracks and no import.
+    /// Spotify's only fill in when YouTube has none, so the shelf never mixes cards and tiles.
     private var playlists: [FederatedSearchItem] {
-        searchViewModel.spotifyPlaylistResults.isEmpty ? searchViewModel.youtubePlaylistResults : searchViewModel.spotifyPlaylistResults
+        searchViewModel.youtubePlaylistResults.isEmpty ? searchViewModel.spotifyPlaylistResults : searchViewModel.youtubePlaylistResults
     }
 
     /// The artist the query names, if one does — it heads the results with their songs.
@@ -180,7 +187,7 @@ struct SearchResultsList: View {
             section("Playlists", filter: .playlists) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(alignment: .top, spacing: 26) {
-                        ForEach(playlists) { playlistTile($0).frame(width: 160) }
+                        ForEach(playlists) { playlistCard($0) }
                     }
                 }
                 .scrollClipDisabled()
@@ -288,6 +295,21 @@ struct SearchResultsList: View {
                 .foregroundStyle(.primary.opacity(0.8))
                 .lineLimit(1)
                 .frame(width: 100)
+        }
+    }
+
+    /// A YouTube Music playlist is the Playlists module's own card, opening with its tracks
+    /// without importing anything. A Spotify one stays a tile: tapping imports it, which needs
+    /// the user's Spotify session.
+    @ViewBuilder
+    private func playlistCard(_ item: FederatedSearchItem) -> some View {
+        if case let .youtubePlaylist(browseID) = item.payload {
+            PlaylistCard(
+                remote: CatalogPlaylist(title: item.title, owner: item.subtitle, artworkURL: item.artworkURL, youtubeBrowseID: browseID),
+                onAddToLibrary: { onRowSelection(item) }
+            )
+        } else {
+            playlistTile(item).frame(width: 160)
         }
     }
 
