@@ -163,9 +163,11 @@ public struct ArtistView: View {
 
     // MARK: - Data
 
-    /// The wide banner from YouTube Music when there is one; the saved artwork otherwise.
+    /// The saved artwork; the Catalog's banner only for an artist with none. Never swapped once
+    /// the page is up: replacing the photo when the Catalog arrived re-cropped and reloaded the
+    /// hero in front of the user.
     private var heroURL: URL? {
-        catalogArtist?.photoURL ?? artist.artworkURLString.flatMap(URL.init(string:))
+        artist.artworkURLString.flatMap(URL.init(string:)) ?? catalogArtist?.photoURL
     }
 
     /// The saved artwork is square and already cached, so the palette comes from it first.
@@ -182,9 +184,6 @@ public struct ArtistView: View {
         // Remembered, so the next visit skips the name search.
         if artist.youtubeMusicBrowseID == nil, let browseID = page.youtubeBrowseID {
             artist.youtubeMusicBrowseID = browseID
-        }
-        if artist.artworkURLString == nil, let photo = page.photoURL {
-            artist.artworkURLString = photo.absoluteString
         }
         withAnimation(.easeOut(duration: 0.35)) {
             catalogArtist = page
