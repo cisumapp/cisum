@@ -71,6 +71,7 @@ struct PlaylistTrackListView: View {
     @State private var isRenaming = false
     @State private var renameText = ""
     @State private var shareURL: IdentifiableURL?
+    @State private var coverViewModel = PlaylistViewModel()
 
     @Query private var tracks: [PlaylistItem]
 
@@ -87,12 +88,22 @@ struct PlaylistTrackListView: View {
     var body: some View {
         Group {
             if isDetail {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
-                        coverHeader
+                GeometryReader { geo in
+                    PaletteScrollView(palette: coverViewModel.palette, heroHeight: geo.size.width) {
+                        PlaylistCover(isCardExpanded: true, viewModel: coverViewModel, playlist: playlist, showAllImages: .constant(false))
+                    } content: {
                         trackList
+                            .padding()
                     }
-                    .padding()
+                }
+                // A playlist with no artwork of its own ("Saved", most local ones) takes its
+                // colours from its first track, so the cover and the page share one palette.
+                .task(id: tracks.first?.artworkURLString) {
+                    guard playlist.artworkURLString == nil,
+                          let artwork = tracks.first?.artworkURLString,
+                          let url = URL(string: artwork)
+                    else { return }
+                    await coverViewModel.fetchPaletteIfNeeded(from: ImageColorExtractor.paletteURL(from: url))
                 }
             } else {
                 ZStack {
@@ -127,30 +138,6 @@ struct PlaylistTrackListView: View {
                 Task { await playlistLibraryStore?.renamePlaylist(playlistID: id, title: name) }
             }
         }
-    }
-
-    private var coverHeader: some View {
-        VStack(spacing: 12) {
-            ArtworkImage(url: playlist.artworkURLString.flatMap { URL(string: $0) }, size: 220)
-                .frame(width: 220, height: 220)
-                .clipShape(.rect(cornerRadius: 12))
-                .shadow(radius: 8)
-
-            VStack(spacing: 4) {
-                Text(playlist.title)
-                    .font(.title2.bold())
-                    .multilineTextAlignment(.center)
-                    .legibleForeground(.primary)
-                if let owner = playlist.ownerName, !owner.isEmpty {
-                    Text(owner)
-                        .font(.subheadline)
-                        .legibleForeground(.secondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
     }
 
     private var trackList: some View {

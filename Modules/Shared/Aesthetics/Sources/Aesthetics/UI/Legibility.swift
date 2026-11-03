@@ -18,6 +18,9 @@ public enum LegibilityRole: Sendable { case primary, secondary, accent }
 
 public extension EnvironmentValues {
     @Entry var legibilityBackground: Color = .cisumBg
+    /// The artwork's own text colours, when a screen is painted in its palette. `nil` falls
+    /// back to the brand inks.
+    @Entry var legibilityPalette: ImageColorPalette?
 }
 
 // Non-adaptive brand inks. Chosen by background luminance, NOT by system appearance.
@@ -27,28 +30,30 @@ private let cisumLightInk = Color(hex: "#F7F4EC")
 private struct LegibleForeground: ViewModifier {
     let role: LegibilityRole
     @Environment(\.legibilityBackground) private var background
+    @Environment(\.legibilityPalette) private var palette
 
     func body(content: Content) -> some View {
         content.foregroundStyle(resolved)
     }
 
     private var resolved: Color {
-        #if os(iOS)
-        // perceivedBrightness is 0–255; W3C legibility threshold is 125.
-        let backgroundIsLight = UIColor(background).perceivedBrightness > 125
+        // The palette's title and song colours, each kept only if it reads on this background.
+        if let palette {
+            switch role {
+            case .primary: return palette.title.safeTextColor(over: background)
+            case .secondary: return palette.songs.safeTextColor(over: background).opacity(0.8)
+            case .accent: return palette.dominant.safeTextColor(over: background)
+            }
+        }
+        // perceivedBrightness is 0–255; W3C legibility threshold is 125. On macOS too: the
+        // semantic colours follow the system appearance, not the surface under the text.
+        let backgroundIsLight = PlatformColor(background).perceivedBrightness > 125
         let ink = backgroundIsLight ? cisumDarkInk : cisumLightInk
         switch role {
         case .primary: return ink
         case .secondary: return ink.opacity(0.7)
         case .accent: return Color.dynamicAccent.safeTextColor(over: background)
         }
-        #else
-        switch role {
-        case .primary: return .cisumPrimaryText
-        case .secondary: return .cisumSecondaryText
-        case .accent: return .dynamicAccent
-        }
-        #endif
     }
 }
 

@@ -50,11 +50,13 @@ public struct AlbumCover: View {
                                 .font(.title)
 //                                .fontWidth(.expanded)
                                 .bold()
+                                .legibleForeground(.primary)
 
                             if let year = album.releaseDateString {
                                 Text(year)
 //                                    .fontWidth(.expanded)
                                     .fontWeight(.semibold)
+                                    .legibleForeground(.secondary)
                             }
                         }
                     }

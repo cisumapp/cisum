@@ -98,10 +98,12 @@ public struct PlaylistCover: View {
                                 .font(.title)
 //                                .fontWidth(.expanded)
                                 .bold()
+                                .legibleForeground(.primary)
 
                             Text(playlist.createdAt.formatted())
 //                                .fontWidth(.expanded)
                                 .fontWeight(.semibold)
+                                .legibleForeground(.secondary)
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)

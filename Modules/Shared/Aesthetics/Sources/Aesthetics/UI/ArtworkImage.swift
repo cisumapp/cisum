@@ -21,11 +21,25 @@ public struct ArtworkImage: View {
         #elseif os(macOS)
         let px = pointSize * (NSScreen.main?.backingScaleFactor ?? 1.0)
         #endif
-        KFImage(ArtworkURL.best(from: url))
-            .cacheOriginalImage()
-            .downsampling(size: CGSize(width: px, height: px))
-            .resizable()
-            .scaledToFill()
+        // Fills exactly the frame the caller gives and is clipped to it. A bare `scaledToFill`
+        // image spills past its frame wherever the source is not square: a YouTube video
+        // thumbnail widened the album and playlist cards it sat in.
+        Color.clear
+            .overlay {
+                KFImage(ArtworkURL.best(from: url))
+                    .cacheOriginalImage()
+                    .downsampling(size: CGSize(width: px, height: px))
+                    .resizable()
+                    .scaledToFill()
+                    // YouTube video thumbnails are 4:3 with the 16:9 picture letterboxed inside;
+                    // zooming by 4/3 puts both black bars just outside the frame.
+                    .scaleEffect(isLetterboxed ? 4 / 3 : 1)
+            }
+            .clipped()
+    }
+
+    private var isLetterboxed: Bool {
+        url?.host?.hasSuffix("ytimg.com") == true
     }
 }
 //#endif
