@@ -24,62 +24,52 @@ public struct AlbumView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            ScrollView {
-                VStack(spacing: 0) {
-                    AlbumCover(isCardExpanded: true, viewModel: viewModel, album: album)
-                        .frame(width: geo.size.width, height: geo.size.width)
-
-                    VStack(spacing: 0) {
-                        HStack(spacing: 12) {
-                            Button {
-                                playTracks(startingAt: 0)
-                            } label: {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 50)
-                                        .fill(viewModel.backgroundColor)
-
-                                    Text("Play")
-                                        .foregroundStyle(viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor))
-                                        .fontWeight(.bold)
-                                }
-                            }
+            PaletteScrollView(palette: viewModel.palette, heroHeight: geo.size.width) {
+                AlbumCover(isCardExpanded: true, viewModel: viewModel, album: album)
+            } content: {
+                HStack(spacing: 12) {
+                    Button {
+                        playTracks(startingAt: 0)
+                    } label: {
+                        Text("Play")
+                            .fontWeight(.bold)
+                            .foregroundStyle(viewModel.backgroundColor)
                             .frame(width: 160, height: 48)
-                            .buttonStyle(.plain)
-
-                            Button {
-                                playTracks(startingAt: tracks.isEmpty ? 0 : Int.random(in: 0 ..< tracks.count), shuffled: true)
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(viewModel.backgroundColor)
-
-                                    Image(systemName: "shuffle")
-                                        .foregroundStyle(viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor))
-                                        .fontWeight(.bold)
-                                }
-                            }
-                            .frame(width: 48, height: 48)
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 24)
-
-                        LazyVStack(spacing: 0) {
-                            ForEach(Array(tracks.enumerated()), id: \.element.songID) { index, track in
-                                AlbumTrackRow(index: index, track: track) {
-                                    playTracks(startingAt: index)
-                                }
-
-                                Divider()
-                                    .padding(.horizontal)
-                            }
-                        }
+                            .background(ink, in: .capsule)
                     }
-                    .background(viewModel.backgroundColor.opacity(0.1))
-                    .legibilityBackground(viewModel.backgroundColor)
+                    .buttonStyle(.plain)
+
+                    Button {
+                        playTracks(startingAt: tracks.isEmpty ? 0 : Int.random(in: 0 ..< tracks.count), shuffled: true)
+                    } label: {
+                        Image(systemName: "shuffle")
+                            .fontWeight(.bold)
+                            .foregroundStyle(ink)
+                            .frame(width: 48, height: 48)
+                            .background(ink.opacity(0.15), in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(tracks.enumerated()), id: \.element.songID) { index, track in
+                        AlbumTrackRow(index: index, track: track) {
+                            playTracks(startingAt: index)
+                        }
+                        Divider()
+                            .padding(.horizontal)
+                    }
                 }
             }
-            .ignoresSafeArea(edges: .top)
         }
+    }
+
+    /// The palette's title colour as it reads on the page: the play button's fill, the shuffle
+    /// button's glyph. Both used to fill with the page's own background, so they vanished into it.
+    private var ink: Color {
+        viewModel.titleColor.safeTextColor(over: viewModel.backgroundColor)
     }
 
     private func playTracks(startingAt index: Int, shuffled: Bool = false) {

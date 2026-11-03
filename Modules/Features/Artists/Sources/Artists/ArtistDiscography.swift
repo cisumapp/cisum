@@ -5,6 +5,7 @@
 //  Created by Aarav Gupta on 01/05/26.
 //
 
+import Aesthetics
 import Albums
 import Models
 import SwiftData
@@ -32,8 +33,12 @@ struct ArtistDiscography: View {
                         .font(.system(size: 18))
                 }
                 .bold()
+                .legibleForeground(.primary)
+                .padding(.horizontal)
                 .padding(.bottom)
 
+                // Edge to edge: each `AlbumCard` carries its own side padding, so the shelf
+                // scrolls under the screen's edge instead of clipping inside an inset.
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 0) {
                         ForEach(albums, id: \.albumID) { album in
@@ -41,8 +46,9 @@ struct ArtistDiscography: View {
                         }
                     }
                 }
+                .scrollClipDisabled()
             }
-            .padding()
+            .padding(.vertical)
         }
     }
 }

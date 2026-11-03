@@ -23,46 +23,33 @@ public struct ArtistView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            let size = geo.size
-
-            ZStack {
-                Color.cisumBg
-
-                ScrollView {
-                    ArtistArtworkHeader(
-                        artist: artist,
-                        palette: palette,
-                        size: size,
-                        onShuffle: {
-                            if !topTracks.isEmpty {
-                                playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
-                            }
-                        },
-                        onPlay: { playTracks(startingAt: 0) }
-                    )
-                    .task {
-                        if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
-                            let tinyURL = ImageColorExtractor.paletteURL(from: artworkURL)
-                            KingfisherManager.shared.retrieveImage(with: tinyURL) { result in
-                                guard case let .success(value) = result,
-                                      let data = value.image.pngData() else { return }
-
-                                Task {
-                                    let extractedPalette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: artworkURL.absoluteString)
-                                    await MainActor.run { palette = extractedPalette }
-                                }
-                            }
+            PaletteScrollView(palette: palette, heroHeight: max(260, geo.size.height * 0.56)) {
+                ArtistArtworkHeader(
+                    artist: artist,
+                    palette: palette,
+                    size: geo.size,
+                    onShuffle: {
+                        if !topTracks.isEmpty {
+                            playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
                         }
-                    }
+                    },
+                    onPlay: { playTracks(startingAt: 0) }
+                )
+            } content: {
+                ArtistTopSongs(artist: artist, onPlayTrack: { index in
+                    playTracks(startingAt: index)
+                })
 
-                    ArtistTopSongs(artist: artist, onPlayTrack: { index in
-                        playTracks(startingAt: index)
-                    })
-
-                    ArtistDiscography(artist: artist)
-                }
+                ArtistDiscography(artist: artist)
             }
-            .legibilityBackground(palette?.background ?? .cisumBg)
+        }
+        .task {
+            guard let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) else { return }
+            let tinyURL = ImageColorExtractor.paletteURL(from: artworkURL)
+            guard let value = try? await KingfisherManager.shared.retrieveImage(with: tinyURL),
+                  let data = value.image.pngData()
+            else { return }
+            palette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: artworkURL.absoluteString)
         }
         // The iOS screen owns its whole viewport. macOS already hosts this inside the split
         // view's detail column, which opts out of the safe area itself — opting out again here
@@ -98,11 +85,10 @@ private struct ArtistArtworkHeader: View {
 
     /// The canvas the artwork dissolves into.
     ///
-    /// The blend gradients below have to fade to the exact colour painted behind them, so this
-    /// is bound to the same token the screen's own background uses rather than to the extracted
-    /// palette. Fading to the palette instead leaves a visible seam where the two disagree.
+    /// The blend gradients below have to fade to the exact colour painted behind them, and the
+    /// page is painted in the palette's background (`PaletteScrollView`), so this is that colour.
     private var canvas: Color {
-        .cisumBg
+        palette?.background ?? .cisumBg
     }
 
     /// Height of the artwork panel.
@@ -223,7 +209,7 @@ private struct ArtistArtworkHeader: View {
             Text(artist.displayName)
                 .font(.largeTitle)
                 .bold()
-                .foregroundStyle(palette?.title.safeTextColor(over: canvas) ?? .white)
+                .legibleForeground(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
