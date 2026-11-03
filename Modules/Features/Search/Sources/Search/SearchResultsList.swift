@@ -92,17 +92,31 @@ struct SearchResultsList: View {
 
     // MARK: Data
 
-    /// Every song result, best first: the unified ranking, then Spotify's own list for anything it
-    /// missed.
+    /// Every song result, best first, from Spotify, Apple Music and YouTube.
     private var songs: [FederatedSearchItem] {
-        var seen = Set<String>()
-        return (searchViewModel.unifiedTopResults + searchViewModel.spotifyTrackResults)
-            .filter { seen.insert($0.id).inserted }
+        searchViewModel.unifiedTopResults
     }
 
-    /// Spotify's when signed in, otherwise YouTube Music's.
+    /// The artists the query names, then the artists of the top songs; sources pad their artist
+    /// lists with anyone popular, and those are left out. Spotify's first, then YouTube Music's,
+    /// one per name.
     private var artists: [FederatedSearchItem] {
-        searchViewModel.spotifyArtistResults.isEmpty ? searchViewModel.youtubeArtistResults : searchViewModel.spotifyArtistResults
+        let query = tokenSet(from: searchViewModel.searchText)
+        let topSongArtists = songs.prefix(3).map { normalizedRankingText($0.displayArtist) }
+        var seen = Set<String>()
+        let relevant = (searchViewModel.spotifyArtistResults + searchViewModel.youtubeArtistResults).filter { artist in
+            let name = normalizedRankingText(artist.title)
+            guard !name.isEmpty, seen.insert(name).inserted else { return false }
+            return isNamed(artist, in: query) || topSongArtists.contains { $0.contains(name) }
+        }
+        return relevant.filter { isNamed($0, in: query) } + relevant.filter { !isNamed($0, in: query) }
+    }
+
+    /// Every word of the artist's name is in the query ("anti-hero taylor swift"), or the query is
+    /// the start of their name ("kendrick").
+    private func isNamed(_ artist: FederatedSearchItem, in query: Set<String>) -> Bool {
+        let name = tokenSet(from: artist.title)
+        return share(of: name, foundIn: query) == 1 || share(of: query, foundIn: name) == 1
     }
 
     /// YouTube Music's first: those open as a `PlaylistCard` with their tracks and no import.
@@ -113,10 +127,7 @@ struct SearchResultsList: View {
 
     /// The artist the query names, if one does — it heads the results with their songs.
     private var topArtist: FederatedSearchItem? {
-        let query = normalizedRankingText(searchViewModel.searchText)
-        guard !query.isEmpty, let first = artists.first else { return nil }
-        let name = normalizedRankingText(first.title)
-        return name.contains(query) || query.contains(name) ? first : nil
+        artists.first.flatMap { isNamed($0, in: tokenSet(from: searchViewModel.searchText)) ? $0 : nil }
     }
 
     private func songs(by artist: FederatedSearchItem) -> [FederatedSearchItem] {

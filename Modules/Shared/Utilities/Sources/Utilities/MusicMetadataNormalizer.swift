@@ -53,6 +53,12 @@ public nonisolated func tokenSet(from value: String) -> Set<String> {
     Set(normalizedRankingText(value).split(separator: " ").map(String.init))
 }
 
+/// The share of `words` that some word of `text` begins with, so a word still being typed counts.
+public nonisolated func share(of words: Set<String>, foundIn text: Set<String>) -> Double {
+    guard !words.isEmpty else { return 0 }
+    return Double(words.count { word in text.contains { $0.hasPrefix(word) } }) / Double(words.count)
+}
+
 public nonisolated func tokenOverlapScore(_ lhs: String, _ rhs: String) -> Double {
     let lhsTokens = tokenSet(from: lhs)
     let rhsTokens = tokenSet(from: rhs)
