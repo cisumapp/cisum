@@ -498,6 +498,8 @@ public class SearchViewModel: SearchViewModelInterface {
         let youtubeArtistSignals: [String: Double]
         let dominantArtist: String?
         let queryHasArtistHint: Bool
+        /// Credited artists whose whole name is in the query ("anti-hero taylor swift").
+        let namedArtists: [Set<String>]
     }
 
     private nonisolated func buildUnifiedTopResults(for query: String, in sections: [FederatedSearchSection]) -> [FederatedSearchItem] {
@@ -621,8 +623,15 @@ public class SearchViewModel: SearchViewModelInterface {
             normalizedQuery: normalizedQuery,
             youtubeArtistSignals: youtubeArtistSignals,
             dominantArtist: dominantArtist,
-            queryHasArtistHint: queryHasArtistHint
+            queryHasArtistHint: queryHasArtistHint,
+            namedArtists: namedArtists(in: normalizedQuery, candidates: candidates)
         )
+    }
+
+    private nonisolated func namedArtists(in normalizedQuery: String, candidates: [FederatedSearchItem]) -> [Set<String>] {
+        let query = tokenSet(from: normalizedQuery)
+        let artists = Set(candidates.map { tokenSet(from: primaryArtistName(from: $0.subtitle)) })
+        return artists.filter { !$0.isEmpty && $0.isSubset(of: query) }
     }
 
     private nonisolated func buildYouTubeArtistSignals(from candidates: [FederatedSearchItem]) -> [String: Double] {
@@ -700,7 +709,13 @@ public class SearchViewModel: SearchViewModelInterface {
             queryHasArtistHint: context.queryHasArtistHint
         )
 
+        // The query names an artist and this result is credited to someone else: a cover or a
+        // fan upload that only mentions them in its title.
+        let itemArtist = tokenSet(from: primaryArtistName(from: item.subtitle))
+        let otherArtistPenalty = !context.namedArtists.isEmpty && !context.namedArtists.contains { $0.isSubset(of: itemArtist) } ? -0.35 : 0
+
         let totalScore = (0.68 * overlap)
+            + otherArtistPenalty
             + containsBoost
             + prefixBoost
             + providerBoost
