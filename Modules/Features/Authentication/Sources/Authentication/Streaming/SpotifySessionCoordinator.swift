@@ -391,6 +391,12 @@ public final class SpotifySessionCoordinator {
         }
     }
 
+    /// The track's Canvas video, for animated artwork; `nil` when signed out or it has none.
+    public func canvasURL(trackID: String) async -> URL? {
+        guard let rest = sdk?.restClient else { return nil }
+        return try? await rest.canvasURL(trackID: trackID)
+    }
+
     public func signOut() async {
         lastErrorMessage = nil
         let currentSession = session
@@ -485,5 +491,6 @@ public final class SpotifySessionCoordinator {
     public func completeSessionExtraction(tokens _: Any) {}
     public func failSessionExtraction(_: String) {}
     public func signOut() async {}
+    public func canvasURL(trackID _: String) async -> URL? { nil }
 }
 #endif
