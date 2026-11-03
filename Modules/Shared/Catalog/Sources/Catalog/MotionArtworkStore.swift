@@ -10,10 +10,12 @@
 import Foundation
 import iTunesKit
 import Models
+import Utilities
 
 public actor MotionArtworkStore {
-    /// Fetches a Spotify track's Canvas URL; `nil` when signed out or the track has none.
-    public typealias CanvasLookup = @Sendable (_ spotifyTrackID: String) async -> URL?
+    /// Fetches the track's Spotify Canvas URL, finding the track by name when there is no Spotify
+    /// ID; `nil` when signed out or the track has none.
+    public typealias CanvasLookup = @Sendable (MotionArtworkRequest) async -> URL?
 
     /// Kept under this; the least recently played videos go first.
     static let budget: Int64 = 300 * 1024 * 1024
@@ -92,13 +94,15 @@ public actor MotionArtworkStore {
 
     private func download(_ request: MotionArtworkRequest, key: String) async -> URL? {
         var data: Data?
-        if let trackID = request.spotifyTrackID, let canvas = await canvasLookup?(trackID) {
+        if let canvas = await canvasLookup?(request) {
             data = try? await URLSession.shared.data(from: canvas).0
+            PerfLog.info("MotionArtwork: Spotify Canvas for '\(request.title)' (\(data?.count ?? 0) bytes)")
         }
         if data == nil,
            let resolution = try? await itunes.resolveMotionArtwork(term: "\(request.album ?? request.title) \(request.artist)")
         {
             data = try? await Self.downloadHLS(resolution.sourceURL)
+            PerfLog.info("MotionArtwork: Apple Music motion artwork for '\(request.album ?? request.title)' (\(data?.count ?? 0) bytes)")
         }
 
         guard let data, !data.isEmpty else {

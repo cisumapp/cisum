@@ -45,8 +45,10 @@ public final class cisumModule {
     /// Artist pages kept on the device, refreshed overnight.
     public let artistPageStore: ArtistPageStore
     /// Spotify Canvas and Apple Music motion artwork, downloaded and kept for later plays.
-    public let motionArtworkStore = MotionArtworkStore { trackID in
-        await SpotifySessionCoordinator.shared.canvasURL(trackID: trackID)
+    public let motionArtworkStore = MotionArtworkStore { request in
+        await SpotifySessionCoordinator.shared.canvasURL(
+            trackID: request.spotifyTrackID, title: request.title, artist: request.artist
+        )
     }
 
     public var router: Router {

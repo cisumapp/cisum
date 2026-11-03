@@ -271,7 +271,9 @@ public final class PlayerViewModel: PlaybackCommands {
         if let motionArtwork {
             let request = MotionArtworkRequest(
                 title: ref.title, artist: ref.artist, album: ref.album,
-                spotifyTrackID: selected.sourceID == "spotify" ? selected.sourceTrackID : nil
+                // The requested track, not the stream: Spotify's audio always plays from another
+                // source, so the stream is never Spotify's.
+                spotifyTrackID: ref.sourceID == "spotify" ? ref.sourceTrackID : nil
             )
             Task { _ = await motionArtwork.fetch(request) }
         }

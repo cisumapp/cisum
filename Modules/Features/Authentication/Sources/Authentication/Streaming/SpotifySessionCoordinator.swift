@@ -392,9 +392,40 @@ public final class SpotifySessionCoordinator {
     }
 
     /// The track's Canvas video, for animated artwork; `nil` when signed out or it has none.
-    public func canvasURL(trackID: String) async -> URL? {
-        guard let rest = sdk?.restClient else { return nil }
-        return try? await rest.canvasURL(trackID: trackID)
+    /// Without a Spotify ID (the song came from YouTube or Apple) the track is found by name.
+    public func canvasURL(trackID: String?, title: String, artist: String) async -> URL? {
+        guard let sdk else {
+            PerfLog.info("Canvas: no Spotify session")
+            return nil
+        }
+        do {
+            var trackID = trackID
+            if trackID == nil {
+                trackID = try await spotifyTrackID(title: title, artist: artist, in: sdk)
+            }
+            guard let trackID else {
+                PerfLog.info("Canvas: '\(title)' not found on Spotify")
+                return nil
+            }
+            let url = try await sdk.pathfinder.canvasURL(trackID: trackID)
+            PerfLog.info("Canvas: \(trackID) → \(url?.absoluteString ?? "none")")
+            return url
+        } catch {
+            PerfLog.error("Canvas: '\(title)' failed: \(error)")
+            return nil
+        }
+    }
+
+    /// The Spotify track with this title by this artist: the first search hit whose title starts
+    /// the same and shares an artist, so a cover or a remix is not taken for the song.
+    private func spotifyTrackID(title: String, artist: String, in sdk: SpotifySDK) async throws -> String? {
+        let tracks = try await sdk.search.search("\(title) \(artist)", limit: 5).tracks?.items ?? []
+        let wantedTitle = title.lowercased().prefix(while: { $0 != "(" && $0 != "-" }).trimmingCharacters(in: .whitespaces)
+        let wantedArtist = artist.lowercased()
+        return tracks.first { track in
+            track.name.lowercased().hasPrefix(wantedTitle)
+                && track.artists.contains { wantedArtist.contains($0.name.lowercased()) }
+        }?.id
     }
 
     public func signOut() async {
@@ -491,6 +522,6 @@ public final class SpotifySessionCoordinator {
     public func completeSessionExtraction(tokens _: Any) {}
     public func failSessionExtraction(_: String) {}
     public func signOut() async {}
-    public func canvasURL(trackID _: String) async -> URL? { nil }
+    public func canvasURL(trackID _: String?, title _: String, artist _: String) async -> URL? { nil }
 }
 #endif
