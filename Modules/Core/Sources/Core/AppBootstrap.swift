@@ -407,8 +407,7 @@ enum AppBootstrap {
             streamingProviderSettings: streamingProviderSettings,
             centralMediaStore: centralMediaStore,
             metadataCache: metadataCache,
-            searchCache: searchCache,
-            sourceRegistry: sourceRegistry
+            searchCache: searchCache
         )
 
         let playbackServices = PlaybackServices(

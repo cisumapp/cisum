@@ -5,7 +5,7 @@ import Models
 import Networking
 import Observation
 import Player
-import ProviderSDK
+import iTunesKit
 import SwiftUI
 import Utilities
 import YouTubeSDK
@@ -17,14 +17,14 @@ import SpotifySDK
 @MainActor
 public class SearchViewModel: SearchViewModelInterface {
     private enum UnifiedTopResultsPolicy {
-        nonisolated static let limit: Int = 10
-        // All four service types participate in unified top results
+        nonisolated static let limit: Int = 25
+        // Spotify, YouTube Music, YouTube and Apple Music (the `.providerSDK` slot)
         nonisolated static let services: [FederatedService] = [.spotify, .youtubeMusic, .youtube, .providerSDK]
         nonisolated static let maxPerService: [FederatedService: Int] = [
-            .spotify: 5,
-            .youtubeMusic: 3,
-            .youtube: 3,
-            .providerSDK: 8, // Up to 8 streaming-provider tracks (SoundCloud, Tidal, Qobuz…)
+            .spotify: 10,
+            .youtubeMusic: 8,
+            .youtube: 4,
+            .providerSDK: 8,
         ]
     }
 
@@ -39,7 +39,6 @@ public class SearchViewModel: SearchViewModelInterface {
     }
 
     private let youtube: YouTube
-    private let sourceRegistry: SourceRegistry?
     private let settings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor
     private let historyStore: SearchHistoryStore
@@ -58,11 +57,8 @@ public class SearchViewModel: SearchViewModelInterface {
         streamingProviderSettings: StreamingProviderSettings,
         centralMediaStore: CentralMediaStore? = nil,
         metadataCache: any VideoMetadataCaching,
-        searchCache: any SearchResultsCaching,
-        sourceRegistry: SourceRegistry? = nil
-    ) {
+        searchCache: any SearchResultsCaching) {
         self.youtube = youtube
-        self.sourceRegistry = sourceRegistry
         self.settings = settings
         self.networkMonitor = networkMonitor
         self.historyStore = historyStore
@@ -202,11 +198,11 @@ public class SearchViewModel: SearchViewModelInterface {
         async let spotifyFetch = fetchSpotifySectionItems(query: query)
         async let ytMusicFetch = fetchYouTubeMusicSectionItems(query: query, updateUI: true)
         async let ytVideoFetch = fetchYouTubeSectionItems(query: effectiveVideoQuery, updateUI: true)
-        async let providerFetch = fetchProviderSDKSectionItems(query: query)
+        async let appleFetch = fetchAppleMusicSectionItems(query: query)
         async let ytCollectionsFetch = fetchYouTubeMusicCollections(query: query)
 
-        let (spotifyResult, ytMusicResult, ytVideoResult, providerResult, ytCollections) =
-            await (spotifyFetch, ytMusicFetch, ytVideoFetch, providerFetch, ytCollectionsFetch)
+        let (spotifyResult, ytMusicResult, ytVideoResult, appleResult, ytCollections) =
+            await (spotifyFetch, ytMusicFetch, ytVideoFetch, appleFetch, ytCollectionsFetch)
 
         // Anything past this point publishes. A superseded search must publish nothing.
         //
@@ -232,7 +228,7 @@ public class SearchViewModel: SearchViewModelInterface {
         applySpotifySearchResult(spotifyResult)
         applyFederatedSearchResult(ytMusicResult, for: .youtubeMusic)
         applyFederatedSearchResult(ytVideoResult, for: .youtube)
-        applyFederatedSearchResult(providerResult, for: .providerSDK)
+        applyFederatedSearchResult(appleResult, for: .providerSDK)
         youtubeArtistResults = ytCollections.artists
         youtubePlaylistResults = ytCollections.playlists
         refreshUnifiedResults(for: query)
@@ -363,7 +359,7 @@ public class SearchViewModel: SearchViewModelInterface {
 
             // Unify Spotify tracks into federatedSections for Unified Ranking
             if let index = federatedSections.firstIndex(where: { $0.service == .spotify }) {
-                federatedSections[index].items = Array(items.tracks.prefix(5))
+                federatedSections[index].items = Array(items.tracks.prefix(10))
                 federatedSections[index].state = .success
             }
         case .failure:
@@ -468,29 +464,13 @@ public class SearchViewModel: SearchViewModelInterface {
         for service: FederatedService
     ) {
         guard let index = federatedSections.firstIndex(where: { $0.service == service }) else { return }
-        // ProviderSDK has up to 8 candidates to give the unified ranker more signal.
-        let sectionLimit = service == .providerSDK ? 8 : 5
-
         switch result {
         case let .success(items):
-            let limited = Array(items.prefix(sectionLimit))
-            federatedSections[index].items = limited
+            federatedSections[index].items = Array(items.prefix(10))
             federatedSections[index].state = .success
-            if service == .providerSDK {
-                PerfLog.info("SearchViewModel.applyFederatedSearchResult(.providerSDK): \(limited.count) items")
-                for item in limited {
-                    if case let .providerSDK(ref) = item.payload {
-                        let reprs = ref.representations.map { "providerID=\($0.providerID) trackID=\($0.providerTrackID)" }
-                        PerfLog.info("  providerSDK result: '\(item.title)' — representations: \(reprs)")
-                    }
-                }
-            }
         case let .failure(error):
             federatedSections[index].items = []
             federatedSections[index].state = .error(error.localizedDescription)
-            if service == .providerSDK {
-                PerfLog.error("SearchViewModel.applyFederatedSearchResult(.providerSDK) FAILED: \(error)")
-            }
         }
     }
 
@@ -528,8 +508,10 @@ public class SearchViewModel: SearchViewModelInterface {
 
         let context = makeUnifiedRankingContext(for: query, candidates: candidates)
         var groupedCandidates: [String: [(item: FederatedSearchItem, score: Double)]] = [:]
+        let queryTokens = tokenSet(from: query)
 
-        for item in candidates {
+        // A result that shares no word with the query is a source padding its list, not an answer.
+        for item in candidates where share(of: queryTokens, foundIn: tokenSet(from: "\(item.title) \(item.subtitle)")) > 0 {
             let key = unifiedResultDedupKey(for: item)
             let score = unifiedResultScore(for: item, context: context)
             PerfLog.info("SearchRanking: [\(item.service.rawValue)] '\(item.title) - \(primaryArtistName(from: item.subtitle))' -> Total Score: \(String(format: "%.3f", score))")
@@ -1173,130 +1155,43 @@ public class SearchViewModel: SearchViewModelInterface {
         }
     }
 
-    // MARK: - ProviderSDK Search & Resolution
+    // MARK: - Apple Music Search
 
-    /// Fetches and maps search results from all registered ProviderSDK providers (SoundCloud,
-    /// Tidal, Qobuz, Deezer, etc.) into `FederatedSearchItem` objects with quality badges.
-    ///
-    /// The ProviderSDK's `SearchFederation` runs each registered provider in parallel and
-    /// yields deduplicated batches via an `AsyncThrowingStream`. We collect all batches,
-    /// using the C-3 fix (append not overwrite) so partial results are preserved on error.
-    private nonisolated func fetchProviderSDKSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
-        guard let sources = await MainActor.run(resultType: [any MusicSource]?.self, body: {
-            self.sourceRegistry?.sources.filter { $0.capabilities.contains(.search) }
-        }), !sources.isEmpty else {
-            PerfLog.info("SearchViewModel.fetchProviderSDKSectionItems: no sources with .search capability")
-            return .success([])
-        }
-
-        PerfLog.info("SearchViewModel.fetchProviderSDKSectionItems: searching \(sources.count) sources: \(sources.map { "\($0.id) caps=\($0.capabilities)" })")
-
-        // Fan-out lives here, in the Search feature, rather than in ProviderSDK. That is the
-        // boundary the reset draws: the SDK talks to one service at a time and returns what it
-        // said; deciding to ask several at once, and how to rank the answers, is the application's
-        // job. A source that fails is skipped so one broken plugin cannot empty the results.
-        let collected = await withTaskGroup(of: [(String, SourceTrack)].self) { group in
-            for source in sources {
-                group.addTask {
-                    do {
-                        let tracks = try await source.searchTracks(query: query, limit: 10)
-                        return tracks.map { (source.id, $0) }
-                    } catch is CancellationError {
-                        // The query was superseded. That is not the provider failing, and reporting it
-                        // as "no results" made a normal part of typing look like a provider problem.
-                        PerfLog.trace("SearchViewModel: source \(source.id) search cancelled")
-                        return []
-                    } catch {
-                        // The error's *type*, never its message: a provider error message can carry the
-                        // URL it failed on. A plugin that is enabled but not loaded is the common case
-                        // here, and `SourceBuilder` has already named it.
-                        PerfLog.info("SearchViewModel: source \(source.id) search failed (\(type(of: error)))")
-                        return []
-                    }
-                }
-            }
-
-            var all: [(String, SourceTrack)] = []
-            for await batch in group {
-                all.append(contentsOf: batch)
-            }
-            return all
-        }
-
-        guard !collected.isEmpty else { return .success([]) }
-
-        let items = collected.prefix(10).map { sourceID, track -> FederatedSearchItem in
-            let subtitle = track.album.map { "\(track.artist) • \($0)" } ?? track.artist
-            let (qualityLabel, codecLabel) = qualityBadge(for: track)
-
-            return FederatedSearchItem(
-                id: "pdk-\(sourceID)-\(track.id)",
-                title: track.title,
-                subtitle: subtitle,
-                artworkURL: track.artworkURL,
-                durationSeconds: track.durationSeconds,
-                isPlayable: true,
-                isExplicit: track.isExplicit ?? false,
-                audioQualityLabel: qualityLabel,
-                audioCodecLabel: codecLabel,
-                payload: .providerSDK(
-                    ProviderMediaRef(
-                        canonicalID: track.id,
-                        title: track.title,
-                        artist: track.artist,
-                        album: track.album,
-                        artworkURL: track.artworkURL,
-                        durationSeconds: track.durationSeconds,
-                        representations: [
-                            MediaRepresentation(
-                                providerID: sourceID,
-                                providerTrackID: track.id,
-                                title: track.title,
-                                artist: track.artist,
-                                album: track.album,
-                                durationSeconds: track.durationSeconds,
-                                isrc: track.isrc,
-                                artworkURL: track.artworkURL
-                            ),
-                        ]
-                    )
+    /// Apple Music's catalogue, through the public iTunes Search API: no account needed, and the
+    /// songs only Apple lists. They play by matching title and artist, like Spotify's.
+    private nonisolated func fetchAppleMusicSectionItems(query: String) async -> Result<[FederatedSearchItem], Error> {
+        do {
+            let results = try await SearchService().search(term: query, media: "music", entity: "song", limit: 10).results
+            return .success(results.compactMap { result in
+                guard let trackID = result.trackId.map(String.init), let title = result.trackName else { return nil }
+                let artist = result.artistName ?? ""
+                let artwork = result.artworkUrl100.flatMap { URL(string: $0.replacingOccurrences(of: "100x100bb", with: "600x600bb")) }
+                let duration = result.trackTimeMillis.map { TimeInterval($0) / 1000 }
+                let representation = MediaRepresentation(
+                    providerID: "apple_music", providerTrackID: trackID, title: title, artist: artist,
+                    album: result.collectionName, durationSeconds: duration, isrc: nil, artworkURL: artwork
                 )
-            )
+                return FederatedSearchItem(
+                    id: "apple-\(trackID)",
+                    title: title,
+                    subtitle: result.collectionName.map { "\(artist) • \($0)" } ?? artist,
+                    artworkURL: artwork,
+                    durationSeconds: duration,
+                    isPlayable: true,
+                    isExplicit: result.trackExplicitness == "explicit",
+                    audioQualityLabel: nil,
+                    audioCodecLabel: nil,
+                    payload: .providerSDK(ProviderMediaRef(
+                        canonicalID: trackID, title: title, artist: artist, album: result.collectionName,
+                        artworkURL: artwork, durationSeconds: duration, representations: [representation]
+                    ))
+                )
+            })
+        } catch {
+            return .failure(error)
         }
-
-        return .success(Array(items))
     }
 
-    /// Derives a quality badge for a ProviderSDK `Track` based on the representations
-    /// it carries from its source provider.
-    ///
-    /// Returns `(qualityLabel, codecLabel)` — e.g. `("Hi-Res", "FLAC")`.
-    /// A coarse display badge for a search result.
-    ///
-    /// Derived from the provider's own quality string, which is **display text with no shared
-    /// vocabulary** — the same tier appears as "FLAC 16-bit / 44.1 kHz", "LOSSLESS", "320kbps",
-    /// and "DOLBY ATMOS" depending on who answered. So this does prefix matching for a badge and
-    /// nothing more. Actual playback quality decisions use SourceStream's structured fields; see
-    /// StreamSelector.
-    private nonisolated func qualityBadge(for track: SourceTrack) -> (String, String) {
-        guard let label = track.audioQualityLabel?.uppercased() else {
-            return ("Standard", "MP3")
-        }
-
-        if label.contains("HI-RES") || label.contains("24-BIT") || label.contains("96") {
-            return ("Hi-Res", "FLAC")
-        }
-        if label.contains("FLAC") || label.contains("LOSSLESS") || label.contains("ALAC") {
-            return ("Lossless", "FLAC")
-        }
-        if label.contains("320") || label.contains("HIGH") {
-            return ("High", "AAC")
-        }
-        return ("Standard", "MP3")
-    }
-
-    /// Resolves a ProviderSDK `Track` directly to a playable `ExternalStreamPayload`
-    /// without going through the YouTube fallback chain.
     /// Result type carrying all three Spotify visible sections
     public struct SpotifySearchItems {
         let tracks: [FederatedSearchItem]
