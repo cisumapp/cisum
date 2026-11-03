@@ -737,6 +737,8 @@ public struct RootView: View {
                         scrollPhase = newPhase
                     }
                 }
+                // Cards open over the tab's content but under the tab bar and its accessory.
+                .universalOverlayHost(id: "\(tab)")
         }
     }
     #else
