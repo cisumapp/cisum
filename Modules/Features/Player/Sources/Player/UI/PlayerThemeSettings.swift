@@ -53,8 +53,8 @@ enum PlayerThemeRenderer {
         collapsedHeight: CGFloat
     ) -> some View {
         switch id {
-        case .default:
-            DefaultPlayerTheme().background(
+        case .default, .animatedArtwork:
+            DefaultPlayerTheme(showsMotionArtwork: id == .animatedArtwork).background(
                 expanded: expanded,
                 fullyExpanded: fullyExpanded,
                 collapsedHeight: collapsedHeight
@@ -69,7 +69,7 @@ enum PlayerThemeRenderer {
         namespace: Namespace.ID
     ) -> some View {
         switch id {
-        case .default:
+        case .default, .animatedArtwork:
             DefaultPlayerTheme().miniPlayer(expanded: expanded, namespace: namespace)
         }
     }
@@ -82,7 +82,7 @@ enum PlayerThemeRenderer {
         namespace: Namespace.ID
     ) -> some View {
         switch id {
-        case .default:
+        case .default, .animatedArtwork:
             DefaultPlayerTheme().expanded(expanded: expanded, size: size, namespace: namespace)
         }
     }

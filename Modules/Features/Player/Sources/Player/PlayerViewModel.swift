@@ -93,7 +93,7 @@ public final class PlayerViewModel: PlaybackCommands {
         wireEngineCallbacks()
         followAudioSettings()
 
-        let center = NowPlayingCenter(commands: self)
+        let center = NowPlayingCenter(commands: self, nowPlaying: nowPlaying, transport: transport, progress: progress)
         center.registerCommands()
         self.nowPlayingCenter = center
     }
@@ -275,7 +275,13 @@ public final class PlayerViewModel: PlaybackCommands {
                 // source, so the stream is never Spotify's.
                 spotifyTrackID: ref.sourceID == "spotify" ? ref.sourceTrackID : nil
             )
-            Task { _ = await motionArtwork.fetch(request) }
+            // The lock screen and Control Centre loop it too, once it is on the device.
+            nowPlayingCenter?.setMotionVideo(motionArtwork.cachedVideo(request), for: ref)
+            Task { [weak self] in
+                if let video = await motionArtwork.fetch(request) {
+                    self?.nowPlayingCenter?.setMotionVideo(video, for: ref)
+                }
+            }
         }
     }
 
@@ -752,18 +758,10 @@ public final class PlayerViewModel: PlaybackCommands {
     private func updateSkipAvailability() {
         transport.canSkipForward = queue.canSkipForward
         transport.canSkipBackward = queue.canSkipBackward
-        nowPlayingCenter?.updateAvailability(
-            canSkipForward: queue.canSkipForward,
-            canSkipBackward: queue.canSkipBackward
-        )
     }
 
+    /// The lock screen follows the state on its own (`NowPlayingCenter`); this tells the app.
     private func publishNowPlaying() {
-        nowPlayingCenter?.update(
-            nowPlaying: nowPlaying,
-            transport: transport,
-            currentTime: progress.currentTime
-        )
         onNowPlayingChange?()
     }
 }

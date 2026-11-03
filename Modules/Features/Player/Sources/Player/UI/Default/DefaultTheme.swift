@@ -11,8 +11,17 @@ import SwiftUI
 /// This theme is a thin wrapper. Every view it returns already existed and is unchanged — the
 /// theme only names them, which is what makes the protocol trustworthy: if wrapping the existing
 /// player had required editing it, the boundary would have been in the wrong place.
+///
+/// The Animated Artwork theme is this one with the looping video in the record's place: the
+/// controls, queue and lyrics are the same, only the background differs.
 public struct DefaultPlayerTheme: PlayerTheme {
+    var showsMotionArtwork = false
+
     public init() {}
+
+    init(showsMotionArtwork: Bool) {
+        self.showsMotionArtwork = showsMotionArtwork
+    }
 
     public func background(
         expanded: Bool,
@@ -22,7 +31,8 @@ public struct DefaultPlayerTheme: PlayerTheme {
         PlayerBackground(
             isPlayerExpanded: expanded,
             isFullExpanded: fullyExpanded,
-            collapsedHeight: collapsedHeight
+            collapsedHeight: collapsedHeight,
+            showsMotionArtwork: showsMotionArtwork
         )
     }
 
