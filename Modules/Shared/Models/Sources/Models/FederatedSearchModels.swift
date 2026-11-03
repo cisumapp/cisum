@@ -96,6 +96,10 @@ public enum FederatedSearchPayload: Sendable {
     case spotify(SpotifySearchTrack)
     case spotifyArtist(SpotifySearchArtist)
     case spotifyPlaylist(SpotifySearchPlaylist)
+    /// A YouTube Music artist; the item's title and artwork carry the rest.
+    case youtubeArtist(browseID: String)
+    /// A YouTube Music playlist, by its browse ID (`VL…`), which the YouTube importer accepts.
+    case youtubePlaylist(browseID: String)
     /// A track resolved from one of the ProviderSDK providers (SoundCloud, Tidal, Qobuz, Deezer, etc.).
     case providerSDK(ProviderMediaRef)
 }
@@ -151,6 +155,8 @@ public struct FederatedSearchItem: Identifiable, Sendable {
             ref.isMusic ? .youtubeMusic : .youtube
         case .spotify, .spotifyArtist, .spotifyPlaylist:
             .spotify
+        case .youtubeArtist, .youtubePlaylist:
+            .youtubeMusic
         case .providerSDK:
             .providerSDK
         }

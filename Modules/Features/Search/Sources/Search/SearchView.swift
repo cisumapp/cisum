@@ -186,6 +186,14 @@ public struct SearchView: View {
                 await handleSpotifyPlaylistTap(playlist)
             }
 
+        case let .youtubeArtist(browseID):
+            navigateToYouTubeArtist(browseID: browseID, name: item.title, artworkURL: item.artworkURL)
+
+        case let .youtubePlaylist(browseID):
+            Task {
+                await openYouTubePlaylist(ImportablePlaylistRef(id: browseID, title: item.title))
+            }
+
         case .providerSDK:
             // ProviderSDK tracks resolve via the same external stream path as Spotify.
             PerfLog.info("SearchView: providerSDK tap — creating playableRef")
@@ -268,6 +276,42 @@ public struct SearchView: View {
         #endif
     }
 
+    /// Opens a YouTube Music playlist: the saved copy if it was imported before, else imports it first.
+    private func openYouTubePlaylist(_ ref: ImportablePlaylistRef) async {
+        guard let playlistLibraryStore, let importDownloadManager else { return }
+        if let existing = await playlistLibraryStore.playlistSnapshot(sourceProvider: .youtube, sourcePlaylistID: ref.id) {
+            router.navigate(to: .playlist(id: existing.playlistID))
+            return
+        }
+
+        viewModel.isImportingSpotifyPlaylistID = ref.id
+        defer { viewModel.isImportingSpotifyPlaylistID = nil }
+
+        if let playlistID = await importDownloadManager.importAndWait(provider: .youtube, playlistRef: ref) {
+            router.navigate(to: .playlist(id: playlistID))
+        } else {
+            viewModel.actionAlertMessage = "Couldn't import \(ref.title)."
+            viewModel.showActionAlert = true
+        }
+    }
+
+    /// Opens the artist page for a YouTube Music artist, adding the artist the first time.
+    private func navigateToYouTubeArtist(browseID: String, name: String, artworkURL: URL?) {
+        let descriptor = FetchDescriptor<Artist>(predicate: #Predicate<Artist> { $0.youtubeMusicBrowseID == browseID })
+        if let artist = (try? modelContext.fetch(descriptor))?.first {
+            router.navigate(to: .artist(id: artist.artistID))
+            return
+        }
+        let artist = Artist(
+            displayName: name,
+            normalizedName: name.lowercased(),
+            artworkURLString: artworkURL?.absoluteString,
+            youtubeMusicBrowseID: browseID
+        )
+        modelContext.insert(artist)
+        router.navigate(to: .artist(id: artist.artistID))
+    }
+
     private func searchSongs(for artist: SpotifySearchArtist) {
         searchViewModel.searchScope = .music
         searchViewModel.searchText = artist.name
@@ -310,7 +354,10 @@ public struct SearchView: View {
     }
 
     private func playlistID(for item: FederatedSearchItem) -> String? {
-        guard case let .spotifyPlaylist(playlist) = item.payload else { return nil }
-        return playlist.id
+        switch item.payload {
+        case let .spotifyPlaylist(playlist): playlist.id
+        case let .youtubePlaylist(browseID): browseID
+        default: nil
+        }
     }
 }

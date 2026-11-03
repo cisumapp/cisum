@@ -26,6 +26,7 @@ let package = Package(
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/SpotifySDK"),
         .package(path: "../Tracks"),
+        .package(path: "../Artists"),
         .package(path: "../Plugins"),
     ],
     targets: [
@@ -46,6 +47,7 @@ let package = Package(
                 .product(name: "Kingfisher", package: "Kingfisher"),
                 .product(name: "SpotifySDK", package: "SpotifySDK"),
                 .product(name: "Tracks", package: "Tracks"),
+                .product(name: "Artists", package: "Artists"),
                 .product(name: "Plugins", package: "Plugins"),
             ]
         ),

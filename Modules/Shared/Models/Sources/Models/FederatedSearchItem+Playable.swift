@@ -54,7 +54,7 @@ public extension FederatedSearchItem {
                 )
             }
 
-        case .spotifyArtist, .spotifyPlaylist:
+        case .spotifyArtist, .spotifyPlaylist, .youtubeArtist, .youtubePlaylist:
             nil
         }
     }

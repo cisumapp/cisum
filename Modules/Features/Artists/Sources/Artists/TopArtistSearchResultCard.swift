@@ -9,16 +9,27 @@
 import Kingfisher
 import SwiftUI
 
-struct TopArtistSearchResultCard: View {
-    let artistName = "Kendrick Lamar"
-    let artistImageURL: URL
-    let width: CGFloat
+/// The artist a search names: their photo with the name over it and a row of their covers.
+public struct TopArtistSearchResultCard: View {
+    let artistName: String
+    let artistImageURL: URL?
+    /// Covers along the bottom; up to five are shown.
+    let previewArtworkURLs: [URL?]
 
-    var body: some View {
-        KFImage(artistImageURL)
-            .resizable()
-            .scaledToFill()
-            .frame(width: width, height: width * 6 / 7)
+    public init(artistName: String, artistImageURL: URL?, previewArtworkURLs: [URL?]) {
+        self.artistName = artistName
+        self.artistImageURL = artistImageURL
+        self.previewArtworkURLs = previewArtworkURLs
+    }
+
+    public var body: some View {
+        Color.gray.opacity(0.3)
+            .aspectRatio(7 / 6, contentMode: .fit)
+            .overlay {
+                KFImage(artistImageURL)
+                    .resizable()
+                    .scaledToFill()
+            }
             .overlay {
                 ZStack {
                     LinearGradient(
@@ -31,13 +42,15 @@ struct TopArtistSearchResultCard: View {
                         Text(artistName)
                             .font(.largeTitle)
                             .fontWeight(.semibold)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
                         HStack {
-                            ForEach(0 ..< 5, id: \.self) { _ in
-                                ArtistResultAlbumPreview()
+                            ForEach(Array(previewArtworkURLs.prefix(5).enumerated()), id: \.offset) { _, url in
+                                ArtistResultAlbumPreview(artworkURL: url)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(12)
                 }
@@ -47,13 +60,18 @@ struct TopArtistSearchResultCard: View {
 }
 
 struct ArtistResultAlbumPreview: View {
-//    var albumName: String
-//    var albumCover: URL
+    let artworkURL: URL?
 
     var body: some View {
         RoundedRectangle(cornerRadius: 12)
             .fill(.gray)
             .frame(width: 70, height: 70)
+            .overlay {
+                KFImage(artworkURL)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipShape(.rect(cornerRadius: 12))
     }
 }
 
@@ -61,18 +79,8 @@ struct ArtistResultAlbumPreview: View {
     let url = URL(string: "https://yt3.googleusercontent.com/_c4JMCiDeaC2RRfShXddOuIV_A7oCL4m1R6-YK-3TDlsYgNQTXwxV0f-TTJrsO1StMt07qW3O6XNPSNt=w544-h544-l90-rj")!
 
     ScrollView {
-        LazyVStack {
-            GeometryReader { geo in
-                let width = geo.size.width - 32
-
-                TopArtistSearchResultCard(
-                    artistImageURL: url,
-                    width: width
-                )
-                .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .frame(height: (UIScreen.main.bounds.width - 32) * 6 / 7)
-        }
+        TopArtistSearchResultCard(artistName: "Kendrick Lamar", artistImageURL: url, previewArtworkURLs: Array(repeating: nil, count: 5))
+            .padding(16)
     }
 }
 #endif
