@@ -19,6 +19,10 @@ public struct ArtistView: View {
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Environment(PlayerPresentationController.self) private var playerPresentationController
     @Environment(\.catalog) private var catalog
+    @Environment(\.artistPageStore) private var pageStore
+    /// The hero photo, chosen once when the page opens and kept for the visit, so it never
+    /// re-crops or reloads in front of the user, and the palette is always read from it.
+    @State private var heroURL: URL?
     @Environment(\.modelContext) private var modelContext
     @Environment(\.router) private var router
     /// The artist's page from the Catalog; `nil` until it arrives.
@@ -31,6 +35,7 @@ public struct ArtistView: View {
         self.artist = artist
         let artistID = artist.artistID
         _topTracks = Query(filter: #Predicate<Song> { $0.primaryArtistID == artistID })
+        _heroURL = State(initialValue: (artist.bannerURLString ?? artist.artworkURLString).flatMap(URL.init(string:)))
     }
 
     public var body: some View {
@@ -64,13 +69,14 @@ public struct ArtistView: View {
         .task(id: artist.artistID) {
             await loadCatalog()
         }
-        .task(id: paletteSource) {
-            guard let paletteSource else { return }
-            let tinyURL = ImageColorExtractor.paletteURL(from: paletteSource)
+        .task(id: heroURL) {
+            // From the photo on screen, so the page's colours always belong to it.
+            guard let heroURL else { return }
+            let tinyURL = ImageColorExtractor.paletteURL(from: heroURL)
             guard let value = try? await KingfisherManager.shared.retrieveImage(with: tinyURL),
                   let data = value.image.pngData()
             else { return }
-            palette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: paletteSource.absoluteString)
+            palette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: heroURL.absoluteString)
         }
         // The iOS screen owns its whole viewport. macOS already hosts this inside the split
         // view's detail column, which opts out of the safe area itself — opting out again here
@@ -163,28 +169,21 @@ public struct ArtistView: View {
 
     // MARK: - Data
 
-    /// The saved artwork; the Catalog's banner only for an artist with none. Never swapped once
-    /// the page is up: replacing the photo when the Catalog arrived re-cropped and reloaded the
-    /// hero in front of the user.
-    private var heroURL: URL? {
-        artist.artworkURLString.flatMap(URL.init(string:)) ?? catalogArtist?.photoURL
-    }
-
-    /// The saved artwork is square and already cached, so the palette comes from it first.
-    private var paletteSource: URL? {
-        artist.artworkURLString.flatMap(URL.init(string:)) ?? catalogArtist?.photoURL
-    }
-
+    /// The page saved on the device opens at once; it is fetched again only when it has gone
+    /// stale, and the overnight refresh usually does that first.
     private func loadCatalog() async {
-        guard let catalog else {
+        guard let pageStore else {
             isLoadingCatalog = false
             return
         }
-        let page = await catalog.artist(named: artist.displayName, youtubeBrowseID: artist.youtubeMusicBrowseID)
-        // Remembered, so the next visit skips the name search.
-        if artist.youtubeMusicBrowseID == nil, let browseID = page.youtubeBrowseID {
-            artist.youtubeMusicBrowseID = browseID
+        if let saved = pageStore.savedPage(for: artist) {
+            catalogArtist = saved
+            isLoadingCatalog = false
+            guard pageStore.isStale(artist) else { return }
         }
+        let page = await pageStore.refresh(artist)
+        // An artist with no photo at all takes the banner now; otherwise it is the next visit's.
+        if heroURL == nil { heroURL = page.photoURL }
         withAnimation(.easeOut(duration: 0.35)) {
             catalogArtist = page
             isLoadingCatalog = false
