@@ -50,7 +50,10 @@ public struct CardOpenTransition<Hero: View, Content: View>: View {
             sourceRect = newValue
         })
         #if os(iOS)
-        .universalOverlay(show: $showFullScreenCover) {
+        // Under the tab bar and its accessory, and added and removed in one frame: the cover
+        // animates its own open and close, and an overlay fade on top of that left a
+        // full-screen copy lingering over the card after it had closed.
+        .universalOverlay(animation: nil, layer: .tab, show: $showFullScreenCover) {
             TransitionFullScreenCover(
                 config: config,
                 backgroundColor: backgroundColor,
@@ -75,6 +78,7 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
     @ViewBuilder var content: (_ safeArea: EdgeInsets, _ dismiss: @escaping () -> Void) -> Content
 
     @State private var animateContents: Bool = false
+    @State private var isDismissing = false
     @State private var dragScale: CGFloat = 1
     @State private var safeArea: EdgeInsets = .init()
 
@@ -109,7 +113,10 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
                     }
                     .zIndex(1000)
 
+                // Faded with the expansion: while the card collapses, the list under the hero
+                // otherwise shows through the shrinking mask wherever the cover is not opaque.
                 content(safeArea, dismiss)
+                    .opacity(animateContents ? 1 : 0)
             }
         }
         .background {
@@ -143,6 +150,9 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
                     y: animateContents ? safeArea.top : sourceRect.minY
                 )
         }
+        // The cover is drawn by an overlay host, outside the card's own environment, so the
+        // surface under its text is declared here: the card's colour.
+        .legibilityBackground(backgroundColor ?? .cisumBg)
         .scaleEffect(dragScale)
         .scaleEffect(buttonScale)
         .ignoresSafeArea()
@@ -216,8 +226,15 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
     }
     #endif
 
+    /// Collapses the card back into its source, then removes the cover.
+    ///
+    /// `.logicallyComplete` rather than `.removed`: a spring's last imperceptible wobble can run
+    /// for a long time after it has visibly landed, and until then the full-screen cover stayed
+    /// on top, invisible and swallowing taps. A second dismiss while one runs is ignored.
     private func dismiss() {
-        withAnimation(config.animation, completionCriteria: .removed) {
+        guard !isDismissing else { return }
+        isDismissing = true
+        withAnimation(config.animation, completionCriteria: .logicallyComplete) {
             dragScale = 1
             animateContents = false
         } completion: {

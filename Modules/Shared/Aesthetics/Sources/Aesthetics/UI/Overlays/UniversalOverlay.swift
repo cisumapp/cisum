@@ -21,16 +21,42 @@ public extension EnvironmentValues {
     @Entry var playerOverlayState: PlayerOverlayState = .init()
 }
 
+/// Where a universal overlay is drawn.
+public enum UniversalOverlayLayer: Sendable {
+    /// The overlay window, above everything in the app: the tab bar, its accessory, alerts.
+    case window
+    /// Over the current tab's content, inside the main window, so the system tab bar and its
+    /// accessory stay on top. Needs a `universalOverlayHost(id:)` around the tab; without one it
+    /// falls back to `.window`.
+    case tab
+}
+
+public extension EnvironmentValues {
+    /// The tab host an overlay with `layer: .tab` is drawn into.
+    @Entry var universalOverlayHostID: String?
+}
+
 #if os(iOS)
 public extension View {
+    /// - Parameters:
+    ///   - animation: animates adding and removing the overlay; `nil` adds and removes it in
+    ///     one frame, for content that animates its own appearance.
+    ///   - layer: `.window` (above everything) or `.tab` (under the tab bar).
     func universalOverlay(
-        animation: Animation = .easeInOut,
+        animation: Animation? = .easeInOut,
+        layer: UniversalOverlayLayer = .window,
         show: Binding<Bool>,
         @ViewBuilder content: @escaping () -> some View
     ) -> some View {
         modifier(
-            UniversalOverlayModifier(animation: animation, show: show, viewContent: content)
+            UniversalOverlayModifier(animation: animation, layer: layer, show: show, viewContent: content)
         )
+    }
+
+    /// Draws the `layer: .tab` overlays opened inside this view, on top of it. Each tab gets its
+    /// own host, so an overlay is drawn once, in the tab that opened it.
+    func universalOverlayHost(id: String) -> some View {
+        modifier(UniversalOverlayHost(id: id))
     }
 }
 
@@ -108,15 +134,19 @@ class UniversalOverlayProperties {
     struct OverlayView: Identifiable {
         var id: String = UUID().uuidString
         var view: AnyView
+        /// The tab host that draws it; `nil` for the overlay window.
+        var hostID: String?
     }
 }
 
 private struct UniversalOverlayModifier<ViewContent: View>: ViewModifier {
-    var animation: Animation
+    var animation: Animation?
+    var layer: UniversalOverlayLayer
     @Binding var show: Bool
     @ViewBuilder var viewContent: ViewContent
     /// Local View Properties
     @Environment(UniversalOverlayProperties.self) private var properties
+    @Environment(\.universalOverlayHostID) private var hostID
     @State private var viewID: String = UUID().uuidString
 
     func body(content: Content) -> some View {
@@ -149,25 +179,32 @@ private struct UniversalOverlayModifier<ViewContent: View>: ViewModifier {
         guard properties.window != nil else { return }
         guard !properties.views.contains(where: { $0.id == viewID }) else { return }
 
-        withAnimation(animation) {
-            properties.views.append(
-                .init(
-                    id: viewID,
-                    view: .init(
-                        viewContent
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .ignoresSafeArea()
-                    )
-                )
-            )
-        }
+        let view = UniversalOverlayProperties.OverlayView(
+            id: viewID,
+            view: .init(
+                viewContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea()
+            ),
+            hostID: layer == .tab ? hostID : nil
+        )
+        animate { properties.views.append(view) }
     }
 
     private func removeView() {
         guard properties.views.contains(where: { $0.id == viewID }) else { return }
+        animate { properties.views.removeAll(where: { $0.id == viewID }) }
+    }
 
-        withAnimation(animation) {
-            properties.views.removeAll(where: { $0.id == viewID })
+    /// With no animation the change is made in a transaction that disables animations, so a
+    /// caller's own animation cannot leak in and fade the overlay out after it already closed.
+    private func animate(_ change: () -> Void) {
+        if let animation {
+            withAnimation(animation, change)
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction, change)
         }
     }
 }
@@ -177,12 +214,30 @@ private struct UniversalOverlayViews: View {
 
     var body: some View {
         ZStack {
-            ForEach(properties.views) {
+            ForEach(properties.views.filter { $0.hostID == nil }) {
                 $0.view
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
+    }
+}
+
+private struct UniversalOverlayHost: ViewModifier {
+    let id: String
+    @Environment(UniversalOverlayProperties.self) private var properties
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.universalOverlayHostID, id)
+            .overlay {
+                ZStack {
+                    ForEach(properties.views.filter { $0.hostID == id }) {
+                        $0.view
+                    }
+                }
+                .ignoresSafeArea()
+            }
     }
 }
 
@@ -221,10 +276,15 @@ private class PassThroughWindow: UIWindow {
 #else
 public extension View {
     func universalOverlay(
-        animation _: Animation = .easeInOut,
+        animation _: Animation? = .easeInOut,
+        layer _: UniversalOverlayLayer = .window,
         show _: Binding<Bool>,
         @ViewBuilder content _: @escaping () -> some View
     ) -> some View {
+        self
+    }
+
+    func universalOverlayHost(id _: String) -> some View {
         self
     }
 }
