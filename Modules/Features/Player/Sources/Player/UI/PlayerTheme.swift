@@ -51,6 +51,8 @@ public protocol PlayerTheme: Sendable {
 public enum PlayerThemeID: String, CaseIterable, Sendable, Identifiable {
     /// cisum's own look — the spinning vinyl.
     case `default`
+    /// The album's Spotify Canvas or Apple Music motion artwork, filling the player.
+    case animatedArtwork
 
     // Adding a theme is three steps and nothing else:
     //
@@ -71,12 +73,14 @@ public enum PlayerThemeID: String, CaseIterable, Sendable, Identifiable {
     public var displayName: String {
         switch self {
         case .default: "Vinyl"
+        case .animatedArtwork: "Animated Artwork"
         }
     }
 
     public var summary: String {
         switch self {
         case .default: "A spinning record with the queue either side."
+        case .animatedArtwork: "The song's Spotify Canvas or Apple Music motion artwork behind the controls, or its cover when it has none."
         }
     }
 }

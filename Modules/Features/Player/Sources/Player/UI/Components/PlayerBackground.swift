@@ -26,6 +26,8 @@ struct PlayerBackground: View {
     /// radius so the background matches whatever the caller collapses to —
     /// the measured platter height on iOS 26, the island height on iOS 17/18.
     var collapsedHeight: CGFloat = Utilities.AppConstants.dynamicPlayerIslandHeight
+    /// The Animated Artwork theme: the looping video instead of the record.
+    var showsMotionArtwork = false
 
     var body: some View {
         ZStack {
@@ -41,11 +43,18 @@ struct PlayerBackground: View {
                                 .scaleEffect(1.1)
                                 .blur(radius: 10)
 
-                            // Animated artwork, when the album has one, in the record's place
-                            // and under the same dimming, so the controls read the same.
-                            if let motionVideo, isPlayerExpanded {
-                                LoopingVideo(url: motionVideo)
-                                    .transition(.opacity)
+                            // The Animated Artwork theme: the video, or the cover until there is
+                            // one, under the same dimming as the record so the controls read
+                            // the same.
+                            if showsMotionArtwork {
+                                if let motionVideo, isPlayerExpanded {
+                                    LoopingVideo(url: motionVideo)
+                                        .transition(.opacity)
+                                } else {
+                                    ArtworkImage(url: playerViewModel.currentImageURL, size: 600)
+                                        .scaledToFill()
+                                        .transition(.opacity)
+                                }
                             } else {
                             Aesthetics.Vinyl(
                                 isPlaying: playerViewModel.isPlaying,
@@ -100,8 +109,8 @@ struct PlayerBackground: View {
         .frame(height: isPlayerExpanded ? nil : collapsedHeight)
         // Every played track's album is fetched once and kept, and the next track's is fetched
         // ahead, so the video is usually waiting when the song starts.
-        .task(id: motionRequest) {
-            guard let motionArtwork, let motionRequest else {
+        .task(id: showsMotionArtwork ? motionRequest : nil) {
+            guard showsMotionArtwork, let motionArtwork, let motionRequest else {
                 motionVideo = nil
                 return
             }
