@@ -120,21 +120,29 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
             }
         }
         .background {
-            if let backgroundColor {
-                backgroundColor
-            } else {
-                Color.clear.background(.background)
+            Group {
+                if let backgroundColor {
+                    backgroundColor
+                } else {
+                    Color.clear.background(.background)
+                }
             }
+            // Faded with the collapse, so the mask's margin below never shows as a border.
+            .opacity(animateContents ? 1 : 0)
         }
+        // Collapsed, the mask keeps a margin around the card: a hero can draw past its own
+        // frame (the playlist cover's rotated stack of rectangles), and a mask cut to the card
+        // clipped them away mid-close, so they popped back in only once the card was idle.
         .mask(alignment: .topLeading) {
+            let bleed = animateContents ? 0 : sourceRect.width * 0.3
             RoundedRectangle(cornerRadius: cornerRadius - 1, style: .circular)
                 .frame(
-                    width: animateContents ? nil : sourceRect.width,
-                    height: animateContents ? nil : sourceRect.height
+                    width: animateContents ? nil : sourceRect.width + bleed * 2,
+                    height: animateContents ? nil : sourceRect.height + bleed * 2
                 )
                 .offset(
-                    x: animateContents ? 0 : sourceRect.minX,
-                    y: animateContents ? 0 : sourceRect.minY
+                    x: animateContents ? 0 : sourceRect.minX - bleed,
+                    y: animateContents ? 0 : sourceRect.minY - bleed
                 )
         }
         .overlay(alignment: .topLeading) {

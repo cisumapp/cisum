@@ -9,6 +9,8 @@ import YouTubeSDK
 public struct ArtistView: View {
     let artist: Artist
     @State private var palette: ImageColorPalette?
+    /// The title row has scrolled under the toolbar, so its buttons are shown there instead.
+    @State private var isTitleRowHidden = false
     @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Environment(PlayerPresentationController.self) private var playerPresentationController
@@ -23,24 +25,34 @@ public struct ArtistView: View {
 
     public var body: some View {
         GeometryReader { geo in
-            PaletteScrollView(palette: palette, heroHeight: max(260, geo.size.height * 0.56)) {
-                ArtistArtworkHeader(
-                    artist: artist,
-                    palette: palette,
-                    size: geo.size,
-                    onShuffle: {
-                        if !topTracks.isEmpty {
-                            playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
-                        }
-                    },
-                    onPlay: { playTracks(startingAt: 0) }
-                )
+            let heroHeight = max(260, geo.size.height * 0.56)
+            // The title row sits 80pt up into the hero; its buttons hand over to the toolbar as
+            // the row reaches it.
+            PaletteScrollView(
+                palette: palette,
+                heroHeight: heroHeight,
+                isScrolledPast: $isTitleRowHidden,
+                scrolledPastOffset: heroHeight - 180
+            ) {
+                ArtistArtworkHeader(artist: artist, palette: palette, size: geo.size)
             } content: {
+                // Lifted over the hero's faded bottom edge, where the name used to sit inside it.
+                ArtistTitleRow(artist: artist, onShuffle: shuffle, onPlay: { playTracks(startingAt: 0) })
+                    .padding(.top, -80)
+
                 ArtistTopSongs(artist: artist, onPlayTrack: { index in
                     playTracks(startingAt: index)
                 })
 
                 ArtistDiscography(artist: artist)
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if isTitleRowHidden {
+                    Button("Shuffle", systemImage: "shuffle", action: shuffle)
+                    Button("Play", systemImage: "play.fill") { playTracks(startingAt: 0) }
+                }
             }
         }
         .task {
@@ -57,6 +69,11 @@ public struct ArtistView: View {
         #if os(iOS)
         .ignoresSafeArea()
         #endif
+    }
+
+    private func shuffle() {
+        guard !topTracks.isEmpty else { return }
+        playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
     }
 
     private func playTracks(startingAt index: Int, shuffled: Bool = false) {
@@ -80,8 +97,6 @@ private struct ArtistArtworkHeader: View {
     let artist: Artist
     let palette: ImageColorPalette?
     let size: CGSize
-    let onShuffle: () -> Void
-    let onPlay: () -> Void
 
     /// The canvas the artwork dissolves into.
     ///
@@ -105,7 +120,6 @@ private struct ArtistArtworkHeader: View {
         ZStack(alignment: .bottom) {
             artwork
             blends
-            actions
         }
         .frame(height: artworkHeight)
         .frame(maxWidth: .infinity)
@@ -170,26 +184,6 @@ private struct ArtistArtworkHeader: View {
             .frame(height: artworkHeight * 0.62, alignment: .bottom)
             .frame(maxHeight: .infinity, alignment: .bottom)
 
-            // Sides: narrow, so only the outermost edge dissolves and the middle of the
-            // artwork stays at full strength.
-            HStack(spacing: 0) {
-                LinearGradient(
-                    colors: [canvas, .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: size.width * 0.06)
-
-                Spacer(minLength: 0)
-
-                LinearGradient(
-                    colors: [.clear, canvas],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: size.width * 0.06)
-            }
-
             // Top: just enough to stop the artwork meeting the window's edge abruptly.
             LinearGradient(
                 colors: [canvas.opacity(0.4), .clear],
@@ -201,8 +195,18 @@ private struct ArtistArtworkHeader: View {
         }
         .allowsHitTesting(false)
     }
+}
 
-    // MARK: - Title and actions
+/// The name and the Play and Shuffle pills. Part of the page, not the hero: it scrolls away
+/// while the photo holds still, and its buttons move into the toolbar once it has gone.
+private struct ArtistTitleRow: View {
+    let artist: Artist
+    let onShuffle: () -> Void
+    let onPlay: () -> Void
+
+    var body: some View {
+        actions
+    }
 
     private var actions: some View {
         HStack(alignment: .bottom, spacing: 16) {

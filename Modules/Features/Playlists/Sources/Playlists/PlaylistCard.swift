@@ -1,5 +1,4 @@
 import Aesthetics
-import Catalog
 import Kingfisher
 import Models
 import Player
@@ -31,23 +30,21 @@ public struct PlaylistCard: View {
         self.showAllImages = showAllImages
     }
 
-    /// A playlist from YouTube Music that has not been imported. It looks and opens like a saved
-    /// one; its tracks are fetched the first time it opens, and nothing is saved unless the user
-    /// picks Add to Library.
-    ///
-    /// - Parameter onAddToLibrary: imports it; omitted, the menu offers no Add to Library.
-    public init(remote source: CatalogPlaylist, onAddToLibrary: (() async -> Void)? = nil) {
+    /// A playlist that is not in the library, from any provider. It looks and opens like a
+    /// saved one; its tracks are loaded the first time it opens, and nothing is saved unless the
+    /// user picks Add to Library.
+    public init(remote: RemotePlaylist) {
         // Unsaved: SwiftData models work as plain values until they are inserted.
         self.playlist = Models.Playlist(
-            playlistID: "remote:\(source.youtubeBrowseID)",
-            title: source.title,
-            normalizedTitle: source.title.lowercased(),
-            ownerName: source.owner,
-            artworkURLString: source.artworkURL?.absoluteString,
-            sourceProvider: .youtubeMusic,
-            sourcePlaylistID: source.youtubeBrowseID
+            playlistID: "remote:\(remote.source.rawValue):\(remote.sourceID)",
+            title: remote.title,
+            normalizedTitle: remote.title.lowercased(),
+            ownerName: remote.owner,
+            artworkURLString: remote.artworkURL?.absoluteString,
+            sourceProvider: remote.source,
+            sourcePlaylistID: remote.sourceID
         )
-        self.remote = RemotePlaylist(source: source, onAddToLibrary: onAddToLibrary)
+        self.remote = remote
         self.showAllImages = true
     }
 
@@ -77,10 +74,35 @@ public struct PlaylistCard: View {
     }
 }
 
-/// Where a remote card's tracks come from, and how to keep it.
-struct RemotePlaylist {
-    let source: CatalogPlaylist
-    let onAddToLibrary: (() async -> Void)?
+/// A playlist that is not in the library, and where its tracks come from.
+public struct RemotePlaylist {
+    public let title: String
+    public let owner: String?
+    public let artworkURL: URL?
+    public let source: PlaylistSource
+    public let sourceID: String
+    /// Fetches the tracks; called the first time the card opens.
+    public let loadTracks: @MainActor () async -> [IncomingTrack]
+    /// Imports it; `nil` leaves Add to Library out of the menu.
+    public let onAddToLibrary: (@MainActor () async -> Void)?
+
+    public init(
+        title: String,
+        owner: String?,
+        artworkURL: URL?,
+        source: PlaylistSource,
+        sourceID: String,
+        loadTracks: @escaping @MainActor () async -> [IncomingTrack],
+        onAddToLibrary: (@MainActor () async -> Void)? = nil
+    ) {
+        self.title = title
+        self.owner = owner
+        self.artworkURL = artworkURL
+        self.source = source
+        self.sourceID = sourceID
+        self.loadTracks = loadTracks
+        self.onAddToLibrary = onAddToLibrary
+    }
 }
 
 struct PlaylistTrackListView: View {
@@ -104,7 +126,6 @@ struct PlaylistTrackListView: View {
     @State private var shareURL: IdentifiableURL?
     @State private var coverViewModel = PlaylistViewModel()
 
-    @Environment(\.catalog) private var catalog
     @Query private var savedTracks: [PlaylistItem]
     @State private var remoteTracks: [PlaylistItem]?
 
@@ -159,20 +180,21 @@ struct PlaylistTrackListView: View {
         .task {
             guard let remote, remoteTracks == nil else { return }
             let id = playlist.playlistID
-            let fetched = await catalog?.playlistTracks(youtubeBrowseID: remote.source.youtubeBrowseID) ?? []
-            remoteTracks = fetched.enumerated().map { index, track in
+            remoteTracks = await remote.loadTracks().enumerated().map { index, track in
                 PlaylistItem(
                     playlistID: id,
                     sortIndex: index,
-                    sourceTrackID: track.youtubeVideoID,
-                    sourceTrackFingerprint: track.youtubeVideoID,
+                    sourceTrackID: track.providerTrackID,
+                    sourceTrackFingerprint: "\(track.provider.rawValue):\(track.providerTrackID)",
                     title: track.title,
-                    artistName: track.artist,
-                    albumName: track.album,
+                    artistName: track.artistName,
+                    albumName: track.albumName,
+                    isrc: track.isrc,
                     durationSeconds: track.durationSeconds,
-                    artworkURLString: track.artworkURL?.absoluteString,
-                    youtubeID: track.isMusicVideo ? track.youtubeVideoID : nil,
-                    youtubeMusicID: track.isMusicVideo ? nil : track.youtubeVideoID
+                    artworkURLString: track.artworkURLString,
+                    youtubeID: track.provider == .youtube ? track.providerTrackID : nil,
+                    youtubeMusicID: track.provider == .youtubeMusic ? track.providerTrackID : nil,
+                    spotifyID: track.provider == .spotify ? track.providerTrackID : nil
                 )
             }
         }

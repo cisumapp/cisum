@@ -19,6 +19,10 @@ import SwiftUI
 public struct PaletteScrollView<Hero: View, Content: View>: View {
     let palette: ImageColorPalette?
     let heroHeight: CGFloat
+    /// Set once the page has scrolled `scrolledPastOffset` points, e.g. to move a title row's
+    /// buttons into the toolbar when it is gone. Tracked on iOS 18 and macOS 15 and later.
+    var isScrolledPast: Binding<Bool>?
+    var scrolledPastOffset: CGFloat = 0
     @ViewBuilder let hero: Hero
     @ViewBuilder let content: Content
 
@@ -27,11 +31,15 @@ public struct PaletteScrollView<Hero: View, Content: View>: View {
     public init(
         palette: ImageColorPalette?,
         heroHeight: CGFloat,
+        isScrolledPast: Binding<Bool>? = nil,
+        scrolledPastOffset: CGFloat = 0,
         @ViewBuilder hero: () -> Hero,
         @ViewBuilder content: () -> Content
     ) {
         self.palette = palette
         self.heroHeight = heroHeight
+        self.isScrolledPast = isScrolledPast
+        self.scrolledPastOffset = scrolledPastOffset
         self.hero = hero()
         self.content = content()
     }
@@ -76,6 +84,7 @@ public struct PaletteScrollView<Hero: View, Content: View>: View {
             }
         }
         .contentMargins(.bottom, 140, for: .scrollContent)
+        .modifier(ScrolledPastObserver(isScrolledPast: isScrolledPast, offset: scrolledPastOffset))
         .background(background.ignoresSafeArea())
         .legibilityBackground(background)
         .environment(\.legibilityPalette, palette)
@@ -85,5 +94,24 @@ public struct PaletteScrollView<Hero: View, Content: View>: View {
         // column, which handles its own insets.
         .ignoresSafeArea(edges: .top)
         #endif
+    }
+}
+
+/// Reports when a scroll view's offset passes a point. Geometry callbacks on the scrolled
+/// content itself did not fire while scrolling here, so the scroll view's own geometry is read.
+private struct ScrolledPastObserver: ViewModifier {
+    let isScrolledPast: Binding<Bool>?
+    let offset: CGFloat
+
+    func body(content: Content) -> some View {
+        if let isScrolledPast, #available(iOS 18.0, macOS 15.0, *) {
+            content.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > offset
+            } action: { _, isPast in
+                withAnimation(.snappy) { isScrolledPast.wrappedValue = isPast }
+            }
+        } else {
+            content
+        }
     }
 }
