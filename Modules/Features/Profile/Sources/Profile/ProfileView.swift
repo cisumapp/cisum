@@ -10,6 +10,7 @@ import Authentication
 import Models
 import ProviderSDK
 import SwiftUI
+import UniformTypeIdentifiers
 import Utilities
 import YouTubeSDK
 #if canImport(SpotifySDK)
@@ -40,22 +41,38 @@ public struct ProfileView: View {
     @State private var pendingFlowId: String?
 
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                profileHeader
-                cisumAccountCard
-                linkedAccountsSection
-                profileStatusCard
-                supportSection
-
-                Text("This profile screen is intentionally lightweight for now and will be expanded in a later pass.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        List {
+            Section {
+                header
             }
-            .padding()
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+
+            if authService.isAuthenticated {
+                accountSection
+            }
+
+            servicesSection
+
+            Section {
+                ShareLink(item: DiagnosticsLog(), preview: SharePreview("cisum diagnostics")) {
+                    serviceRow("Share diagnostics", status: "Recent app logs, for bug reports") {
+                        iconTile("doc.text.magnifyingglass", tint: .gray)
+                    } action: {
+                        Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(.primary)
+            }
         }
+        .scrollContentBackground(.hidden)
         .background(Color.cisumBg.ignoresSafeArea())
-        .contentMargins(.bottom, 50)
+        .contentMargins(.bottom, 140, for: .scrollContent)
+        .navigationTitle("Profile")
+        #if os(iOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .onAppear {
             refreshSessionState()
         }
@@ -85,124 +102,104 @@ public struct ProfileView: View {
         }
     }
 
-    private var profileHeader: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Profile")
-                .font(.largeTitle.weight(.semibold))
-            Text("Connect your Google account for better personalized search and recommendations.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
+    // MARK: - Header
 
-    // MARK: - cisum Account Card
+    /// The one large thing on the page: who this is.
+    private var header: some View {
+        VStack(spacing: 14) {
+            avatar
+                .frame(width: 96, height: 96)
 
-    private var cisumAccountCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 12) {
-                Image(systemName: authService.isAuthenticated ? "person.crop.circle.badge.checkmark" : "person.crop.circle")
-                    .font(.title2)
-                    .foregroundStyle(authService.isAuthenticated ? .blue : .secondary)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("@\(authService.user?.username ?? "guest")")
-                        .font(.headline)
-                    if authService.isAuthenticated {
-                        Text(authService.user?.emailAddresses.first?.emailAddress ?? "Signed In")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text("Using as Guest")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                if authService.isAuthenticated {
-                    Text("Connected")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.blue)
-                } else {
-                    Text("Guest")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1), in: Capsule())
-                        .foregroundStyle(.secondary)
-                }
+            VStack(spacing: 4) {
+                Text(displayName)
+                    .font(.title2.bold())
+                Text(authService.isAuthenticated
+                    ? authService.user?.emailAddresses.first?.emailAddress ?? "Signed in"
+                    : "Sign in to sync your library and link your services")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
 
-            Divider()
-
-            VStack(spacing: 12) {
-                if authService.isAuthenticated {
-                    if let fullName = authService.user?.fullName, !fullName.isEmpty {
-                        HStack {
-                            Text("Name")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(fullName)
-                                .font(.subheadline)
-                        }
-                    }
-
-                    Button(role: .destructive) {
-                        Task {
-                            isSigningOutcisum = true
-                            await authService.signOut()
-                            analyticsService.reset()
-                            isSigningOutcisum = false
-                        }
-                    } label: {
-                        HStack {
-                            Text("Sign Out")
-                            if isSigningOutcisum {
-                                Spacer()
-                                ProgressView().controlSize(.small)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
+            if !authService.isAuthenticated {
+                Button("Sign In") { router.navigate(to: .login) }
+                    .buttonStyle(.borderedProminent)
+                    // Ink rather than the app tint, which follows the current artwork and can
+                    // turn the page's one call to action grey.
+                    .tint(.primary)
+                    .buttonBorderShape(.capsule)
                     .controlSize(.large)
-                    .disabled(isSigningOutcisum)
-                } else {
-                    VStack(spacing: 12) {
-                        Text("Sign in to connect Last.fm, sync listening data, and link Spotify")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
 
-                        Button {
-                            router.navigate(to: .login)
-                        } label: {
-                            Text("Sign In")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+    private var displayName: String {
+        guard authService.isAuthenticated else { return "Guest" }
+        if let fullName = authService.user?.fullName, !fullName.isEmpty { return fullName }
+        return authService.user?.username.map { "@\($0)" } ?? "Signed in"
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        if let user = authService.user, user.hasImage, let url = URL(string: user.imageUrl) {
+            ArtworkImage(url: url, size: 96)
+                .clipShape(.circle)
+        } else {
+            Circle()
+                .fill(Color.cisumSurface)
+                .overlay {
+                    if authService.isAuthenticated {
+                        Text(initials)
+                            .font(.system(size: 38, weight: .semibold, design: .rounded))
+                    } else {
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+        }
+    }
+
+    private var initials: String {
+        let name = authService.user?.fullName ?? authService.user?.username ?? ""
+        return name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+    }
+
+    // MARK: - Account
+
+    private var accountSection: some View {
+        Section("Account") {
+            if let fullName = authService.user?.fullName, !fullName.isEmpty {
+                LabeledContent("Name", value: fullName)
+            }
+            if let username = authService.user?.username {
+                LabeledContent("Username", value: "@\(username)")
+            }
+
+            Button(role: .destructive) {
+                Task {
+                    isSigningOutcisum = true
+                    await authService.signOut()
+                    analyticsService.reset()
+                    isSigningOutcisum = false
+                }
+            } label: {
+                HStack {
+                    Text("Sign Out")
+                    if isSigningOutcisum {
+                        Spacer()
+                        ProgressView()
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+            .disabled(isSigningOutcisum)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
     }
 
-    // MARK: - Linked Accounts
+    // MARK: - Connected services
 
     private var isAppleConnected: Bool {
         authService.user?.verifiedExternalAccounts.contains(where: { $0.provider.lowercased().contains("apple") }) == true
@@ -212,190 +209,87 @@ public struct ProfileView: View {
         authService.user?.verifiedExternalAccounts.contains(where: { $0.provider.lowercased().contains("google") }) == true
     }
 
-    private var linkedAccountsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Linked Accounts")
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.top, 14)
-
-            Divider()
-
-            VStack(spacing: 16) {
-                if authService.isAuthenticated {
-                    // Apple
-                    HStack {
-                        Image(systemName: "applelogo")
-                            .font(.title3)
-                            .frame(width: 24)
-                        Text("Apple")
-                        Spacer()
-                        if isAppleConnected {
-                            Text("Connected")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.green)
-                        } else {
-                            Button {
-                                Task {
-                                    isConnectingApple = true
-                                    if await authService.connectAppleAccount() == false {
-                                        PerfLog.error("Profile: Apple account connect failed")
-                                    }
-                                    isConnectingApple = false
-                                }
-                            } label: {
-                                if isConnectingApple {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Text("Connect")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isConnectingApple)
-                        }
-                    }
-
-                    Divider()
-
-                    // Google
-                    HStack {
-                        Image("googlelogo")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 18, height: 18)
-                            .frame(width: 24)
-
-                        Text("Google")
-                        Spacer()
-                        if isGoogleConnected {
-                            Text("Connected")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.green)
-                        } else {
-                            Button {
-                                Task {
-                                    isConnectingGoogle = true
-                                    if await authService.connectGoogleAccount() == false {
-                                        PerfLog.error("Profile: Google account connect failed")
-                                    }
-                                    isConnectingGoogle = false
-                                }
-                            } label: {
-                                if isConnectingGoogle {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Text("Connect")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isConnectingGoogle)
-                        }
-                    }
-
-                    Divider()
-                }
-
-                // YouTube
-                HStack {
-                    Image(systemName: "play.rectangle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.red)
-                        .frame(width: 24)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("YouTube")
-                        if hasOAuthSession {
-                            Text("Connected")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    if hasOAuthSession {
-                        Button(role: .destructive) {
-                            Task {
-                                YouTubeOAuthClient.logout()
-                                refreshSessionState()
-                            }
-                        } label: {
-                            Text("Disconnect")
-                        }
-                        .buttonStyle(.bordered)
+    private var servicesSection: some View {
+        Section {
+            if authService.isAuthenticated {
+                serviceRow("Apple", status: isAppleConnected ? "Connected" : nil) {
+                    iconTile("applelogo", tint: .black)
+                } action: {
+                    if isAppleConnected {
+                        connectedMark
                     } else {
-                        Button {
-                            router.navigate(to: .youtubeLogin)
-                        } label: {
-                            Text("Connect")
+                        connectButton(isBusy: isConnectingApple) {
+                            isConnectingApple = true
+                            if await authService.connectAppleAccount() == false {
+                                PerfLog.error("Profile: Apple account connect failed")
+                            }
+                            isConnectingApple = false
                         }
-                        .buttonStyle(.bordered)
                     }
                 }
 
-                Divider()
-
-                // Spotify
-                VStack(spacing: 12) {
-                    HStack {
-                        Image(systemName: "music.note")
-                            .font(.title3)
-                            .foregroundStyle(.green)
-                            .frame(width: 24)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Spotify")
-                            if spotifyCoordinator.hasSession {
-                                Text(spotifyCoordinator.accountDescriptor)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
+                serviceRow("Google", status: isGoogleConnected ? "Connected" : nil) {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(.white)
+                        .overlay {
+                            Image("googlelogo")
+                                .resizable()
+                                .scaledToFit()
+                                .padding(6)
                         }
-                        Spacer()
-                        if spotifyCoordinator.hasSession {
-                            Button(role: .destructive) {
-                                Task {
-                                    isSigningOutSpotify = true
-                                    await spotifyCoordinator.signOut()
-                                    isSigningOutSpotify = false
-                                }
-                            } label: {
-                                if isSigningOutSpotify {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Text("Disconnect")
-                                }
+                } action: {
+                    if isGoogleConnected {
+                        connectedMark
+                    } else {
+                        connectButton(isBusy: isConnectingGoogle) {
+                            isConnectingGoogle = true
+                            if await authService.connectGoogleAccount() == false {
+                                PerfLog.error("Profile: Google account connect failed")
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(isSigningOutSpotify)
-                        } else {
-                            #if os(iOS) && canImport(SpotifySDK)
-                            Button {
-                                router.navigate(to: .spotifyLogin)
-                            } label: {
-                                Text("Connect")
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(spotifyCoordinator.isRestoringSession)
-                            #else
-                            Text("Unavailable")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            #endif
+                            isConnectingGoogle = false
                         }
                     }
+                }
+            }
 
+            serviceRow("YouTube", status: hasOAuthSession ? "Connected" : "Personalised search") {
+                iconTile("play.rectangle.fill", tint: .red)
+            } action: {
+                if hasOAuthSession {
+                    disconnectButton(isBusy: false) {
+                        YouTubeOAuthClient.logout()
+                        refreshSessionState()
+                    }
+                } else {
+                    connectButton(isBusy: false) { router.navigate(to: .youtubeLogin) }
+                }
+            }
+
+            serviceRow("Spotify", status: spotifyCoordinator.hasSession ? spotifyCoordinator.accountDescriptor : "Your playlists and liked songs") {
+                iconTile("music.note", tint: .green)
+            } action: {
+                if spotifyCoordinator.hasSession {
+                    disconnectButton(isBusy: isSigningOutSpotify) {
+                        isSigningOutSpotify = true
+                        await spotifyCoordinator.signOut()
+                        isSigningOutSpotify = false
+                    }
+                } else {
                     #if os(iOS) && canImport(SpotifySDK)
-                    Toggle(
-                        "Anonymous Spotify Mode",
-                        isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback
-                    )
-                    .font(.subheadline)
+                    connectButton(isBusy: spotifyCoordinator.isRestoringSession) { router.navigate(to: .spotifyLogin) }
+                    #else
+                    Text("Unavailable")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     #endif
                 }
+            }
 
-                Divider()
+            #if os(iOS) && canImport(SpotifySDK)
+            Toggle("Anonymous Spotify Mode", isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback)
+            #endif
 
-                // Last.fm
+        // Last.fm
 //                VStack(spacing: 12) {
 //                    HStack {
 //                        Image(systemName: "waveform")
@@ -473,85 +367,81 @@ public struct ProfileView: View {
 //                            .font(.subheadline)
 //                    }
 //                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+        } header: {
+            Text("Connected services")
+        } footer: {
+            Text("Signed out, cisum still finds every artist, album and playlist through YouTube Music and Apple's catalogue.")
         }
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
     }
 
-    private var profileStatusCard: some View {
-        HStack(spacing: 12) {
-            Image(
-                systemName: hasOAuthSession
-                    ? "checkmark.seal.fill" : "person.crop.circle.badge.exclamationmark"
-            )
-            .font(.title2)
-            .foregroundStyle(hasOAuthSession ? .green : .orange)
+    // MARK: - Rows
+
+    private func serviceRow(
+        _ title: String,
+        status: String?,
+        @ViewBuilder icon: () -> some View,
+        @ViewBuilder action: () -> some View
+    ) -> some View {
+        HStack(spacing: 14) {
+            icon()
+                .frame(width: 30, height: 30)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(hasOAuthSession ? "Signed In" : "Not Signed In")
-                    .font(.headline)
-                Text(
-                    hasOAuthSession
-                        ? "OAuth session active." : "Sign in to improve search relevance."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Text(title)
+                if let status {
+                    Text(status)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 8)
+
+            action()
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
+        .padding(.vertical, 2)
     }
 
-    private var supportSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Support & Diagnostics")
-                .font(.headline)
-                .padding(.bottom, -8)
-
-            ShareLink(
-                item: PerfLog.getLogFileURL(),
-                subject: Text("App Diagnostics"),
-                message: Text("Here are the logs from my session:")
-            ) {
-                HStack {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .foregroundStyle(.blue)
-                        .frame(width: 24)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Share App Logs")
-                            .foregroundStyle(.primary)
-                        Text("Send crash and error logs for debugging")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
-                }
-                .padding()
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.cisumSurface.opacity(0.92))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(.primary.opacity(0.08), lineWidth: 1)
-                        }
-                )
+    /// The Settings app's tinted square, so services read as one family.
+    private func iconTile(_ symbol: String, tint: Color) -> some View {
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .fill(tint)
+            .overlay {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
             }
+    }
+
+    private var connectedMark: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .foregroundStyle(.green)
+            .accessibilityLabel("Connected")
+    }
+
+    private func connectButton(isBusy: Bool, action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            if isBusy { ProgressView() } else { Text("Connect") }
         }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .disabled(isBusy)
+    }
+
+    private func disconnectButton(isBusy: Bool, action: @escaping () async -> Void) -> some View {
+        Button(role: .destructive) {
+            Task { await action() }
+        } label: {
+            if isBusy { ProgressView() } else { Text("Disconnect") }
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
+        .disabled(isBusy)
     }
 
     private func refreshSessionState() {
@@ -571,6 +461,17 @@ public struct ProfileView: View {
             }
         } catch {
             PerfLog.warning("Profile: Last.fm status refresh failed (unauthenticated or network): \(error.localizedDescription)")
+        }
+    }
+}
+
+/// The app's log as a file, written only when the user picks where to share it. It used to be
+/// written in `body`: `getLogFileURL()` walks the whole session's log store and writes a file,
+/// synchronously on the main thread, on every render — which is what made the page slow to open.
+private struct DiagnosticsLog: Transferable {
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .plainText) { _ in
+            SentTransferredFile(PerfLog.getLogFileURL())
         }
     }
 }
