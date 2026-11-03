@@ -11,6 +11,7 @@
 import Foundation
 import SwiftUI
 import iTunesKit
+import Models
 import Utilities
 import YouTubeSDK
 
@@ -154,9 +155,29 @@ public actor Catalog {
         ((try? await youtube.getPlaylist(browseId: youtubeBrowseID)) ?? []).map(CatalogTrack.init)
     }
 
-    /// A YouTube Music album's tracks.
-    public func albumTracks(youtubeBrowseID: String) async -> [CatalogTrack] {
-        ((try? await youtube.getAlbum(browseId: youtubeBrowseID)) ?? []).map(CatalogTrack.init)
+    /// An album's tracks: YouTube Music's when the album came from there, otherwise iTunes'
+    /// (an album only iTunes lists), as Apple Music tracks the player matches to a stream.
+    public func albumTracks(_ album: CatalogAlbum) async -> [IncomingTrack] {
+        if let browseID = album.youtubeBrowseID {
+            let songs = (try? await youtube.getAlbum(browseId: browseID)) ?? []
+            return songs.map { CatalogTrack($0).incoming }
+        }
+        guard let collectionID = album.itunesCollectionID,
+              let lookup = try? await itunes.lookup(id: String(collectionID), entity: "song")
+        else { return [] }
+        return lookup.results.filter { $0.wrapperType == "track" }.compactMap { result in
+            guard let trackID = result.trackId, let title = result.trackName else { return nil }
+            return IncomingTrack(
+                provider: .appleMusic,
+                providerTrackID: String(trackID),
+                title: title,
+                artistName: result.artistName,
+                albumName: result.collectionName,
+                artworkURLString: (result.artworkUrl100 ?? album.artworkURL?.absoluteString)?
+                    .replacingOccurrences(of: "100x100bb", with: "600x600bb"),
+                isExplicit: result.trackExplicitness == "explicit"
+            )
+        }
     }
 
     // MARK: iTunes
@@ -222,6 +243,22 @@ public actor Catalog {
 }
 
 // MARK: - Mapping
+
+public extension CatalogTrack {
+    /// As a provider track, which a playlist or album card lists and plays.
+    var incoming: IncomingTrack {
+        IncomingTrack(
+            provider: isMusicVideo ? .youtube : .youtubeMusic,
+            providerTrackID: youtubeVideoID,
+            title: title,
+            artistName: artist,
+            albumName: album,
+            durationSeconds: durationSeconds,
+            artworkURLString: artworkURL?.absoluteString,
+            isExplicit: isExplicit
+        )
+    }
+}
 
 extension CatalogTrack {
     init(_ song: YouTubeMusicSong) {

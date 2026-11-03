@@ -180,23 +180,11 @@ struct PlaylistTrackListView: View {
         .task {
             guard let remote, remoteTracks == nil else { return }
             let id = playlist.playlistID
-            remoteTracks = await remote.loadTracks().enumerated().map { index, track in
-                PlaylistItem(
-                    playlistID: id,
-                    sortIndex: index,
-                    sourceTrackID: track.providerTrackID,
-                    sourceTrackFingerprint: "\(track.provider.rawValue):\(track.providerTrackID)",
-                    title: track.title,
-                    artistName: track.artistName,
-                    albumName: track.albumName,
-                    isrc: track.isrc,
-                    durationSeconds: track.durationSeconds,
-                    artworkURLString: track.artworkURLString,
-                    youtubeID: track.provider == .youtube ? track.providerTrackID : nil,
-                    youtubeMusicID: track.provider == .youtubeMusic ? track.providerTrackID : nil,
-                    spotifyID: track.provider == .spotify ? track.providerTrackID : nil
-                )
+            let loaded = await remote.loadTracks().enumerated().map { index, track in
+                PlaylistItem(remote: track, playlistID: id, sortIndex: index)
             }
+            // Crossfades the skeleton into the rows rather than swapping them.
+            withAnimation(.easeOut(duration: 0.3)) { remoteTracks = loaded }
         }
         #if os(iOS)
         // `AddToPlaylistSheet` and `ShareSheet` are UIKit presentations that do not exist on
@@ -224,9 +212,8 @@ struct PlaylistTrackListView: View {
     private var trackList: some View {
         LazyVStack(alignment: .leading, spacing: 4) {
             if remote != nil, remoteTracks == nil {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                TrackListSkeleton(count: 8)
+                    .transition(.opacity)
             } else if tracks.isEmpty {
                 Text("No tracks found")
                     .legibleForeground(.secondary)

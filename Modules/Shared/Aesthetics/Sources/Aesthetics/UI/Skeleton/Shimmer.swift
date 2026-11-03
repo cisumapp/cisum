@@ -10,12 +10,15 @@ import SwiftUI
 
 public struct ShimmerModifier: ViewModifier {
     @State private var animating = false
+    /// No sweep with Reduce Motion: the still skeleton already shows the layout.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init() {}
 
     public func body(content: Content) -> some View {
         content
             .overlay {
+                if !reduceMotion {
                 GeometryReader { geo in
                     let w = geo.size.width
                     LinearGradient(
@@ -28,6 +31,7 @@ public struct ShimmerModifier: ViewModifier {
                 }
                 .mask(content) // sweep only shows over the skeleton's opaque shapes
                 .allowsHitTesting(false)
+                }
             }
             .onAppear {
                 withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {

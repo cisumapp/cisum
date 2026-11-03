@@ -16,8 +16,12 @@ public struct SkeletonBox: View {
     }
 
     public var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius)
-            .fill(Color.cisumChromeStrong)
+        // The surface's own ink, faint, so a skeleton reads on any page colour — a fixed grey
+        // vanished on pale palettes and glared on dark ones.
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(.foreground)
+            .opacity(0.1)
+            .legibleForeground(.primary)
     }
 }
 

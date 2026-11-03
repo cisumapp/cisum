@@ -210,12 +210,13 @@ public struct MediaTile: View {
                     .shadow(color: .black.opacity(isHovering ? 0.3 : 0), radius: 10, y: 6)
 
                 VStack(alignment: shape == .round ? .center : .leading, spacing: 0) {
+                    // The page's ink, not the system's: tiles sit on palette-coloured pages.
                     Text(title)
-                        .foregroundStyle(.primary.opacity(0.9))
+                        .legibleForeground(.primary)
                         .lineLimit(shape == .round ? 1 : 2)
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
-                            .foregroundStyle(.secondary)
+                            .legibleForeground(.secondary)
                             .lineLimit(1)
                     }
                 }
