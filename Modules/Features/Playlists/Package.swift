@@ -18,6 +18,7 @@ let package = Package(
     dependencies: [
         .package(path: "../../Shared/Models"),
         .package(path: "../../Shared/Utilities"),
+        .package(path: "../../Shared/Catalog"),
         .package(path: "../../Shared/Aesthetics"),
         .package(path: "../Player"),
         .package(path: "../Tracks"),
@@ -32,6 +33,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
+                .product(name: "Catalog", package: "Catalog"),
                 .product(name: "Aesthetics", package: "Aesthetics"),
                 .product(name: "Player", package: "Player"),
                 .product(name: "Tracks", package: "Tracks"),

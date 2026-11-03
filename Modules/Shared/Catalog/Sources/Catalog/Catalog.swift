@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import SwiftUI
 import iTunesKit
 import Utilities
 import YouTubeSDK
@@ -47,6 +48,18 @@ public struct CatalogPlaylist: Identifiable, Sendable, Hashable {
     public let owner: String?
     public let artworkURL: URL?
     public let youtubeBrowseID: String
+
+    public init(title: String, owner: String?, artworkURL: URL?, youtubeBrowseID: String) {
+        self.title = title
+        self.owner = owner
+        self.artworkURL = artworkURL
+        self.youtubeBrowseID = youtubeBrowseID
+    }
+}
+
+public extension EnvironmentValues {
+    /// The app's one `Catalog`, set at the root.
+    @Entry var catalog: Catalog?
 }
 
 public struct CatalogArtistSummary: Identifiable, Sendable, Hashable {

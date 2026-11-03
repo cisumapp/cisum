@@ -18,6 +18,7 @@ let package = Package(
         .package(path: "../Shared/Networking"),
         .package(path: "../Shared/Caching"),
         .package(path: "../Shared/Utilities"),
+        .package(path: "../Shared/Catalog"),
 
         .package(path: "../Features/Authentication"),
         .package(path: "../Features/Plugins"),
@@ -44,6 +45,7 @@ let package = Package(
                 .product(name: "LyricsKit", package: "LyricsKit"),
                 .product(name: "Networking", package: "Networking"),
                 .product(name: "Utilities", package: "Utilities"),
+                .product(name: "Catalog", package: "Catalog"),
                 .product(name: "Caching", package: "Caching"),
 
                 .product(name: "Authentication", package: "Authentication"),
