@@ -100,7 +100,6 @@ public struct SearchView: View {
             case .success:
                 SearchResultsList(
                     searchViewModel: searchViewModel,
-                    isImportingSpotifyPlaylistID: $viewModel.isImportingSpotifyPlaylistID,
                     showNonPlayableAlert: $viewModel.showNonPlayableAlert,
                     nonPlayableMessage: $viewModel.nonPlayableMessage,
                     onRowSelection: handleRowSelection

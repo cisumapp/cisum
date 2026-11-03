@@ -2,6 +2,7 @@ import Aesthetics
 import Artists
 import Catalog
 import Kingfisher
+import Library
 import Models
 import Player
 import Playlists
@@ -19,7 +20,6 @@ import Utilities
 /// each kind and lets the chips or headers open the rest.
 struct SearchResultsList: View {
     let searchViewModel: any SearchViewModelInterface
-    @Binding var isImportingSpotifyPlaylistID: String?
     @Binding var showNonPlayableAlert: Bool
     @Binding var nonPlayableMessage: String
     let onRowSelection: (FederatedSearchItem) -> Void
@@ -27,6 +27,8 @@ struct SearchResultsList: View {
     @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Query private var libraryItems: [PlaylistItem]
+    @Environment(\.catalog) private var catalog
+    @Environment(\.importDownloadManager) private var importDownloadManager
     @State private var filter = SearchFilter.all
     @State private var topInset: CGFloat = 0
 
@@ -298,45 +300,42 @@ struct SearchResultsList: View {
         }
     }
 
-    /// A YouTube Music playlist is the Playlists module's own card, opening with its tracks
-    /// without importing anything. A Spotify one stays a tile: tapping imports it, which needs
-    /// the user's Spotify session.
+    /// Every result playlist is the Playlists module's own card, opening with its tracks and
+    /// importing nothing: YouTube Music's tracks come from the Catalog, Spotify's from the
+    /// Spotify importer's track fetch.
     @ViewBuilder
     private func playlistCard(_ item: FederatedSearchItem) -> some View {
-        if case let .youtubePlaylist(browseID) = item.payload {
-            PlaylistCard(
-                remote: CatalogPlaylist(title: item.title, owner: item.subtitle, artworkURL: item.artworkURL, youtubeBrowseID: browseID),
-                onAddToLibrary: { onRowSelection(item) }
-            )
-        } else {
-            playlistTile(item).frame(width: 160)
-        }
-    }
-
-    private func playlistTile(_ item: FederatedSearchItem) -> some View {
-        let isImporting = { if case let .spotifyPlaylist(playlist) = item.payload { playlist.id == isImportingSpotifyPlaylistID } else { false } }()
-        return Button { onRowSelection(item) } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                SearchArtwork(url: item.artworkURL, cornerRadius: 10)
-                    .overlay {
-                        if isImporting {
-                            ProgressView()
-                        }
+        switch item.payload {
+        case let .youtubePlaylist(browseID):
+            PlaylistCard(remote: RemotePlaylist(
+                title: item.title, owner: item.subtitle, artworkURL: item.artworkURL,
+                source: .youtubeMusic, sourceID: browseID,
+                loadTracks: { [catalog] in
+                    await (catalog?.playlistTracks(youtubeBrowseID: browseID) ?? []).map {
+                        IncomingTrack(
+                            provider: $0.isMusicVideo ? .youtube : .youtubeMusic,
+                            providerTrackID: $0.youtubeVideoID,
+                            title: $0.title, artistName: $0.artist, albumName: $0.album,
+                            durationSeconds: $0.durationSeconds,
+                            artworkURLString: $0.artworkURL?.absoluteString, isExplicit: $0.isExplicit
+                        )
                     }
-                    .padding(.bottom, 3)
-                Text(item.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary.opacity(0.8))
-                    .lineLimit(1)
-                Text(item.subtitle)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .contentShape(Rectangle())
+                },
+                onAddToLibrary: { onRowSelection(item) }
+            ))
+        case let .spotifyPlaylist(playlist):
+            PlaylistCard(remote: RemotePlaylist(
+                title: playlist.name, owner: playlist.ownerName, artworkURL: playlist.artworkURL,
+                source: .spotify, sourceID: playlist.id,
+                loadTracks: { [importDownloadManager] in
+                    let service = await importDownloadManager?.service(for: .spotify)
+                    return (try? await service?.fetchTrackPage(playlistID: playlist.id, cursor: nil, offset: 0).tracks) ?? []
+                },
+                onAddToLibrary: { onRowSelection(item) }
+            ))
+        default:
+            EmptyView()
         }
-        .buttonStyle(.plain)
-        .disabled(isImporting)
     }
 }
 
