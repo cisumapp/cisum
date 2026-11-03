@@ -12,6 +12,7 @@ let package = Package(
         .library(name: "Catalog", targets: ["Catalog"]),
     ],
     dependencies: [
+        .package(path: "../Models"),
         .package(path: "../Utilities"),
         .package(path: "../../../Packages/StreamingKit/YouTubeSDK"),
         .package(path: "../../../Packages/StreamingKit/iTunesKit"),
@@ -20,6 +21,7 @@ let package = Package(
         .target(
             name: "Catalog",
             dependencies: [
+                .product(name: "Models", package: "Models"),
                 .product(name: "Utilities", package: "Utilities"),
                 .product(name: "YouTubeSDK", package: "YouTubeSDK"),
                 .product(name: "iTunesKit", package: "iTunesKit"),

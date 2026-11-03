@@ -62,3 +62,23 @@ public final class Artist {
         self.albums = []
     }
 }
+
+public extension Artist {
+    /// The saved artist for a YouTube Music artist, adding it the first time, so an artist page
+    /// opened from search or from another artist's page is the same page.
+    @MainActor
+    static func findOrInsert(youtubeBrowseID browseID: String, name: String, artworkURL: URL?, in context: ModelContext) -> Artist {
+        let descriptor = FetchDescriptor<Artist>(predicate: #Predicate<Artist> { $0.youtubeMusicBrowseID == browseID })
+        if let artist = (try? context.fetch(descriptor))?.first {
+            return artist
+        }
+        let artist = Artist(
+            displayName: name,
+            normalizedName: name.lowercased(),
+            artworkURLString: artworkURL?.absoluteString,
+            youtubeMusicBrowseID: browseID
+        )
+        context.insert(artist)
+        return artist
+    }
+}

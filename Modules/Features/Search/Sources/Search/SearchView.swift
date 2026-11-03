@@ -86,9 +86,18 @@ public struct SearchView: View {
                 }
 
             case .loading:
-                ProgressView("Searching…")
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The results' own layout, empty: a top-artist card, then song rows.
+                VStack(alignment: .leading, spacing: 24) {
+                    SkeletonBox(cornerRadius: 24)
+                        .aspectRatio(7 / 6, contentMode: .fit)
+                        .shimmering()
+                    TrackListSkeleton(count: 4)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 72)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .transition(.opacity)
+                .accessibilityLabel("Searching")
 
             case let .error(message):
                 ContentUnavailableView(
@@ -296,18 +305,7 @@ public struct SearchView: View {
 
     /// Opens the artist page for a YouTube Music artist, adding the artist the first time.
     private func navigateToYouTubeArtist(browseID: String, name: String, artworkURL: URL?) {
-        let descriptor = FetchDescriptor<Artist>(predicate: #Predicate<Artist> { $0.youtubeMusicBrowseID == browseID })
-        if let artist = (try? modelContext.fetch(descriptor))?.first {
-            router.navigate(to: .artist(id: artist.artistID))
-            return
-        }
-        let artist = Artist(
-            displayName: name,
-            normalizedName: name.lowercased(),
-            artworkURLString: artworkURL?.absoluteString,
-            youtubeMusicBrowseID: browseID
-        )
-        modelContext.insert(artist)
+        let artist = Artist.findOrInsert(youtubeBrowseID: browseID, name: name, artworkURL: artworkURL, in: modelContext)
         router.navigate(to: .artist(id: artist.artistID))
     }
 

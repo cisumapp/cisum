@@ -1,9 +1,13 @@
 import Aesthetics
+import Albums
+import Catalog
 import Kingfisher
 import Models
 import Player
 import SwiftData
+import Playlists
 import SwiftUI
+import Utilities
 import YouTubeSDK
 
 public struct ArtistView: View {
@@ -14,6 +18,12 @@ public struct ArtistView: View {
     @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Environment(PlayerPresentationController.self) private var playerPresentationController
+    @Environment(\.catalog) private var catalog
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.router) private var router
+    /// The artist's page from the Catalog; `nil` until it arrives.
+    @State private var catalogArtist: CatalogArtist?
+    @State private var isLoadingCatalog = true
 
     @Query private var topTracks: [Song]
 
@@ -34,17 +44,13 @@ public struct ArtistView: View {
                 isScrolledPast: $isTitleRowHidden,
                 scrolledPastOffset: heroHeight - 180
             ) {
-                ArtistArtworkHeader(artist: artist, palette: palette, size: geo.size)
+                ArtistArtworkHeader(artist: artist, photoURL: heroURL, palette: palette, size: geo.size)
             } content: {
                 // Lifted over the hero's faded bottom edge, where the name used to sit inside it.
                 ArtistTitleRow(artist: artist, onShuffle: shuffle, onPlay: { playTracks(startingAt: 0) })
                     .padding(.top, -80)
 
-                ArtistTopSongs(artist: artist, onPlayTrack: { index in
-                    playTracks(startingAt: index)
-                })
-
-                ArtistDiscography(artist: artist)
+                sections
             }
         }
         .toolbar {
@@ -55,13 +61,16 @@ public struct ArtistView: View {
                 }
             }
         }
-        .task {
-            guard let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) else { return }
-            let tinyURL = ImageColorExtractor.paletteURL(from: artworkURL)
+        .task(id: artist.artistID) {
+            await loadCatalog()
+        }
+        .task(id: paletteSource) {
+            guard let paletteSource else { return }
+            let tinyURL = ImageColorExtractor.paletteURL(from: paletteSource)
             guard let value = try? await KingfisherManager.shared.retrieveImage(with: tinyURL),
                   let data = value.image.pngData()
             else { return }
-            palette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: artworkURL.absoluteString)
+            palette = await ImageColorExtractor.shared.extractPalette(from: data, cacheKey: paletteSource.absoluteString)
         }
         // The iOS screen owns its whole viewport. macOS already hosts this inside the split
         // view's detail column, which opts out of the safe area itself — opting out again here
@@ -71,20 +80,141 @@ public struct ArtistView: View {
         #endif
     }
 
+    // MARK: - Sections
+
+    /// The Catalog's page once it arrives, a skeleton of it until then, and the library's own
+    /// songs and albums whenever the Catalog has nothing.
+    @ViewBuilder
+    private var sections: some View {
+        Group {
+            if let catalogArtist {
+                catalogSections(catalogArtist)
+            } else if isLoadingCatalog, topTracks.isEmpty {
+                ArtistPageSkeleton()
+            } else {
+                librarySections
+            }
+        }
+        .animation(.easeOut(duration: 0.35), value: catalogArtist == nil)
+    }
+
+    @ViewBuilder
+    private var librarySections: some View {
+        ArtistTopSongs(artist: artist, onPlayTrack: { index in
+            playTracks(startingAt: index)
+        })
+        ArtistDiscography(artist: artist)
+    }
+
+    @ViewBuilder
+    private func catalogSections(_ page: CatalogArtist) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if page.topSongs.isEmpty {
+                ArtistTopSongs(artist: artist, onPlayTrack: { index in
+                    playTracks(startingAt: index)
+                })
+            } else {
+                ArtistCatalogSongs(tracks: Array(page.topSongs.prefix(5))) { index in
+                    playTracks(startingAt: index)
+                }
+            }
+
+            if page.albums.isEmpty {
+                ArtistDiscography(artist: artist)
+            } else {
+                ArtistShelf(title: "Albums") {
+                    ForEach(page.albums) { AlbumCard(remote: RemoteAlbum($0, artist: page.name, catalog: catalog)) }
+                }
+            }
+
+            if !page.singles.isEmpty {
+                ArtistShelf(title: "Singles & EPs") {
+                    ForEach(page.singles) { AlbumCard(remote: RemoteAlbum($0, artist: page.name, catalog: catalog)) }
+                }
+            }
+
+            if !page.playlists.isEmpty {
+                ArtistShelf(title: "Playlists") {
+                    ForEach(page.playlists) { PlaylistCard(remote: RemotePlaylist($0, catalog: catalog)) }
+                }
+            }
+
+            if !page.similar.isEmpty {
+                ArtistShelf(title: "Fans Also Like") {
+                    ForEach(page.similar) { similar in
+                        MediaTile(url: similar.photoURL, title: similar.name, subtitle: similar.audience, shape: .round) {
+                            let next = Artist.findOrInsert(
+                                youtubeBrowseID: similar.youtubeBrowseID, name: similar.name,
+                                artworkURL: similar.photoURL, in: modelContext
+                            )
+                            router.navigate(to: .artist(id: next.artistID))
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                }
+            }
+
+            if let about = page.about, !about.isEmpty {
+                ArtistAbout(text: about)
+            }
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: - Data
+
+    /// The wide banner from YouTube Music when there is one; the saved artwork otherwise.
+    private var heroURL: URL? {
+        catalogArtist?.photoURL ?? artist.artworkURLString.flatMap(URL.init(string:))
+    }
+
+    /// The saved artwork is square and already cached, so the palette comes from it first.
+    private var paletteSource: URL? {
+        artist.artworkURLString.flatMap(URL.init(string:)) ?? catalogArtist?.photoURL
+    }
+
+    private func loadCatalog() async {
+        guard let catalog else {
+            isLoadingCatalog = false
+            return
+        }
+        let page = await catalog.artist(named: artist.displayName, youtubeBrowseID: artist.youtubeMusicBrowseID)
+        // Remembered, so the next visit skips the name search.
+        if artist.youtubeMusicBrowseID == nil, let browseID = page.youtubeBrowseID {
+            artist.youtubeMusicBrowseID = browseID
+        }
+        if artist.artworkURLString == nil, let photo = page.photoURL {
+            artist.artworkURLString = photo.absoluteString
+        }
+        withAnimation(.easeOut(duration: 0.35)) {
+            catalogArtist = page
+            isLoadingCatalog = false
+        }
+    }
+
+    /// The Catalog's top songs once loaded, the library's songs before then.
+    private var playableRefs: [PlayableRef] {
+        if let songs = catalogArtist?.topSongs, !songs.isEmpty {
+            return songs.enumerated().compactMap { index, track in
+                PlaylistItem(remote: track.incoming, playlistID: "artist:\(artist.artistID)", sortIndex: index)
+                    .playableRef(preferring: preferredSourceIDs)
+            }
+        }
+        // Each song already knows which services it exists on, so this is a mapping rather
+        // than a reconstruction.
+        return topTracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
+    }
+
     private func shuffle() {
-        guard !topTracks.isEmpty else { return }
-        playTracks(startingAt: Int.random(in: 0 ..< topTracks.count), shuffled: true)
+        let count = playableRefs.count
+        guard count > 0 else { return }
+        playTracks(startingAt: Int.random(in: 0 ..< count), shuffled: true)
     }
 
     private func playTracks(startingAt index: Int, shuffled: Bool = false) {
-        guard !topTracks.isEmpty else { return }
 
-        // Each song already knows which services it exists on, so this is a mapping rather
-        // than a reconstruction. It replaced a ~65-line block that rebuilt a
-        // SpotifySearchTrack, a FederatedSearchItem, a payload enum, and a stream-resolving
-        // closure per track, on every tap.
-        let refs = topTracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
-        guard !refs.isEmpty else { return }
+        let refs = playableRefs
+        guard refs.indices.contains(index) else { return }
 
         playbackCommands?.setQueue(refs, startIndex: index, shuffled: shuffled)
         playerPresentationController.expand()
@@ -95,6 +225,7 @@ public struct ArtistView: View {
 
 private struct ArtistArtworkHeader: View {
     let artist: Artist
+    let photoURL: URL?
     let palette: ImageColorPalette?
     let size: CGSize
 
@@ -130,7 +261,7 @@ private struct ArtistArtworkHeader: View {
 
     private var artwork: some View {
         Group {
-            if let artwork = artist.artworkURLString, let artworkURL = URL(string: artwork) {
+            if let artworkURL = photoURL {
                 ArtworkImage(url: artworkURL, size: max(size.width, artworkHeight))
             }
         }

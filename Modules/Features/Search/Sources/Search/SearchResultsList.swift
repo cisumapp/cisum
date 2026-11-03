@@ -311,15 +311,7 @@ struct SearchResultsList: View {
                 title: item.title, owner: item.subtitle, artworkURL: item.artworkURL,
                 source: .youtubeMusic, sourceID: browseID,
                 loadTracks: { [catalog] in
-                    await (catalog?.playlistTracks(youtubeBrowseID: browseID) ?? []).map {
-                        IncomingTrack(
-                            provider: $0.isMusicVideo ? .youtube : .youtubeMusic,
-                            providerTrackID: $0.youtubeVideoID,
-                            title: $0.title, artistName: $0.artist, albumName: $0.album,
-                            durationSeconds: $0.durationSeconds,
-                            artworkURLString: $0.artworkURL?.absoluteString, isExplicit: $0.isExplicit
-                        )
-                    }
+                    await (catalog?.playlistTracks(youtubeBrowseID: browseID) ?? []).map(\.incoming)
                 },
                 onAddToLibrary: { onRowSelection(item) }
             ))

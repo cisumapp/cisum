@@ -114,3 +114,27 @@ public final class PlaylistItem {
         "\(playlistID)::\(sortIndex)"
     }
 }
+
+public extension PlaylistItem {
+    /// An unsaved item for a track fetched from a provider, so a playlist or album that is not
+    /// in the library lists and plays its tracks like a saved one. Nothing is persisted unless it
+    /// is inserted.
+    convenience init(remote track: IncomingTrack, playlistID: String, sortIndex: Int) {
+        self.init(
+            playlistID: playlistID,
+            sortIndex: sortIndex,
+            sourceTrackID: track.providerTrackID,
+            sourceTrackFingerprint: "\(track.provider.rawValue):\(track.providerTrackID)",
+            title: track.title,
+            artistName: track.artistName,
+            albumName: track.albumName,
+            isrc: track.isrc,
+            durationSeconds: track.durationSeconds,
+            artworkURLString: track.artworkURLString,
+            youtubeID: track.provider == .youtube ? track.providerTrackID : nil,
+            youtubeMusicID: track.provider == .youtubeMusic ? track.providerTrackID : nil,
+            spotifyID: track.provider == .spotify ? track.providerTrackID : nil,
+            appleMusicID: track.provider == .appleMusic ? track.providerTrackID : nil
+        )
+    }
+}

@@ -22,6 +22,8 @@ let package = Package(
         .package(path: "../Player"),
         .package(path: "../Albums"),
         .package(path: "../Tracks"),
+        .package(path: "../Playlists"),
+        .package(path: "../../Shared/Catalog"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -37,6 +39,8 @@ let package = Package(
                 .product(name: "Player", package: "Player"),
                 .product(name: "Albums", package: "Albums"),
                 .product(name: "Tracks", package: "Tracks"),
+                .product(name: "Playlists", package: "Playlists"),
+                .product(name: "Catalog", package: "Catalog"),
             ]
         ),
 
