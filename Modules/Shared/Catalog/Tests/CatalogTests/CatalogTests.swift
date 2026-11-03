@@ -1,5 +1,7 @@
 @testable import Catalog
+import AVFoundation
 import Foundation
+import Models
 import Testing
 import iTunesKit
 import YouTubeSDK
@@ -56,5 +58,17 @@ struct CatalogTests {
         if let playlist = artist.playlists.first {
             #expect(await !Catalog(youtube: YouTubeMusicClient()).playlistTracks(youtubeBrowseID: playlist.youtubeBrowseID).isEmpty)
         }
+    }
+
+    @Test("Live: Apple Music motion artwork downloads to one playable video")
+    func liveMotionArtwork() async throws {
+        let store = MotionArtworkStore(canvasLookup: nil)
+        let request = MotionArtworkRequest(title: "Midnights", artist: "Taylor Swift", album: "Midnights")
+        let file = try #require(await store.fetch(request))
+        let asset = AVURLAsset(url: file)
+        let duration = try await asset.load(.duration)
+        #expect(duration.seconds > 1)
+        #expect(try await !asset.loadTracks(withMediaType: .video).isEmpty)
+        #expect(store.cachedVideo(for: request) == file)
     }
 }

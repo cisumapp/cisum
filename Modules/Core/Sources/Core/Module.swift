@@ -44,6 +44,10 @@ public final class cisumModule {
     public let catalog: Catalog
     /// Artist pages kept on the device, refreshed overnight.
     public let artistPageStore: ArtistPageStore
+    /// Spotify Canvas and Apple Music motion artwork, downloaded and kept for later plays.
+    public let motionArtworkStore = MotionArtworkStore { trackID in
+        await SpotifySessionCoordinator.shared.canvasURL(trackID: trackID)
+    }
 
     public var router: Router {
         appRouter
@@ -348,6 +352,7 @@ public final class cisumModule {
             .environment(\.centralMediaStore, container.libraryServices.centralMediaStore)
             .environment(\.catalog, catalog)
             .environment(\.artistPageStore, artistPageStore)
+            .environment(\.motionArtwork, motionArtworkStore.source)
             .environment(container.userServices)
             .environment(container.providerServices)
             .environment(container.appServices)
@@ -450,6 +455,7 @@ public final class cisumModule {
         // Public catalogue data only, so the signed-out client is enough even after sign-in.
         self.catalog = Catalog(youtube: youtube.music)
         self.artistPageStore = ArtistPageStore(catalog: catalog, container: container.appServices.modelContainer)
+        container.playbackServices.player.motionArtwork = motionArtworkStore.source
 
         // Initialize Features
         self.home = HomeModule(youtube: youtube)

@@ -268,6 +268,13 @@ public final class PlayerViewModel: PlaybackCommands {
         preResolveUpcoming()
         prepareUpcomingIfNeeded()
         publishNowPlaying()
+        if let motionArtwork {
+            let request = MotionArtworkRequest(
+                title: ref.title, artist: ref.artist, album: ref.album,
+                spotifyTrackID: selected.sourceID == "spotify" ? selected.sourceTrackID : nil
+            )
+            Task { _ = await motionArtwork.fetch(request) }
+        }
     }
 
     private func wireEngineCallbacks() {
@@ -525,6 +532,8 @@ public final class PlayerViewModel: PlaybackCommands {
     /// The track that is playing, as the recording that actually resolved — what a station is built
     /// from. Not the tapped ref: that may be another service's id, or not a track id at all.
     @ObservationIgnored private var playingSeed: PlayableRef?
+    /// Downloads each played track's animated artwork, so the full player has it waiting.
+    @ObservationIgnored public var motionArtwork: MotionArtworkSource?
     /// Set when the station has nothing further, so a dry station is not asked again every track.
     @ObservationIgnored private var radioExhausted = false
 

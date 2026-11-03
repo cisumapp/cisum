@@ -20,6 +20,7 @@ public struct AlbumCard: View {
     @Environment(\.playbackCommands) private var playbackCommands
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Environment(PlayerPresentationController.self) private var playerPresentationController
+    @Environment(\.motionArtwork) private var motionArtwork
 
     @Query private var songs: [Song]
     /// Set for an album that is not in the library: its tracks load when the card opens.
@@ -64,6 +65,7 @@ public struct AlbumCard: View {
                     AlbumCover(isCardExpanded: isCardExpanded, viewModel: viewModel, album: album)
                 }
             } content: { _, _ in
+                Group {
                 if let remote {
                     RemoteAlbumTrackList(album: album, remote: remote)
                 } else {
@@ -100,6 +102,13 @@ public struct AlbumCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding()
                 }
+                }
+                }
+                // Opening an album fetches its animated artwork, so playing it later finds the
+                // video waiting. Keyed like the player's request: artist and album.
+                .task {
+                    let request = MotionArtworkRequest(title: album.title, artist: album.primaryArtistName ?? "", album: album.title)
+                    _ = await motionArtwork?.fetch(request)
                 }
             }
             .frame(width: 175 * scale, height: 175 * scale)

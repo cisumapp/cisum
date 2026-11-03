@@ -15,6 +15,9 @@ import Utilities
 
 struct PlayerBackground: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
+    @Environment(\.motionArtwork) private var motionArtwork
+    /// The current album's animated artwork, once it is on the device.
+    @State private var motionVideo: URL?
 
     let isPlayerExpanded: Bool
     let isFullExpanded: Bool
@@ -38,6 +41,12 @@ struct PlayerBackground: View {
                                 .scaleEffect(1.1)
                                 .blur(radius: 10)
 
+                            // Animated artwork, when the album has one, in the record's place
+                            // and under the same dimming, so the controls read the same.
+                            if let motionVideo, isPlayerExpanded {
+                                LoopingVideo(url: motionVideo)
+                                    .transition(.opacity)
+                            } else {
                             Aesthetics.Vinyl(
                                 isPlaying: playerViewModel.isPlaying,
                                 accentColor: playerViewModel.currentAccentColor,
@@ -71,6 +80,7 @@ struct PlayerBackground: View {
                                 upnextTitle: (playerViewModel as? PlayerViewModel)?.nextQueuePreviewItem?.title,
                                 upnextSubtitle: (playerViewModel as? PlayerViewModel)?.nextQueuePreviewItem?.subtitle
                             )
+                            }
 
                             ZStack {
                                 Color.black.opacity(0.1)
@@ -88,6 +98,31 @@ struct PlayerBackground: View {
         }
         .clipShape(.rect(cornerRadius: dynamicCornerRadius))
         .frame(height: isPlayerExpanded ? nil : collapsedHeight)
+        // Every played track's album is fetched once and kept, and the next track's is fetched
+        // ahead, so the video is usually waiting when the song starts.
+        .task(id: motionRequest) {
+            guard let motionArtwork, let motionRequest else {
+                motionVideo = nil
+                return
+            }
+            motionVideo = motionArtwork.cachedVideo(motionRequest)
+            if motionVideo == nil, let fetched = await motionArtwork.fetch(motionRequest), !Task.isCancelled {
+                withAnimation(.easeOut(duration: 0.5)) { motionVideo = fetched }
+            }
+            if let next = playerViewModel.nextQueuePreviewItem {
+                _ = await motionArtwork.fetch(MotionArtworkRequest(title: next.title, artist: next.subtitle))
+            }
+        }
+    }
+
+    private var motionRequest: MotionArtworkRequest? {
+        guard let ref = playerViewModel.nowPlaying.ref, !ref.title.isEmpty else { return nil }
+        return MotionArtworkRequest(
+            title: ref.title,
+            artist: ref.artist,
+            album: ref.album,
+            spotifyTrackID: ref.sourceID == "spotify" ? ref.sourceTrackID : nil
+        )
     }
 }
 
