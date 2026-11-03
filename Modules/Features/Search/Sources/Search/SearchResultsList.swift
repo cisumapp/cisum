@@ -245,35 +245,12 @@ struct SearchResultsList: View {
     }
 
     private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(availableFilters, id: \.self) { candidate in
-                    Button {
-                        withAnimation(.snappy) { filter = candidate }
-                    } label: {
-                        Text(candidate.rawValue)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary.opacity(0.8))
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-                            .background {
-                                if filter == candidate {
-                                    Capsule().fill(.fill.tertiary)
-                                }
-                            }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(4)
-            // On the row, not the ScrollView: a horizontal ScrollView in a top inset grows into
-            // the status bar area, and a capsule behind it grew with it.
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().strokeBorder(.primary.opacity(0.1)))
-            .padding(.horizontal, 20)
+        Picker("Filter", selection: $filter.animation(.snappy)) {
+            ForEach(availableFilters, id: \.self) { Text($0.rawValue).tag($0) }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .padding(.horizontal, 20)
         .padding(.vertical, 8)
     }
 
