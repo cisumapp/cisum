@@ -1,9 +1,11 @@
 import Aesthetics
+import Artists
 import Kingfisher
 import Models
 import Player
 import SwiftData
 import SwiftUI
+import Tracks
 import Utilities
 
 // MARK: - Search Results
@@ -24,8 +26,28 @@ struct SearchResultsList: View {
     @Environment(\.preferredSourceIDs) private var preferredSourceIDs
     @Query private var libraryItems: [PlaylistItem]
     @State private var filter = SearchFilter.all
+    @State private var topInset: CGFloat = 0
 
     var body: some View {
+        // Chips above the results rather than in a safe-area inset: either scroll view touching
+        // the top edge takes the navigation area as content inset, a tall empty band.
+        VStack(spacing: 0) {
+            filterChips
+            results
+        }
+        // The tab root ignores the safe area, so the status bar's height is applied by hand. Read
+        // once here, not in `body`: reading the window during an update is what froze the tabs.
+        .padding(.top, topInset)
+        .onAppear { topInset = AppConstants.safeAreaInsets.top }
+        .onChange(of: searchViewModel.searchText) { _, _ in
+            filter = .all
+        }
+        .alert(nonPlayableMessage, isPresented: $showNonPlayableAlert) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    private var results: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 32) {
                 switch filter {
@@ -57,17 +79,8 @@ struct SearchResultsList: View {
             .padding(.horizontal, 20)
             .padding(.top, 12)
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            filterChips
-        }
         .contentMargins(.bottom, 140, for: .scrollContent)
         .scrollDismissesKeyboard(.immediately)
-        .onChange(of: searchViewModel.searchText) { _, _ in
-            filter = .all
-        }
-        .alert(nonPlayableMessage, isPresented: $showNonPlayableAlert) {
-            Button("OK", role: .cancel) {}
-        }
     }
 
     // MARK: Data
@@ -80,12 +93,13 @@ struct SearchResultsList: View {
             .filter { seen.insert($0.id).inserted }
     }
 
+    /// Spotify's when signed in, otherwise YouTube Music's.
     private var artists: [FederatedSearchItem] {
-        searchViewModel.spotifyArtistResults
+        searchViewModel.spotifyArtistResults.isEmpty ? searchViewModel.youtubeArtistResults : searchViewModel.spotifyArtistResults
     }
 
     private var playlists: [FederatedSearchItem] {
-        searchViewModel.spotifyPlaylistResults
+        searchViewModel.spotifyPlaylistResults.isEmpty ? searchViewModel.youtubePlaylistResults : searchViewModel.spotifyPlaylistResults
     }
 
     /// The artist the query names, if one does — it heads the results with their songs.
@@ -176,6 +190,16 @@ struct SearchResultsList: View {
 
     private func topArtistCard(_ artist: FederatedSearchItem, songs: [FederatedSearchItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            #if os(iOS)
+            Button { onRowSelection(artist) } label: {
+                TopArtistSearchResultCard(
+                    artistName: artist.title,
+                    artistImageURL: artist.artworkURL,
+                    previewArtworkURLs: songs.map(\.artworkURL)
+                )
+            }
+            .buttonStyle(.plain)
+            #else
             Button { onRowSelection(artist) } label: {
                 HStack(spacing: 10) {
                     SearchArtwork(url: artist.artworkURL, cornerRadius: 22)
@@ -191,13 +215,12 @@ struct SearchResultsList: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            #endif
 
             if !songs.isEmpty {
                 songRows(songs.map(SearchSong.result))
             }
         }
-        .padding(10)
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     // MARK: Pieces
@@ -244,22 +267,19 @@ struct SearchResultsList: View {
                 }
             }
             .padding(4)
+            // On the row, not the ScrollView: a horizontal ScrollView in a top inset grows into
+            // the status bar area, and a capsule behind it grew with it.
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(.primary.opacity(0.1)))
+            .padding(.horizontal, 20)
         }
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.primary.opacity(0.1)))
-        .padding(.horizontal, 20)
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.vertical, 8)
     }
 
     private func songRows(_ rows: [SearchSong]) -> some View {
         VStack(spacing: 0) {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
-                if offset > 0 {
-                    Rectangle()
-                        .fill(.primary.opacity(0.1))
-                        .frame(height: 0.5)
-                        .padding(.vertical, 5)
-                }
+            ForEach(rows) { row in
                 SearchSongRow(song: row.track) {
                     play(row, in: rows)
                 }
@@ -381,7 +401,7 @@ enum SearchSong: Identifiable {
     }
 }
 
-/// A compact song row: artwork, title, album or artist, then Save and a menu.
+/// A song row: the Tracks module's `TrackListItem`, with Save and Add to Playlist in its context menu.
 struct SearchSongRow: View {
     let song: SavableTrack
     let onPlay: () -> Void
@@ -391,50 +411,22 @@ struct SearchSongRow: View {
     @State private var isAddingToPlaylist = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: onPlay) {
-                HStack(spacing: 10) {
-                    SearchArtwork(url: song.artworkURL, cornerRadius: 6)
-                        .frame(width: 34, height: 34)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(song.title)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary.opacity(0.8))
-                        Text(song.album ?? song.artist)
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            HStack(spacing: 20) {
-                Button {
-                    Task { isSaved = await savedLibrary?.toggleSaved(song) ?? isSaved }
-                } label: {
-                    Image(systemName: isSaved ? "star.fill" : "star")
-                }
-                .accessibilityLabel(isSaved ? "Remove from Saved" : "Save")
-
-                Menu {
-                    Button("Add to Playlist", systemImage: "text.badge.plus") { isAddingToPlaylist = true }
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .menuIndicator(.hidden)
-            }
-            .buttonStyle(.plain)
-            .font(.callout.weight(.medium))
-            .foregroundStyle(.secondary)
-            .padding(.trailing, 4)
+        Button(action: onPlay) {
+            TrackListItem(
+                trackName: song.title,
+                artistName: song.album.map { "\(song.artist) • \($0)" } ?? song.artist,
+                duration: song.durationSeconds.map { String(format: "%d:%02d", Int($0) / 60, Int($0) % 60) } ?? "",
+                artworkURL: song.artworkURL,
+                isExplicit: song.isExplicit
+            )
         }
-        .padding(4)
-        .frame(height: 42)
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(isSaved ? "Remove from Saved" : "Save", systemImage: isSaved ? "star.slash" : "star") {
+                Task { isSaved = await savedLibrary?.toggleSaved(song) ?? isSaved }
+            }
+            Button("Add to Playlist", systemImage: "text.badge.plus") { isAddingToPlaylist = true }
+        }
         .task(id: song.fingerprint) {
             isSaved = await savedLibrary?.isSaved(fingerprint: song.fingerprint) ?? false
         }

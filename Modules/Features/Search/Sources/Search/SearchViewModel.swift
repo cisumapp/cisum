@@ -96,6 +96,9 @@ public class SearchViewModel: SearchViewModelInterface {
     public var spotifyTrackResults: [FederatedSearchItem] = []
     public var spotifyArtistResults: [FederatedSearchItem] = []
     public var spotifyPlaylistResults: [FederatedSearchItem] = []
+    /// YouTube Music's artists and playlists, so those sections fill without a Spotify sign-in.
+    public var youtubeArtistResults: [FederatedSearchItem] = []
+    public var youtubePlaylistResults: [FederatedSearchItem] = []
 
     /// Maps spotify item ID → best matching hidden-provider item
     /// Populated asynchronously after hidden providers complete.
@@ -200,9 +203,10 @@ public class SearchViewModel: SearchViewModelInterface {
         async let ytMusicFetch = fetchYouTubeMusicSectionItems(query: query, updateUI: true)
         async let ytVideoFetch = fetchYouTubeSectionItems(query: effectiveVideoQuery, updateUI: true)
         async let providerFetch = fetchProviderSDKSectionItems(query: query)
+        async let ytCollectionsFetch = fetchYouTubeMusicCollections(query: query)
 
-        let (spotifyResult, ytMusicResult, ytVideoResult, providerResult) =
-            await (spotifyFetch, ytMusicFetch, ytVideoFetch, providerFetch)
+        let (spotifyResult, ytMusicResult, ytVideoResult, providerResult, ytCollections) =
+            await (spotifyFetch, ytMusicFetch, ytVideoFetch, providerFetch, ytCollectionsFetch)
 
         // Anything past this point publishes. A superseded search must publish nothing.
         //
@@ -229,6 +233,8 @@ public class SearchViewModel: SearchViewModelInterface {
         applyFederatedSearchResult(ytMusicResult, for: .youtubeMusic)
         applyFederatedSearchResult(ytVideoResult, for: .youtube)
         applyFederatedSearchResult(providerResult, for: .providerSDK)
+        youtubeArtistResults = ytCollections.artists
+        youtubePlaylistResults = ytCollections.playlists
         refreshUnifiedResults(for: query)
 
         state = .success
@@ -318,6 +324,34 @@ public class SearchViewModel: SearchViewModelInterface {
         spotifyTrackResults = []
         spotifyArtistResults = []
         spotifyPlaylistResults = []
+        youtubeArtistResults = []
+        youtubePlaylistResults = []
+    }
+
+    /// YouTube Music's artist and playlist matches. A failure leaves that section empty; songs
+    /// come from the other fetches either way.
+    private func fetchYouTubeMusicCollections(query: String) async -> (artists: [FederatedSearchItem], playlists: [FederatedSearchItem]) {
+        let music = youtube.music
+        async let artists = (try? await music.searchArtists(query)) ?? []
+        async let playlists = (try? await music.searchPlaylists(query)) ?? []
+
+        func item(id: String, title: String, subtitle: String, artworkURL: URL?, payload: FederatedSearchPayload) -> FederatedSearchItem {
+            FederatedSearchItem(
+                id: "ytm:\(id)", title: title, subtitle: subtitle, artworkURL: artworkURL, durationSeconds: nil,
+                isPlayable: false, isExplicit: false, audioQualityLabel: nil, audioCodecLabel: nil, payload: payload
+            )
+        }
+        return await (
+            artists.map { item(id: $0.id, title: $0.name, subtitle: $0.subscriberCount ?? "Artist", artworkURL: Self.largeArtwork($0.thumbnailURL), payload: .youtubeArtist(browseID: $0.id)) },
+            playlists.map { item(id: $0.id, title: $0.title, subtitle: $0.author ?? "", artworkURL: $0.thumbnailURL, payload: .youtubePlaylist(browseID: $0.id)) }
+        )
+    }
+
+    /// Artist rows come with 120px photos (`…=w120-h120-…`); the same URL serves any size.
+    nonisolated static func largeArtwork(_ url: URL?) -> URL? {
+        guard let url else { return nil }
+        let string = url.absoluteString.replacingOccurrences(of: "=w120-h120", with: "=w544-h544")
+        return URL(string: string) ?? url
     }
 
     private func applySpotifySearchResult(_ result: Result<SpotifySearchItems, Error>) {

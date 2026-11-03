@@ -25,6 +25,8 @@ public protocol SearchViewModelInterface: AnyObject, Observable {
     var spotifyTrackResults: [FederatedSearchItem] { get }
     var spotifyArtistResults: [FederatedSearchItem] { get }
     var spotifyPlaylistResults: [FederatedSearchItem] { get }
+    var youtubeArtistResults: [FederatedSearchItem] { get }
+    var youtubePlaylistResults: [FederatedSearchItem] { get }
     var unifiedTopResults: [FederatedSearchItem] { get }
     var youMightLikeResults: [FederatedSearchItem] { get }
     var hiddenFallbackMap: [String: FederatedSearchItem] { get }
