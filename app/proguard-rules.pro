@@ -19,3 +19,5 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Swift calls these by name over JNI (SwiftBridge.nativeCall, SwiftJS.evaluate): keep names and members.
+-keep class aaravgupta.cisum.swift.** { *; }

@@ -14,3 +14,9 @@
 .cxx
 local.properties
 /.idea
+
+# Built by cisum's Packages/StreamingKit/AndroidBridge/build-android.sh (needs the Swift SDK for Android)
+/app/src/main/jniLibs/
+/app/src/main/assets/yt.solver.*.min.js
+# The old dynamic-stdlib YouTubeSDK AAR, replaced by libCisumBridge.so
+/app/libs/
