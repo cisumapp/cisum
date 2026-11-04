@@ -1,0 +1,207 @@
+# proto-message: google.testing.platform.proto.api.core.TestSuiteResult
+# 2026-11-04T13:05:37.026847Z:
+test_suite_meta_data {
+  scheduled_test_case_count: 1
+  device {
+    id: "emulator-5554"
+    friendly_name: "primary"
+  }
+}
+test_status: PASSED
+test_result {
+  test_case {
+    test_class: "BaselineProfileGenerator"
+    test_package: "aaravgupta.cisum.baselineprofile"
+    test_method: "generate"
+    start_time {
+      seconds: 1793797161
+      nanos: 178000000
+    }
+    end_time {
+      seconds: 1793797535
+      nanos: 393000000
+    }
+    device {
+      id: "emulator-5554"
+      friendly_name: "primary"
+    }
+  }
+  test_status: PASSED
+  output_artifact {
+    label {
+      label: "additionaltestoutput.benchmark.message"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/connected_android_test_additional_output/nonMinifiedRelease/connected/Pixel_10(AVD) - 17/additionaltestoutput.benchmark.message_aaravgupta.cisum.baselineprofile.BaselineProfileGenerator.generate.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "additionaltestoutput.benchmark.trace"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/connected_android_test_additional_output/nonMinifiedRelease/connected/Pixel_10(AVD) - 17/BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "logcat"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel_10(AVD) - 17/logcat-aaravgupta.cisum.baselineprofile.BaselineProfileGenerator-generate.txt"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel_10(AVD) - 17/device-info.pb"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.meminfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel_10(AVD) - 17/meminfo"
+    }
+  }
+  output_artifact {
+    label {
+      label: "device-info.cpuinfo"
+      namespace: "android"
+    }
+    source_path {
+      path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel_10(AVD) - 17/cpuinfo"
+    }
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "android.studio.v3display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v3display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "android.studio.v3display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v3display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "android.studio.v3display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v3display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt"
+  }
+  details {
+    key: "additionalTestOutputFile_BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt"
+  }
+  details {
+    key: "android.studio.display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v2display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+  details {
+    key: "android.studio.v3display.benchmark"
+    value: "BaselineProfileGenerator_generate\nTotal run time Ns: 374105153595.\nBaseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)\n\nTo copy the profile use:\nadb -e pull \"/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt\" .\n"
+  }
+  details {
+    key: "android.studio.v3display.benchmark.outputDirPath"
+    value: "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output"
+  }
+}
+output_artifact {
+  label {
+    label: "test-results.log"
+    namespace: "com.google.testing.platform.runtime.android.driver.AndroidInstrumentationDriver"
+  }
+  source_path {
+    path: "/Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/androidTest-results/connected/nonMinifiedRelease/Pixel_10(AVD) - 17/testlog/test-results.log"
+  }
+  type: TEST_DATA
+  mime_type: "text/plain"
+}

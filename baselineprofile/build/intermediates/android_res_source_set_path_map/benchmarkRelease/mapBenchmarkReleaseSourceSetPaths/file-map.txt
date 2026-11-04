@@ -1,0 +1,7 @@
+aaravgupta.cisum.baselineprofile-pngs-0 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/generated/res/pngs/benchmarkRelease
+aaravgupta.cisum.baselineprofile-updated_navigation_xml-1 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/generated/updated_navigation_xml/benchmarkRelease
+aaravgupta.cisum.baselineprofile-packageBenchmarkReleaseResources-2 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/intermediates/incremental/benchmarkRelease/packageBenchmarkReleaseResources/merged.dir
+aaravgupta.cisum.baselineprofile-packageBenchmarkReleaseResources-3 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/intermediates/incremental/benchmarkRelease/packageBenchmarkReleaseResources/stripped.dir
+aaravgupta.cisum.baselineprofile-benchmarkRelease-4 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/intermediates/merged_res/benchmarkRelease/mergeBenchmarkReleaseResources
+aaravgupta.cisum.baselineprofile-benchmarkRelease-5 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/src/benchmarkRelease/res
+aaravgupta.cisum.baselineprofile-main-6 /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/src/main/res

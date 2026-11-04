@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cisum"
 include(":app")
- 
+include(":baselineprofile")

@@ -1,0 +1,6 @@
+BaselineProfileGenerator_generate
+Total run time Ns: 374105153595.
+Baseline profile [results](file://BaselineProfileGenerator_generate-startup-prof-2026-11-04-13-05-35.txt)
+
+To copy the profile use:
+adb -e pull "/sdcard/Android/media/aaravgupta.cisum.baselineprofile/additional_test_output/BaselineProfileGenerator_generate-startup-prof.txt" .

@@ -1,0 +1,36 @@
+EXECUTING: /Users/aaravgupta/Library/Android/sdk/build-tools/36.0.0/aapt dump badging /Users/aaravgupta/Programming/Kotlin/cisum/baselineprofile/build/outputs/apk/nonMinifiedRelease/baselineprofile-nonMinifiedRelease.apk
+CURRENT_WORKING_DIRECTORY: /Users/aaravgupta/Programming/Kotlin/cisum
+START_TIME: 2026-11-04 18:35:36.581
+START_TIME-NANOS: 2026-11-04 18:35:36.581765000
+ENVIRONMENT:
+
+*****************************************
+STDOUT/STDERR BELOW
+===================
+package: name='aaravgupta.cisum.baselineprofile' versionCode='' versionName='' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+sdkVersion:'31'
+targetSdkVersion:'36'
+uses-permission: name='android.permission.WRITE_EXTERNAL_STORAGE'
+uses-permission: name='android.permission.READ_EXTERNAL_STORAGE'
+uses-permission: name='android.permission.QUERY_ALL_PACKAGES'
+uses-permission: name='android.permission.INTERNET'
+uses-permission: name='android.permission.REORDER_TASKS'
+uses-permission: name='aaravgupta.cisum.baselineprofile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+application: label='' icon=''
+application-debuggable
+uses-library-not-required:'com.android.extensions.xr'
+feature-group: label=''
+  uses-feature: name='android.hardware.faketouch'
+  uses-implied-feature: name='android.hardware.faketouch' reason='default feature for all apps'
+other-activities
+other-receivers
+supports-screens: 'small' 'normal' 'large' 'xlarge'
+supports-any-density: 'true'
+locales: '--_--' 'af' 'am' 'ar' 'as' 'az' 'be' 'bg' 'bn' 'bs' 'ca' 'cs' 'da' 'de' 'el' 'en-AU' 'en-CA' 'en-GB' 'en-IN' 'en-XC' 'es' 'es-US' 'et' 'eu' 'fa' 'fi' 'fr' 'fr-CA' 'gl' 'gu' 'hi' 'hr' 'hu' 'hy' 'in' 'is' 'it' 'iw' 'ja' 'ka' 'kk' 'km' 'kn' 'ko' 'ky' 'lo' 'lt' 'lv' 'mk' 'ml' 'mn' 'mr' 'ms' 'my' 'nb' 'ne' 'nl' 'or' 'pa' 'pl' 'pt' 'pt-BR' 'pt-PT' 'ro' 'ru' 'si' 'sk' 'sl' 'sq' 'sr' 'sr-Latn' 'sv' 'sw' 'ta' 'te' 'th' 'tl' 'tr' 'uk' 'ur' 'uz' 'vi' 'zh-CN' 'zh-HK' 'zh-TW' 'zu'
+densities: '160' '240' '320' '65535'
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
+===================
+END_TIME: 2026-11-04 18:35:36.612
+END_TIME-NANOS: 2026-11-04 18:35:36.612799000
+DURATION: 31ms
+EXIT CODE: 0

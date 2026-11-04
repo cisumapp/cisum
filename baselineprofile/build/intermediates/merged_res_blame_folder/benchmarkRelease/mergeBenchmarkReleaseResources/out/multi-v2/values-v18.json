@@ -1,0 +1,28 @@
+{
+    "logs": [
+        {
+            "outputFile": "aaravgupta.cisum.baselineprofile-mergeBenchmarkReleaseResources-16:/values-v18/values-v18.xml",
+            "map": [
+                {
+                    "source": "/Users/aaravgupta/.gradle/caches/9.3.1/transforms/dc0ad98a60d24a84b4ef6baa22ae9109/transformed/core-1.7.0/res/values-v18/values.xml",
+                    "from": {
+                        "startLines": "4,12",
+                        "startColumns": "0,0",
+                        "startOffsets": "146,562",
+                        "endLines": "11,19",
+                        "endColumns": "8,8",
+                        "endOffsets": "561,975"
+                    },
+                    "to": {
+                        "startLines": "2,10",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,475",
+                        "endLines": "9,17",
+                        "endColumns": "8,8",
+                        "endOffsets": "470,888"
+                    }
+                }
+            ]
+        }
+    ]
+}
