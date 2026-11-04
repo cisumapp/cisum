@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuites tests="1" failures="0" errors="0" skipped="0" time="375.734" timestamp="2026-11-04T13:05:37" hostname="localhost">
+  <testsuite name="aaravgupta.cisum.baselineprofile.BaselineProfileGenerator" tests="1" failures="0" errors="0" skipped="0" time="374.355" timestamp="2026-11-04T13:05:37" hostname="localhost">
+    <properties>
+      <property name="device" value="Pixel_10(AVD) - 17" />
+      <property name="flavor" value="" />
+      <property name="project" value=":baselineprofile" />
+    </properties>
+    <testcase name="generate" classname="aaravgupta.cisum.baselineprofile.BaselineProfileGenerator" time="374.355" />
+  </testsuite>
+</testsuites>

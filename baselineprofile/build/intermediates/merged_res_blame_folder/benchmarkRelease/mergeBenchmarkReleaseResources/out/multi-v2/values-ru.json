@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "aaravgupta.cisum.baselineprofile-mergeBenchmarkReleaseResources-16:/values-ru/values-ru.xml",
+            "map": [
+                {
+                    "source": "/Users/aaravgupta/.gradle/caches/9.3.1/transforms/d2aa9bceb5c8d43bc9d2a7de12c923a9/transformed/core-1.9.0/res/values-ru/values-ru.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    }
+                }
+            ]
+        }
+    ]
+}
