@@ -117,6 +117,22 @@ esac
 CLASSPATH="\\\"\\\""
 
 
+# Some IDE extensions set JAVA_HOME to a runtime without jlink.
+# AGP needs jlink for androidJdkImage, so fall back to a full local JDK.
+if [ -n "$JAVA_HOME" ] && [ ! -x "$JAVA_HOME/bin/jlink" ] ; then
+    for CANDIDATE_JAVA_HOME in \
+        "/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
+        "$HOME/.sdkman/candidates/java/current"
+    do
+        if [ -x "$CANDIDATE_JAVA_HOME/bin/java" ] && [ -x "$CANDIDATE_JAVA_HOME/bin/jlink" ] ; then
+            JAVA_HOME=$CANDIDATE_JAVA_HOME
+            export JAVA_HOME
+            break
+        fi
+    done
+fi
+
+
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
