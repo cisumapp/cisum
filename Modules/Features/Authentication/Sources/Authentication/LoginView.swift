@@ -9,10 +9,11 @@ import AppKit
 
 public struct LoginView: View {
     enum Step {
-        case email, password, profile
+        case email, password, profile, verify
     }
 
     @Environment(AuthService.self) private var authService
+    @Environment(\.dismiss) private var dismiss
     public var onLoginSuccess: ((_ signup: Bool) async -> Void)?
 
     @State private var step: Step = .email
@@ -23,6 +24,7 @@ public struct LoginView: View {
     @State private var firstName = ""
     @State private var lastName = ""
     @State private var username = ""
+    @State private var code = ""
     @State private var errorMessage: String?
 
     private static let fieldBg = Color.cisumSurface
@@ -33,68 +35,78 @@ public struct LoginView: View {
     }
 
     public var body: some View {
-        ZStack {
-            VStack(spacing: 16) {
-                Spacer(minLength: 300)
+        // Scrolls, bottom-anchored when it fits: opened from Profile (guest mode) the player and the
+        // tab bar stay on screen, and a fixed layout put the buttons underneath them.
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: 16) {
+                    Spacer(minLength: 120)
 
-                VStack(alignment: .leading, spacing: 24) {
-                    HStack(spacing: 12) {
-                        if step != .email {
-                            Button {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                    goBack()
+                    VStack(alignment: .leading, spacing: 24) {
+                        HStack(spacing: 12) {
+                            if step != .email {
+                                Button {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                        goBack()
+                                    }
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundColor(.primary)
                                 }
-                            } label: {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(.primary)
+                                .transition(.opacity.combined(with: .scale(scale: 0.8)))
                             }
-                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                        }
 
-                        Text(title)
-                            .font(.title2)
-                            .foregroundStyle(.primary)
-                            .fontWeight(.bold)
+                            Text(title)
+                                .font(.title2)
+                                .foregroundStyle(.primary)
+                                .fontWeight(.bold)
 //                            .fontWidth(.expanded)
-                            .contentTransition(.numericText())
-                    }
-
-                    Group {
-                        switch step {
-                        case .email:
-                            emailFields
-                        case .password:
-                            passwordFields
-                        case .profile:
-                            profileFields
+                                .contentTransition(.numericText())
                         }
+
+                        Group {
+                            switch step {
+                            case .email:
+                                emailFields
+                            case .password:
+                                passwordFields
+                            case .profile:
+                                profileFields
+                            case .verify:
+                                verifyFields
+                            }
+                        }
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
+
+                        if let errorMessage {
+                            errorBanner(errorMessage)
+                        }
+
+                        actionButton
                     }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
 
-                    if let errorMessage {
-                        errorBanner(errorMessage)
+                    if step == .email {
+                        socialSection
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    actionButton
-                }
+                    Spacer()
 
-                if step == .email {
-                    socialSection
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    if step == .email, !authService.isGuestMode {
+                        continueAsGuest
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
-
-                Spacer()
-
-                if step == .email {
-                    continueAsGuest
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                .padding([.horizontal, .bottom], 24)
+                .frame(minHeight: proxy.size.height, alignment: .bottom)
             }
-            .padding([.horizontal, .bottom], 24)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .contentMargins(.bottom, authService.isGuestMode ? 150 : 0, for: .scrollContent)
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: step)
         .onChange(of: email) { _, _ in isNewUser = false }
@@ -108,10 +120,10 @@ public struct LoginView: View {
             fieldLabel("Email")
             TextField("", text: $email)
                 .textFieldStyle(.plain)
-            #if os(iOS)
+                #if os(iOS)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
-            #endif
+                #endif
                 .textContentType(.emailAddress)
                 .padding(12)
                 .background(Self.fieldBg)
@@ -139,9 +151,9 @@ public struct LoginView: View {
                 fieldLabel("First Name")
                 TextField("First", text: $firstName)
                     .textFieldStyle(.plain)
-                #if os(iOS)
+                    #if os(iOS)
                     .textInputAutocapitalization(.words)
-                #endif
+                    #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
@@ -151,9 +163,9 @@ public struct LoginView: View {
                 fieldLabel("Last Name")
                 TextField("Last", text: $lastName)
                     .textFieldStyle(.plain)
-                #if os(iOS)
+                    #if os(iOS)
                     .textInputAutocapitalization(.words)
-                #endif
+                    #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
@@ -163,14 +175,33 @@ public struct LoginView: View {
                 fieldLabel("Username")
                 TextField("@username", text: $username)
                     .textFieldStyle(.plain)
-                #if os(iOS)
+                    #if os(iOS)
                     .textInputAutocapitalization(.never)
-                #endif
+                    #endif
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
                     .foregroundColor(.primary)
             }
+        }
+    }
+
+    private var verifyFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel("Code")
+            Text("Sent to \(email)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            TextField("", text: $code)
+                .textFieldStyle(.plain)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+                .textContentType(.oneTimeCode)
+                .padding(12)
+                .background(Self.fieldBg)
+                .cornerRadius(6)
+                .foregroundColor(.primary)
         }
     }
 
@@ -276,6 +307,7 @@ public struct LoginView: View {
         case .email: ""
         case .password: isNewUser ? "Create a password" : "Enter your password"
         case .profile: "Almost there"
+        case .verify: "Check your email"
         }
     }
 
@@ -284,6 +316,7 @@ public struct LoginView: View {
         case .email: "Next"
         case .password: "Continue"
         case .profile: "Create Account"
+        case .verify: "Verify"
         }
     }
 
@@ -292,6 +325,7 @@ public struct LoginView: View {
         case .email: "Next"
         case .password: isNewUser ? "Continue" : "Signing In..."
         case .profile: "Creating Account..."
+        case .verify: "Verifying..."
         }
     }
 
@@ -304,6 +338,8 @@ public struct LoginView: View {
             return busy || password.isEmpty
         case .profile:
             return busy || firstName.isEmpty || username.isEmpty
+        case .verify:
+            return busy || code.count < 6
         }
     }
 
@@ -321,6 +357,9 @@ public struct LoginView: View {
             lastName = ""
             username = ""
             step = .password
+        case .verify:
+            code = ""
+            step = .profile
         }
     }
 
@@ -341,6 +380,8 @@ public struct LoginView: View {
             } else {
                 signUp()
             }
+        case .verify:
+            verify()
         }
     }
 
@@ -349,9 +390,7 @@ public struct LoginView: View {
             let result = await authService.signInWithEmailPassword(email: email, password: password)
             switch result {
             case .success:
-                if let onLoginSuccess {
-                    await onLoginSuccess(false)
-                }
+                await finish(signup: false)
             case .accountNotFound, .needsProfile:
                 isNewUser = true
                 withAnimation { step = .profile }
@@ -363,18 +402,38 @@ public struct LoginView: View {
 
     private func signUp() {
         Task {
-            let ok = await authService.signUpWithEmailPassword(
+            let result = await authService.signUpWithEmailPassword(
                 email: email, password: password,
-                firstName: firstName, lastName: lastName.isEmpty ? nil : lastName
+                firstName: firstName, lastName: lastName.isEmpty ? nil : lastName,
+                username: username
             )
-            if ok {
-                if let onLoginSuccess {
-                    await onLoginSuccess(true)
-                }
-            } else {
-                errorMessage = authService.error?.localizedDescription ?? "Sign-up failed"
-            }
+            await handle(result)
         }
+    }
+
+    private func verify() {
+        Task { await handle(authService.verifySignUpEmail(code: code)) }
+    }
+
+    private func handle(_ result: AuthService.SignUpResult) async {
+        switch result {
+        case .success:
+            await finish(signup: true)
+        case .needsEmailCode:
+            withAnimation { step = .verify }
+        case let .failed(message):
+            errorMessage = message
+        }
+    }
+
+    /// Signed in: tells the app, then leaves. Opened from Profile the page is pushed and has to pop
+    /// itself; at launch the root swaps to the app on its own and `dismiss` does nothing.
+    private func finish(signup: Bool) async {
+        authService.exitGuestMode()
+        if let onLoginSuccess {
+            await onLoginSuccess(signup)
+        }
+        dismiss()
     }
 
     private func completeOAuthSignUp() {
@@ -382,9 +441,7 @@ public struct LoginView: View {
             let result = await authService.completeOAuthSignUp(username: username, firstName: firstName, lastName: lastName)
             switch result {
             case .success:
-                if let onLoginSuccess {
-                    await onLoginSuccess(true)
-                }
+                await finish(signup: true)
             case let .failed(message):
                 errorMessage = message
             case .accountNotFound, .needsProfile:
@@ -399,9 +456,7 @@ public struct LoginView: View {
             let result = await authService.signInWithApple()
             switch result {
             case .success:
-                if let onLoginSuccess {
-                    await onLoginSuccess(false)
-                }
+                await finish(signup: false)
             case .needsProfile:
                 isNewUser = true
                 isOAuthFlow = true
@@ -420,9 +475,7 @@ public struct LoginView: View {
             let result = await authService.signInWithGoogle()
             switch result {
             case .success:
-                if let onLoginSuccess {
-                    await onLoginSuccess(false)
-                }
+                await finish(signup: false)
             case .needsProfile:
                 isNewUser = true
                 isOAuthFlow = true
@@ -439,7 +492,6 @@ public struct LoginView: View {
 // MARK: - View Modifiers
 
 private extension View {
-    @ViewBuilder
     func loginTabBarHidden() -> some View {
         #if os(iOS)
         toolbar(.hidden, for: .tabBar)
