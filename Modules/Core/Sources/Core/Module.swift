@@ -62,6 +62,11 @@ public final class cisumModule {
     public func handleScenePhaseChange(_ phase: ScenePhase) {
         player.handleScenePhaseChange(phase)
 
+        if phase == .active {
+            let imports = container.libraryServices.importDownloadManager
+            Task { await imports.syncSpotifyLikedSongs() }
+        }
+
         if phase != .active {
             container.coreServices.prefetchSettings.flushPendingWrites()
             container.playbackServices.playbackControlSettings.flushPendingWrites()

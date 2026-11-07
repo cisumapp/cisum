@@ -11,6 +11,7 @@
 //  idempotent (replaceItems replaces); single-page providers make mid-offset resume moot.
 //
 
+import Authentication
 import Foundation
 import Models
 import Playlists
@@ -130,6 +131,23 @@ public actor ImportDownloadManager {
             )
             await enqueue(provider: provider, playlistRef: ref)
         }
+    }
+
+    /// Re-imports Spotify Liked Songs into its library playlist when the user turned sync on.
+    /// One-way: Spotify → cisum; nothing is written back. Re-import replaces the playlist's items,
+    /// so unlikes on Spotify disappear here too.
+    public func syncSpotifyLikedSongs(minimumInterval: TimeInterval = 30 * 60) async {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: StreamingProviderSettings.spotifySyncLikedSongsKey) else { return }
+        let lastKey = "streaming.spotify.liked_songs_last_sync"
+        let now = Date().timeIntervalSince1970
+        // ponytail: time throttle, full re-import each run (~1 request per 100 likes). Diff on count +
+        // newest addedAt if large libraries make this heavy.
+        guard now - defaults.double(forKey: lastKey) >= minimumInterval else { return }
+        guard let service = services[.spotify], await service.isAuthorized() else { return }
+        defaults.set(now, forKey: lastKey)
+        PerfLog.info("ImportDownloadManager: syncing Spotify Liked Songs")
+        await enqueue(provider: .spotify, playlistRef: .init(id: "spotify:collection:tracks", title: "Liked Songs"))
     }
 
     // MARK: - Scheduler
