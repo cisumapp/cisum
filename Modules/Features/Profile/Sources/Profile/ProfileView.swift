@@ -122,14 +122,18 @@ public struct ProfileView: View {
             }
 
             if !authService.isAuthenticated {
-                Button("Sign In") { router.navigate(to: .login) }
-                    .buttonStyle(.borderedProminent)
-                    // Ink rather than the app tint, which follows the current artwork and can
-                    // turn the page's one call to action grey.
-                    .tint(.primary)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
-                    .padding(.top, 4)
+                Button { router.navigate(to: .login) } label: {
+                    // The page's colour on the ink fill: the default white label vanished on a
+                    // white capsule in dark mode.
+                    Text("Sign In").foregroundStyle(Color.cisumBg)
+                }
+                .buttonStyle(.borderedProminent)
+                // Ink rather than the app tint, which follows the current artwork and can
+                // turn the page's one call to action grey.
+                .tint(.primary)
+                .buttonBorderShape(.capsule)
+                .controlSize(.large)
+                .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity)
@@ -138,7 +142,9 @@ public struct ProfileView: View {
 
     private var displayName: String {
         guard authService.isAuthenticated else { return "Guest" }
-        if let fullName = authService.user?.fullName, !fullName.isEmpty { return fullName }
+        if let fullName = authService.user?.fullName, !fullName.isEmpty {
+            return fullName
+        }
         return authService.user?.username.map { "@\($0)" } ?? "Signed in"
     }
 
@@ -289,7 +295,7 @@ public struct ProfileView: View {
             Toggle("Anonymous Spotify Mode", isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback)
             #endif
 
-        // Last.fm
+            // Last.fm
 //                VStack(spacing: 12) {
 //                    HStack {
 //                        Image(systemName: "waveform")
@@ -424,7 +430,11 @@ public struct ProfileView: View {
         Button {
             Task { await action() }
         } label: {
-            if isBusy { ProgressView() } else { Text("Connect") }
+            if isBusy {
+                ProgressView()
+            } else {
+                Text("Connect")
+            }
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
@@ -436,7 +446,11 @@ public struct ProfileView: View {
         Button(role: .destructive) {
             Task { await action() }
         } label: {
-            if isBusy { ProgressView() } else { Text("Disconnect") }
+            if isBusy {
+                ProgressView()
+            } else {
+                Text("Disconnect")
+            }
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.capsule)
