@@ -20,6 +20,7 @@ import Utilities
 public struct LibraryPage: View {
     public enum Kind: Hashable, Sendable {
         case songs, albums, artists, playlists
+        case album(String), artist(String)
     }
 
     let kind: Kind
@@ -48,6 +49,14 @@ public struct LibraryPage: View {
                 onDelete: { LibraryActions.delete($0, store: store) },
                 onReimport: { LibraryActions.reimport($0, importer: importer) }
             )
+        case let .album(id):
+            if let album = LibraryIndex(items: items).albums.first(where: { $0.id == id }) {
+                LibraryAlbumView(album: album)
+            }
+        case let .artist(id):
+            if let artist = LibraryIndex(items: items).artists.first(where: { $0.id == id }) {
+                LibraryArtistView(artist: artist)
+            }
         }
     }
 }
@@ -241,25 +250,20 @@ struct LibrarySongsView: View {
 struct LibraryAlbumsView: View {
     let albums: [LibraryIndex.Album]
 
-    @State private var openAlbumID: String?
+    @Environment(\.router) private var router
 
     var body: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 26, alignment: .top)], spacing: 30) {
                 ForEach(albums) { album in
                     MediaTile(url: album.artworkURL, title: album.title, subtitle: album.artist) {
-                        openAlbumID = album.id
+                        router.navigate(to: .libraryAlbum(id: album.id))
                     }
                 }
             }
             .padding(.horizontal)
         }
         .libraryPage(title: "Albums")
-        .navigationDestination(item: $openAlbumID) { id in
-            if let album = albums.first(where: { $0.id == id }) {
-                LibraryAlbumView(album: album)
-            }
-        }
     }
 }
 
@@ -291,7 +295,7 @@ struct LibraryAlbumView: View {
 struct LibraryArtistsView: View {
     let artists: [LibraryIndex.Artist]
 
-    @State private var openArtistID: String?
+    @Environment(\.router) private var router
 
     var body: some View {
         ScrollView {
@@ -303,25 +307,20 @@ struct LibraryArtistsView: View {
                         subtitle: artist.songs.count == 1 ? "1 song" : "\(artist.songs.count) songs",
                         shape: .round
                     ) {
-                        openArtistID = artist.id
+                        router.navigate(to: .libraryArtist(id: artist.id))
                     }
                 }
             }
             .padding(.horizontal)
         }
         .libraryPage(title: "Artists")
-        .navigationDestination(item: $openArtistID) { id in
-            if let artist = artists.first(where: { $0.id == id }) {
-                LibraryArtistView(artist: artist)
-            }
-        }
     }
 }
 
 struct LibraryArtistView: View {
     let artist: LibraryIndex.Artist
 
-    @State private var openAlbumID: String?
+    @Environment(\.router) private var router
 
     var body: some View {
         LibrarySongList(songs: artist.songs, showsArtwork: true) {
@@ -331,7 +330,7 @@ struct LibraryArtistView: View {
                     MediaShelf {
                         ForEach(artist.albums) { album in
                             MediaTile(url: album.artworkURL, title: album.title) {
-                                openAlbumID = album.id
+                                router.navigate(to: .libraryAlbum(id: album.id))
                             }
                         }
                     }
@@ -341,11 +340,6 @@ struct LibraryArtistView: View {
             }
         }
         .libraryPage(title: artist.name)
-        .navigationDestination(item: $openAlbumID) { id in
-            if let album = artist.albums.first(where: { $0.id == id }) {
-                LibraryAlbumView(album: album)
-            }
-        }
     }
 }
 

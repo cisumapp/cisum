@@ -4,6 +4,7 @@ import Models
 import Networking
 import Player
 import SwiftUI
+import Utilities
 
 public struct SettingsView: View {
     public init() {}
@@ -94,7 +95,7 @@ public struct SettingsView: View {
                             ? "Off" : "\(Int(playbackControlSettings.crossfadeSeconds)) s"
                     )
                     Slider(value: Bindable(playbackControlSettings).crossfadeSeconds, in: 0 ... 12, step: 1)
-                    NavigationLink("Equalizer") { EqualizerView() }
+                    NavigationLink("Equalizer", value: AppRoute.equalizer)
                 } header: {
                     Text("Playback")
                 } footer: {

@@ -520,7 +520,7 @@ public struct RootView: View {
                 let isActive = navigationState.selectedTab == tab
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 1)) {
-                        navigationState.selectedTab = tab
+                        selectTab(tab)
                     }
                 } label: {
                     Image(systemName: Self.pillIcon(for: tab))
@@ -636,8 +636,18 @@ public struct RootView: View {
     private var selectedTabBinding: Binding<TabItem> {
         Binding(
             get: { cisum.navigationState.selectedTab },
-            set: { cisum.navigationState.selectedTab = $0 }
+            set: { selectTab($0) }
         )
+    }
+
+    /// A tab tapped in the tab bar or the macOS tab pill: the tab that's already showing
+    /// pops back to its root, any other tab is switched to with its own stack intact.
+    private func selectTab(_ tab: TabItem) {
+        if tab == cisum.navigationState.selectedTab {
+            cisum.router.popToRoot()
+        } else {
+            cisum.navigationState.selectedTab = tab
+        }
     }
 
     #if os(iOS)
@@ -706,6 +716,12 @@ public struct RootView: View {
                         cisum.applyEnvironment(to: LibraryPage(.artists))
                     case .libraryPlaylists:
                         cisum.applyEnvironment(to: LibraryPage(.playlists))
+                    case let .libraryAlbum(id):
+                        cisum.applyEnvironment(to: LibraryPage(.album(id)))
+                    case let .libraryArtist(id):
+                        cisum.applyEnvironment(to: LibraryPage(.artist(id)))
+                    case .equalizer:
+                        cisum.applyEnvironment(to: EqualizerView())
                     }
                 }
                 .onScrollOffsetChange { oldValue, newValue in
@@ -826,6 +842,12 @@ public struct RootView: View {
                         cisum.applyEnvironment(to: LibraryPage(.artists))
                     case .libraryPlaylists:
                         cisum.applyEnvironment(to: LibraryPage(.playlists))
+                    case let .libraryAlbum(id):
+                        cisum.applyEnvironment(to: LibraryPage(.album(id)))
+                    case let .libraryArtist(id):
+                        cisum.applyEnvironment(to: LibraryPage(.artist(id)))
+                    case .equalizer:
+                        cisum.applyEnvironment(to: EqualizerView())
                     }
                 }
         }
