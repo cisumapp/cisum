@@ -46,7 +46,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
     /// The player presented in the iOS 26 zoom cover.
     let zoomedPlayerContent: ZoomedPlayerContent
     let popupItemID: String
-    let accentColor: Color
 
     public init(
         selection: Binding<SelectionValue>,
@@ -57,7 +56,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
         miniPlayerContent: MiniPlayerContent,
         zoomedPlayerContent: ZoomedPlayerContent,
         popupItemID: String = "cisum-now-playing",
-        accentColor: Color = .blue,
         @TabViewBuilder<SelectionValue> content: () -> [TabViewData<SelectionValue>],
         onSearchSubmit: @escaping () -> Void = {}
     ) {
@@ -71,7 +69,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
         self.miniPlayerContent = miniPlayerContent
         self.zoomedPlayerContent = zoomedPlayerContent
         self.popupItemID = popupItemID
-        self.accentColor = accentColor
     }
 
     public var body: some View {
@@ -281,7 +278,6 @@ public struct iOSTabView<SelectionValue: Hashable, PlayerContent: View, MiniPlay
                     tabs: tabs,
                     activeTab: $selection,
                     showsSearchBar: true,
-                    accentColor: accentColor,
                     searchText: searchText,
                     onSearchTriggered: {
                         if let searchTab = tabs.first(where: { $0.role == .search }) {

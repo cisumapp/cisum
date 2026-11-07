@@ -11,8 +11,10 @@ import Albums
 import Catalog
 import Models
 import Playlists
+import SwiftData
 import SwiftUI
 import Tracks
+import Utilities
 
 /// A section heading in the page's style: "Title ›".
 struct ArtistSectionHeader: View {
@@ -49,6 +51,50 @@ struct ArtistShelf<Content: View>: View {
             .scrollClipDisabled()
         }
         .padding(.vertical)
+    }
+}
+
+/// The songs the user has saved by this artist, one row into the Library's page for them.
+/// Hidden when there are none.
+struct ArtistSavedSongsRow: View {
+    let artistName: String
+
+    @Query private var items: [PlaylistItem]
+    @Environment(\.router) private var router
+
+    init(artistName: String) {
+        self.artistName = artistName
+        _items = Query(filter: #Predicate<PlaylistItem> { item in
+            item.artistName?.localizedStandardContains(artistName) ?? false
+        })
+    }
+
+    var body: some View {
+        let id = LibraryIndex.artistID(forName: artistName)
+        if let saved = LibraryIndex(items: items).artists.first(where: { $0.id == id }) {
+            Button {
+                router.navigate(to: .libraryArtist(id: saved.id))
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .legibleForeground(.accent)
+                    Text("Saved Songs")
+                        .font(.headline)
+                        .legibleForeground(.primary)
+                    Spacer()
+                    Text("\(saved.songs.count)")
+                        .legibleForeground(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .legibleForeground(.secondary)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 

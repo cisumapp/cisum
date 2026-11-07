@@ -21,6 +21,7 @@ public struct LibraryView: View {
     @Environment(\.importDownloadManager) private var importDownloadManager
     @Query(sort: \Playlist.updatedAt, order: .reverse) private var allPlaylists: [Playlist]
     @Query private var items: [PlaylistItem]
+    @Query(filter: #Predicate<Artist> { $0.followedAt != nil }) private var followedArtists: [Artist]
 
     @State private var index = LibraryIndex(items: [])
     #if os(iOS)
@@ -56,7 +57,7 @@ public struct LibraryView: View {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 28) {
-            if playlists.isEmpty, savedPlaylist == nil {
+            if playlists.isEmpty, savedPlaylist == nil, followedArtists.isEmpty {
                 emptyState
             } else {
                 categories
@@ -128,8 +129,8 @@ public struct LibraryView: View {
             if !index.albums.isEmpty {
                 categoryRow("Albums", "square.stack", index.albums.count, .libraryAlbums)
             }
-            if !index.artists.isEmpty {
-                categoryRow("Artists", "music.mic", index.artists.count, .libraryArtists)
+            if !followedArtists.isEmpty {
+                categoryRow("Artists", "music.mic", followedArtists.count, .libraryArtists)
             }
             if let savedPlaylist {
                 categoryRow("Saved", "star", savedPlaylist.itemCount, .playlist(id: savedPlaylist.playlistID))

@@ -4,8 +4,8 @@ import Catalog
 import Kingfisher
 import Models
 import Player
-import SwiftData
 import Playlists
+import SwiftData
 import SwiftUI
 import Utilities
 import YouTubeSDK
@@ -52,8 +52,15 @@ public struct ArtistView: View {
                 ArtistArtworkHeader(artist: artist, photoURL: heroURL, palette: palette, size: geo.size)
             } content: {
                 // Lifted over the hero's faded bottom edge, where the name used to sit inside it.
-                ArtistTitleRow(artist: artist, onShuffle: shuffle, onPlay: { playTracks(startingAt: 0) })
-                    .padding(.top, -80)
+                ArtistTitleRow(
+                    artist: artist,
+                    onShuffle: shuffle,
+                    onPlay: { playTracks(startingAt: 0) },
+                    onFollow: toggleFollow
+                )
+                .padding(.top, -80)
+
+                ArtistSavedSongsRow(artistName: artist.displayName)
 
                 sections
             }
@@ -61,6 +68,11 @@ public struct ArtistView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if isTitleRowHidden {
+                    Button(
+                        artist.isFollowed ? "Following" : "Follow",
+                        systemImage: artist.isFollowed ? "checkmark" : "plus",
+                        action: toggleFollow
+                    )
                     Button("Shuffle", systemImage: "shuffle", action: shuffle)
                     Button("Play", systemImage: "play.fill") { playTracks(startingAt: 0) }
                 }
@@ -90,7 +102,6 @@ public struct ArtistView: View {
 
     /// The Catalog's page once it arrives, a skeleton of it until then, and the library's own
     /// songs and albums whenever the Catalog has nothing.
-    @ViewBuilder
     private var sections: some View {
         Group {
             if let catalogArtist {
@@ -112,7 +123,6 @@ public struct ArtistView: View {
         ArtistDiscography(artist: artist)
     }
 
-    @ViewBuilder
     private func catalogSections(_ page: CatalogArtist) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if page.topSongs.isEmpty {
@@ -183,7 +193,9 @@ public struct ArtistView: View {
         }
         let page = await pageStore.refresh(artist)
         // An artist with no photo at all takes the banner now; otherwise it is the next visit's.
-        if heroURL == nil { heroURL = page.photoURL }
+        if heroURL == nil {
+            heroURL = page.photoURL
+        }
         withAnimation(.easeOut(duration: 0.35)) {
             catalogArtist = page
             isLoadingCatalog = false
@@ -203,6 +215,14 @@ public struct ArtistView: View {
         return topTracks.compactMap { $0.playableRef(preferring: preferredSourceIDs) }
     }
 
+    /// Following puts the artist in the Library, where their whole page stays a tap away.
+    private func toggleFollow() {
+        withAnimation(.snappy) {
+            artist.followedAt = artist.isFollowed ? nil : .now
+        }
+        try? modelContext.save()
+    }
+
     private func shuffle() {
         let count = playableRefs.count
         guard count > 0 else { return }
@@ -210,7 +230,6 @@ public struct ArtistView: View {
     }
 
     private func playTracks(startingAt index: Int, shuffled: Bool = false) {
-
         let refs = playableRefs
         guard refs.indices.contains(index) else { return }
 
@@ -332,13 +351,15 @@ private struct ArtistTitleRow: View {
     let artist: Artist
     let onShuffle: () -> Void
     let onPlay: () -> Void
+    let onFollow: () -> Void
 
     var body: some View {
         actions
     }
 
     private var actions: some View {
-        HStack(alignment: .bottom, spacing: 16) {
+        // Name on its own line: three pills beside it clipped their labels on a phone.
+        VStack(alignment: .leading, spacing: 14) {
             Text(artist.displayName)
                 .font(.largeTitle)
                 .bold()
@@ -346,13 +367,18 @@ private struct ArtistTitleRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
-            Spacer(minLength: 0)
-
             HStack(spacing: 8) {
+                actionButton(
+                    artist.isFollowed ? "checkmark" : "plus",
+                    label: artist.isFollowed ? "Following" : "Follow"
+                ) { onFollow() }
+                    .contentTransition(.symbolEffect(.replace))
+
+                Spacer(minLength: 0)
+
                 actionButton("shuffle", label: nil) { onShuffle() }
                 actionButton("play.fill", label: "Play") { onPlay() }
             }
-            .padding(.bottom, 2)
         }
         .padding(.horizontal, 24)
         .padding(.bottom, 20)

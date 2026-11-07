@@ -81,8 +81,7 @@ public struct RootView: View {
                         isExpanded: $presentation.isExpanded,
                         namespace: playerAnimationNamespace
                     )),
-                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
-                    accentColor: cisum.playerAccentColor
+                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer())
                 ) {
                     Tab("Home", systemImage: "house.fill", value: TabItem.home) {
                         cisum.applyEnvironment(to: tabRoot(for: .home) {
@@ -136,8 +135,7 @@ public struct RootView: View {
                         isExpanded: $presentation.isExpanded,
                         namespace: playerAnimationNamespace
                     )),
-                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer()),
-                    accentColor: cisum.playerAccentColor
+                    zoomedPlayerContent: cisum.applyEnvironment(to: cisum.zoomedPlayer())
                 ) {
                     Tab("Home", systemImage: "house.fill", value: TabItem.home) {
                         cisum.applyEnvironment(to: tabRoot(for: .home) {

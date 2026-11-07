@@ -29,6 +29,10 @@ public final class Artist {
     public var catalogPageData: Data?
     public var catalogFetchedAt: Date?
 
+    /// When the user followed this artist; `nil` when they don't. Followed artists are the
+    /// Library's Artists, each opening their whole page.
+    public var followedAt: Date?
+
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -70,6 +74,10 @@ public final class Artist {
 }
 
 public extension Artist {
+    var isFollowed: Bool {
+        followedAt != nil
+    }
+
     /// The saved artist for a YouTube Music artist, adding it the first time, so an artist page
     /// opened from search or from another artist's page is the same page.
     @MainActor

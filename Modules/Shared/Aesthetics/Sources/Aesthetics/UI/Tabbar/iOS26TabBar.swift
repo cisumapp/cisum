@@ -20,7 +20,6 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
     let tabs: [TabViewData<SelectionValue>]
     @Binding var activeTab: SelectionValue
     var showsSearchBar: Bool = false
-    let accentColor: Color
     @Environment(\.isSearchExpanded) private var searchExpansion
 
     @Binding var searchText: String
@@ -216,7 +215,9 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     .lineLimit(1)
             }
         }
-        .foregroundStyle(activeTab == tab.value ? accentColor : .primary)
+        // Tokens, not the player's artwork accent: with nothing playing that accent is a dark grey,
+        // and the selected tab vanished on its own highlight. The highlight marks the selection.
+        .foregroundStyle(activeTab == tab.value ? Color.textPrimary : Color.textSecondary)
         .frame(width: width, height: height)
         .contentShape(.capsule)
         .simultaneousGesture(
