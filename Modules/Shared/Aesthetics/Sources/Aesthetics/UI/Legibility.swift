@@ -31,12 +31,17 @@ private struct LegibleForeground: ViewModifier {
     let role: LegibilityRole
     @Environment(\.legibilityBackground) private var background
     @Environment(\.legibilityPalette) private var palette
+    @Environment(\.self) private var environment
 
     func body(content: Content) -> some View {
         content.foregroundStyle(resolved)
     }
 
     private var resolved: Color {
+        // Resolved against this view's own colour scheme. Converted to UIColor directly, an
+        // adaptive colour such as `cisumBg` gives its light variant on iOS 17/18, which put
+        // near-black text on every dark page there.
+        let background = Color(background.resolve(in: environment))
         // The palette's title and song colours, each kept only if it reads on this background.
         if let palette {
             switch role {
