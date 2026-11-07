@@ -12,6 +12,11 @@ public final class StreamingProviderSettings {
         static let spotifyPreferAnonymousFallback = "streaming.spotify.prefer_anonymous_fallback"
     }
 
+    /// Read off the main actor (import manager, SpotifySDK), so they're plain nonisolated keys.
+    public nonisolated static let spotifySyncLikedSongsKey = "streaming.spotify.sync_liked_songs"
+    /// SpotifySDK reads this same key before every library write (SpotifyPathfinderClient+LibraryWrites).
+    public nonisolated static let spotifyAllowWritesKey = "SpotifySDK.writesEnabled"
+
     private let defaults: UserDefaults
 
     public var spotifyClientID: String {
@@ -32,7 +37,19 @@ public final class StreamingProviderSettings {
         }
     }
 
+    /// Keep a read-only copy of Spotify Liked Songs in the library, refreshed on launch/foreground.
+    public var spotifySyncLikedSongs: Bool {
+        didSet {
+            defaults.set(spotifySyncLikedSongs, forKey: Self.spotifySyncLikedSongsKey)
+        }
+    }
 
+    /// Lets cisum change the Spotify account (like, follow, edit playlists). Off by default.
+    public var spotifyAllowWrites: Bool {
+        didSet {
+            defaults.set(spotifyAllowWrites, forKey: Self.spotifyAllowWritesKey)
+        }
+    }
 
     public var hasSpotifyCredentials: Bool {
         !spotifyClientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -48,7 +65,8 @@ public final class StreamingProviderSettings {
         self.spotifyClientID = defaults.string(forKey: Keys.spotifyClientID) ?? ""
         self.spotifyClientSecret = defaults.string(forKey: Keys.spotifyClientSecret) ?? ""
         self.spotifyPreferAnonymousFallback = defaults.object(forKey: Keys.spotifyPreferAnonymousFallback) as? Bool ?? true
-
+        self.spotifySyncLikedSongs = defaults.bool(forKey: Self.spotifySyncLikedSongsKey)
+        self.spotifyAllowWrites = defaults.bool(forKey: Self.spotifyAllowWritesKey)
     }
 
     public func clearSpotifyCredentials() {

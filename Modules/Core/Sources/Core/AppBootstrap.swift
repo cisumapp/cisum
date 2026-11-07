@@ -444,6 +444,7 @@ enum AppBootstrap {
         Task {
             guard startBackgroundWork else { return }
             await importDownloadManager.resumePendingJobs()
+            await importDownloadManager.syncSpotifyLikedSongs()
         }
 
         let libraryServices = LibraryServices(

@@ -288,6 +288,10 @@ public struct ProfileView: View {
 
             #if os(iOS) && canImport(SpotifySDK)
             Toggle("Anonymous Spotify Mode", isOn: Bindable(streamingProviderSettings).spotifyPreferAnonymousFallback)
+            if spotifyCoordinator.hasSession {
+                Toggle("Sync Liked Songs", isOn: Bindable(streamingProviderSettings).spotifySyncLikedSongs)
+                Toggle("Allow Changes to Spotify", isOn: Bindable(streamingProviderSettings).spotifyAllowWrites)
+            }
             #endif
 
             // Last.fm
@@ -371,7 +375,12 @@ public struct ProfileView: View {
         } header: {
             Text("Connected services")
         } footer: {
-            Text("Signed out, cisum still finds every artist, album and playlist through YouTube Music and Apple's catalogue.")
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Signed out, cisum still finds every artist, album and playlist through YouTube Music and Apple's catalogue.")
+                if spotifyCoordinator.hasSession {
+                    Text("Sync Liked Songs keeps a read-only copy in your library. Allow Changes to Spotify lets cisum like songs, follow artists and edit playlists on your account; it's off by default because Spotify may flag unofficial clients that write.")
+                }
+            }
         }
     }
 
