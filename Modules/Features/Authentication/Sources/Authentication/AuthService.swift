@@ -177,28 +177,66 @@ public final class AuthService {
         }
     }
 
-    public func signUpWithEmailPassword(email: String, password: String, firstName: String?, lastName: String?) async -> Bool {
+    public enum SignUpResult {
+        case success
+        /// Clerk emailed a code; the sign-up finishes with `verifySignUpEmail(code:)`.
+        case needsEmailCode
+        case failed(String)
+    }
+
+    /// Creates the account, or, after a rejected attempt (a taken or invalid username), corrects
+    /// the sign-up already in progress rather than starting a second one.
+    public func signUpWithEmailPassword(
+        email: String, password: String, firstName: String?, lastName: String?, username: String?
+    ) async -> SignUpResult {
         isLoading = true
         defer { isLoading = false }
-        PerfLog.debug("[AuthService] signUp: attempting with email=\(email), firstName=\(firstName ?? "nil")")
+        PerfLog.debug("[AuthService] signUp: attempting with firstName=\(firstName ?? "nil")")
 
         do {
-            _ = try await Clerk.shared.auth.signUp(
-                emailAddress: email,
-                password: password,
-                firstName: firstName,
-                lastName: lastName
-            )
+            let signUp: SignUp = if let pending = Clerk.shared.client?.signUp, pending.emailAddress == email, pending.status == .missingRequirements {
+                try await pending.update(password: password, firstName: firstName, lastName: lastName, username: username)
+            } else {
+                try await Clerk.shared.auth.signUp(
+                    emailAddress: email, password: password, firstName: firstName, lastName: lastName, username: username
+                )
+            }
+            return try await finish(signUp, sendingCode: true)
+        } catch {
+            self.error = error
+            PerfLog.debug("[AuthService] signUp: \(String(reflecting: error))")
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    public func verifySignUpEmail(code: String) async -> SignUpResult {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            guard let pending = Clerk.shared.client?.signUp else { return .failed("The sign-up expired. Start again.") }
+            return try await finish(pending.verifyEmailCode(code), sendingCode: false)
+        } catch {
+            self.error = error
+            return .failed(error.localizedDescription)
+        }
+    }
+
+    /// A sign-up that is not `complete` has no session yet: it still needs a verified email or a
+    /// field the instance requires. Treating that as success is what left people on the page.
+    private func finish(_ signUp: SignUp, sendingCode: Bool) async throws -> SignUpResult {
+        switch signUp.status {
+        case .complete:
             session = Clerk.shared.session
             user = Clerk.shared.user
             error = nil
-            PerfLog.debug("[AuthService] signUp:  success, user=\(user?.id ?? "nil")")
-            return true
-        } catch {
-            self.error = error
-            PerfLog.debug("[AuthService] signUp:  \(error.localizedDescription)")
-            PerfLog.debug("[AuthService] signUp: reflected = \(String(reflecting: error))")
-            return false
+            return .success
+        case .missingRequirements where signUp.unverifiedFields.contains(.emailAddress):
+            guard sendingCode else { return .failed("That code didn't work. Check the email and try again.") }
+            try await signUp.sendEmailCode()
+            return .needsEmailCode
+        default:
+            let missing = signUp.missingFields.map { "\($0)" }.joined(separator: ", ")
+            return .failed(missing.isEmpty ? "Sign-up couldn't be completed." : "Still needed: \(missing)")
         }
     }
 
