@@ -70,7 +70,7 @@ public struct DiscoverView: View {
                         await loadDiscoverSections(force: true)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.cisumProminent)
             }
 
             ForEach(sections) { section in

@@ -126,18 +126,9 @@ public struct ProfileView: View {
             }
 
             if !authService.isAuthenticated {
-                Button { router.navigate(to: .login) } label: {
-                    // The page's colour on the ink fill: the default white label vanished on a
-                    // white capsule in dark mode.
-                    Text("Sign In").foregroundStyle(.surfaceBackground)
-                }
-                .buttonStyle(.borderedProminent)
-                // Ink rather than the app tint, which follows the current artwork and can
-                // turn the page's one call to action grey.
-                .tint(.primary)
-                .buttonBorderShape(.capsule)
-                .controlSize(.large)
-                .padding(.top, 4)
+                Button("Sign In") { router.navigate(to: .login) }
+                    .buttonStyle(.cisumProminent)
+                    .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity)
@@ -440,8 +431,7 @@ public struct ProfileView: View {
                 Text("Connect")
             }
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
+        .buttonStyle(.cisumSecondary)
         .controlSize(.small)
         .disabled(isBusy)
     }
@@ -456,8 +446,7 @@ public struct ProfileView: View {
                 Text("Disconnect")
             }
         }
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.capsule)
+        .buttonStyle(.cisumSecondary)
         .controlSize(.small)
         .disabled(isBusy)
     }

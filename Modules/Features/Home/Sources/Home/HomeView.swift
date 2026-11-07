@@ -75,7 +75,7 @@ public struct HomeView: View {
                         await viewModel.refresh()
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.cisumProminent)
                 .frame(maxWidth: .infinity)
             }
 

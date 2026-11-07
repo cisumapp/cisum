@@ -23,7 +23,7 @@ public struct TopArtistSearchResultCard: View {
     }
 
     public var body: some View {
-        Color.gray.opacity(0.3)
+        Color.fillStrong
             .aspectRatio(7 / 6, contentMode: .fit)
             .overlay {
                 KFImage(artistImageURL)
@@ -64,7 +64,7 @@ struct ArtistResultAlbumPreview: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: 12)
-            .fill(.gray)
+            .fill(.fillStrong)
             .frame(width: 70, height: 70)
             .overlay {
                 KFImage(artworkURL)

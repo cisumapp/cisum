@@ -59,6 +59,7 @@ enum PlayerThemeRenderer {
                 fullyExpanded: fullyExpanded,
                 collapsedHeight: collapsedHeight
             )
+            .modifier(OnMediaAppearance(active: expanded))
         }
     }
 
@@ -84,7 +85,21 @@ enum PlayerThemeRenderer {
         switch id {
         case .default, .animatedArtwork:
             DefaultPlayerTheme().expanded(expanded: expanded, size: size, namespace: namespace)
+                .modifier(OnMediaAppearance(active: true))
         }
+    }
+}
+
+/// The open player always sits on artwork under a dark scrim, so it renders as dark mode in either
+/// system appearance: its materials go dark and every token resolves to its light ink. In light mode
+/// it was mixing near-black `.primary` lyrics with the controls' white. The collapsed pill keeps
+/// following the app.
+private struct OnMediaAppearance: ViewModifier {
+    let active: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.environment(\.colorScheme, active ? .dark : colorScheme)
     }
 }
 #endif

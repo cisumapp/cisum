@@ -77,8 +77,10 @@ public struct PlaylistCover: View {
 
             if !isCardExpanded {
                 Text(playlist.title)
-                    .foregroundStyle(.blue.opacity(0.5))
+                    .foregroundStyle(.textOnAccent)
                     .padding(4)
+                    // A paper label stuck on the cover: ink on white in both modes (blue at half
+                    // opacity on white was 1.9:1).
                     .background(.white)
 //                    .fontWidth(.expanded)
                     .font(.subheadline)

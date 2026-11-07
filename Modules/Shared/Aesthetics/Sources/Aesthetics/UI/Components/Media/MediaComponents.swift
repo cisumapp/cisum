@@ -144,7 +144,7 @@ public struct MediaSongRow<Menu: View>: View {
         .padding(.vertical, 4)
         .background {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(isHovering ? 0.06 : 0))
+                .fill(isHovering ? Color.fillSubtle : .clear)
         }
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering }
@@ -264,7 +264,7 @@ public struct MediaArtwork: View {
     }
 
     public var body: some View {
-        Color.primary.opacity(0.08)
+        Color.fillSubtle
             .overlay {
                 if let url {
                     ArtworkImage(url: url, size: 320)

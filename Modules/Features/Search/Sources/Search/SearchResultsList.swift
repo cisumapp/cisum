@@ -305,7 +305,7 @@ struct SearchResultsList: View {
                 .frame(width: 100, height: 100)
             Text(item.title)
                 .font(.footnote.weight(.medium))
-                .foregroundStyle(.primary.opacity(0.8))
+                .foregroundStyle(.textPrimary)
                 .lineLimit(1)
                 .frame(width: 100)
         }
@@ -445,7 +445,7 @@ struct SearchArtwork: View {
     let cornerRadius: CGFloat
 
     var body: some View {
-        Color.primary.opacity(0.08)
+        Color.fillSubtle
             .overlay {
                 if let url {
                     KFImage(url)
