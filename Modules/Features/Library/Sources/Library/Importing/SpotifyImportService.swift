@@ -51,7 +51,7 @@ public final class SpotifyImportService: ImportService {
         async let summariesTask = sdk.account.playlists(limit: max(1, limit))
         async let likedTask = sdk.account.likedSongs(limit: 1)
         let summaries = try await summariesTask
-        let likedCount = await (try? likedTask).flatMap { $0.totalCount ?? $0.items.count }
+        let likedCount = await (try? likedTask)?.totalCount // nil hides the number; never a fake 0
         PerfLog.info("SpotifyImportService: SDK returned \(summaries.count) playlists")
 
         // ponytail: heart fallback (nil artwork) rendered by the picker row; Liked Songs has no cover URL.
