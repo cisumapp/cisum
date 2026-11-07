@@ -42,32 +42,36 @@ public struct ProfileView: View {
 
     public var body: some View {
         List {
-            Section {
-                header
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-
-            if authService.isAuthenticated {
-                accountSection
-            }
-
-            servicesSection
-
-            Section {
-                ShareLink(item: DiagnosticsLog(), preview: SharePreview("cisum diagnostics")) {
-                    serviceRow("Share diagnostics", status: "Recent app logs, for bug reports") {
-                        iconTile("doc.text.magnifyingglass", tint: .gray)
-                    } action: {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundStyle(.secondary)
-                    }
+            // One group so every row takes the brand surface, not the system's cold grouped grey.
+            Group {
+                Section {
+                    header
                 }
-                .foregroundStyle(.primary)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+
+                if authService.isAuthenticated {
+                    accountSection
+                }
+
+                servicesSection
+
+                Section {
+                    ShareLink(item: DiagnosticsLog(), preview: SharePreview("cisum diagnostics")) {
+                        serviceRow("Share diagnostics", status: "Recent app logs, for bug reports") {
+                            iconTile("doc.text.magnifyingglass", tint: .gray)
+                        } action: {
+                            Image(systemName: "square.and.arrow.up")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
             }
+            .listRowBackground(Color.surfaceRaised)
         }
         .scrollContentBackground(.hidden)
-        .background(Color.cisumBg.ignoresSafeArea())
+        .background(Color.surfaceBackground.ignoresSafeArea())
         .contentMargins(.bottom, 140, for: .scrollContent)
         .navigationTitle("Profile")
         #if os(iOS)
@@ -125,7 +129,7 @@ public struct ProfileView: View {
                 Button { router.navigate(to: .login) } label: {
                     // The page's colour on the ink fill: the default white label vanished on a
                     // white capsule in dark mode.
-                    Text("Sign In").foregroundStyle(Color.cisumBg)
+                    Text("Sign In").foregroundStyle(.surfaceBackground)
                 }
                 .buttonStyle(.borderedProminent)
                 // Ink rather than the app tint, which follows the current artwork and can
@@ -155,7 +159,7 @@ public struct ProfileView: View {
                 .clipShape(.circle)
         } else {
             Circle()
-                .fill(Color.cisumSurface)
+                .fill(.surfaceRaised)
                 .overlay {
                     if authService.isAuthenticated {
                         Text(initials)

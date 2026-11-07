@@ -96,6 +96,7 @@ fileprivate extension DynamicPlayerIsland {
     var surface: some View {
         if #available(macOS 26.0, *) {
             RoundedRectangle(cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50))
+                .fill(.clear)
                 .glassEffect(
                     .regular,
                     in: .rect(cornerRadius: isHovering ? 21 : (isLyricsExpanded ? 21 : 50))

@@ -73,7 +73,7 @@ struct NowPlayingSongInfo: View, Equatable {
                             .font(.caption2.bold())
                             .foregroundStyle(Color.white.opacity(0.8))
                             .padding(4)
-                            .background(Color.cisumChromeSubtle, in: RoundedRectangle(cornerRadius: 4))
+                            .background(Color.onMedia.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
                     }
                 }
 

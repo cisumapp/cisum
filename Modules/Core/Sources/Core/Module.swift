@@ -243,7 +243,7 @@ public final class cisumModule {
                 properties: ["email": user.emailAddresses.first?.emailAddress ?? ""]
             )
         }
-        return view.environment(authService)
+        return view.environment(authService).cisumTextStyles()
     }
 
     public var spotifyLoginView: some View {
@@ -384,6 +384,7 @@ public final class cisumModule {
             .environment(PlayerThemeSettings.shared)
             #endif
             .modelContainer(modelContainer)
+            .cisumTextStyles()
     }
 
     @ViewBuilder
