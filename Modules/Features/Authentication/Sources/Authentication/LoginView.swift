@@ -14,6 +14,7 @@ public struct LoginView: View {
 
     @Environment(AuthService.self) private var authService
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     public var onLoginSuccess: ((_ signup: Bool) async -> Void)?
 
     @State private var step: Step = .email
@@ -27,8 +28,7 @@ public struct LoginView: View {
     @State private var code = ""
     @State private var errorMessage: String?
 
-    private static let fieldBg = Color.cisumSurface
-    private static let highlights = Color.cisumAccent
+    private static let fieldBg = Color.surfaceRaised
 
     public init(onLoginSuccess: ((_ signup: Bool) async -> Void)? = nil) {
         self.onLoginSuccess = onLoginSuccess
@@ -52,14 +52,14 @@ public struct LoginView: View {
                                 } label: {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(.primary)
+                                        .foregroundStyle(.textPrimary)
                                 }
                                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
                             }
 
                             Text(title)
                                 .font(.title2)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(.textPrimary)
                                 .fontWeight(.bold)
 //                            .fontWidth(.expanded)
                                 .contentTransition(.numericText())
@@ -108,6 +108,7 @@ public struct LoginView: View {
             .scrollDismissesKeyboard(.interactively)
             .contentMargins(.bottom, authService.isGuestMode ? 150 : 0, for: .scrollContent)
         }
+        .background(Color.surfaceBackground.ignoresSafeArea())
         .animation(.spring(response: 0.45, dampingFraction: 0.85), value: step)
         .onChange(of: email) { _, _ in isNewUser = false }
         .loginTabBarHidden()
@@ -128,7 +129,7 @@ public struct LoginView: View {
                 .padding(12)
                 .background(Self.fieldBg)
                 .cornerRadius(6)
-                .foregroundColor(.primary)
+                .foregroundStyle(.textPrimary)
         }
     }
 
@@ -141,7 +142,7 @@ public struct LoginView: View {
                 .padding(12)
                 .background(Self.fieldBg)
                 .cornerRadius(6)
-                .foregroundColor(.primary)
+                .foregroundStyle(.textPrimary)
         }
     }
 
@@ -157,7 +158,7 @@ public struct LoginView: View {
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.textPrimary)
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Last Name")
@@ -169,7 +170,7 @@ public struct LoginView: View {
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.textPrimary)
             }
             VStack(alignment: .leading, spacing: 6) {
                 fieldLabel("Username")
@@ -181,7 +182,7 @@ public struct LoginView: View {
                     .padding(12)
                     .background(Self.fieldBg)
                     .cornerRadius(6)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.textPrimary)
             }
         }
     }
@@ -201,7 +202,7 @@ public struct LoginView: View {
                 .padding(12)
                 .background(Self.fieldBg)
                 .cornerRadius(6)
-                .foregroundColor(.primary)
+                .foregroundStyle(.textPrimary)
         }
     }
 
@@ -211,21 +212,20 @@ public struct LoginView: View {
         Text(text)
             .font(.title2)
             .fontWeight(.semibold)
-            .foregroundStyle(.primary)
+            .foregroundStyle(.textPrimary)
 //            .fontWidth(.expanded)
     }
 
     private func errorBanner(_ message: String) -> some View {
         HStack {
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundColor(.red)
             Text(message)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.red)
         }
+        .foregroundStyle(.textDestructive)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(Color.red.opacity(0.1))
+        .background(Color.textDestructive.opacity(0.12))
         .cornerRadius(8)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
@@ -235,7 +235,7 @@ public struct LoginView: View {
             Group {
                 if authService.isLoading {
                     HStack(spacing: 8) {
-                        ProgressView().progressViewStyle(.circular).tint(.primary)
+                        ProgressView().progressViewStyle(.circular).tint(.textOnAccent)
                         Text(loadingLabel)
                     }
                 } else {
@@ -247,8 +247,8 @@ public struct LoginView: View {
 //            .fontWidth(.expanded)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(isActionDisabled ? Self.highlights.opacity(0.4) : Self.highlights)
-            .foregroundColor(.primary)
+            .background(isActionDisabled ? Color.fillStrong : Color.accentFill)
+            .foregroundStyle(isActionDisabled ? Color.textTertiary : Color.textOnAccent)
             .cornerRadius(50)
             .disabled(isActionDisabled)
             .animation(.easeInOut(duration: 0.2), value: isActionDisabled)
@@ -259,13 +259,15 @@ public struct LoginView: View {
     private var socialSection: some View {
         VStack(spacing: 12) {
             HStack {
-                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
-                Text("or").foregroundColor(.secondary).font(.system(size: 14))
-                Rectangle().fill(Color.secondary.opacity(0.3)).frame(height: 1)
+                Rectangle().fill(.separatorLine).frame(height: 1)
+                Text("or").foregroundStyle(.textSecondary).font(.system(size: 14))
+                Rectangle().fill(.separatorLine).frame(height: 1)
             }
 
             #if os(iOS)
             AppleSignInButton(action: handleAppleSignIn)
+                // Apple's button takes its style once, at creation: rebuilt when the mode changes.
+                .id(colorScheme)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52) // Approximate height for standard buttons
             #endif
@@ -281,7 +283,7 @@ public struct LoginView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(Self.fieldBg)
-                .foregroundColor(.primary)
+                .foregroundStyle(.textPrimary)
                 .cornerRadius(50)
                 .contentShape(.rect)
             }
@@ -293,8 +295,8 @@ public struct LoginView: View {
         Button(action: { authService.enterGuestMode() }) {
             Text("Continue as guest")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Self.highlights.opacity(0.8))
-                .underline(color: Self.highlights.opacity(0.4))
+                .foregroundStyle(.textSecondary)
+                .underline(color: .textTertiary)
         }
         .buttonStyle(.plain)
         .padding(.top, 4)

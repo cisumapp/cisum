@@ -35,17 +35,11 @@ public extension Color {
     static let cisumDark = Color.cisumAdaptive(light: "#2B221B", dark: "#F2EBDC")
     static let cisumPrimaryText = Color.cisumAdaptive(light: "#151515", dark: "#F7F4EC")
     static let cisumSecondaryText = Color.cisumAdaptive(light: "#68635B", dark: "#B7B1A6")
-    static var cisumChromeSubtle: Color {
-        .white.opacity(0.1)
-    }
-
-    static var cisumChromeBorder: Color {
-        .white.opacity(0.2)
-    }
-
-    static var cisumChromeStrong: Color {
-        .white.opacity(0.32)
-    }
+    // Lines and fills on the page: ink in light mode, white in dark. They were white in both,
+    // which vanished on the cream page. Over artwork use the `onMedia` tokens instead.
+    static let cisumChromeSubtle = Color.cisumAdaptive(light: "#000000", dark: "#FFFFFF", opacity: 0.1)
+    static let cisumChromeBorder = Color.cisumAdaptive(light: "#000000", dark: "#FFFFFF", opacity: 0.16)
+    static let cisumChromeStrong = Color.cisumAdaptive(light: "#000000", dark: "#FFFFFF", opacity: 0.22)
     
     static var cisumTrackActive: Color {
         .white.opacity(0.9)
@@ -81,18 +75,18 @@ public extension Color {
         self.init(red: r, green: g, blue: b)
     }
 
-    private static func cisumAdaptive(light: String, dark: String) -> Color {
+    static func cisumAdaptive(light: String, dark: String, opacity: Double = 1) -> Color {
         #if os(iOS)
         Color(UIColor { traits in
-            UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light))
+            UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light).opacity(opacity))
         })
         #elseif os(macOS)
         Color(NSColor(name: nil) { appearance in
             let bestMatch = appearance.bestMatch(from: [.darkAqua, .aqua])
-            return NSColor(Color(hex: bestMatch == .darkAqua ? dark : light))
+            return NSColor(Color(hex: bestMatch == .darkAqua ? dark : light).opacity(opacity))
         })
         #else
-        Color(hex: light)
+        Color(hex: light).opacity(opacity)
         #endif
     }
 }

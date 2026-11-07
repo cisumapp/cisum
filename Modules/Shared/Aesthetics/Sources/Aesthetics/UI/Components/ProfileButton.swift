@@ -393,7 +393,9 @@ public struct ProfileButton: View {
         collapsedOverlayContent
             .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
             .background {
+                // Clear first: an unfilled shape is painted in the inherited text colour.
                 Circle()
+                    .fill(.clear)
                     .glassEffect(.regular, in: .circle)
                     .matchedGeometryEffect(id: "GLASS", in: namespace)
             }
@@ -405,6 +407,7 @@ public struct ProfileButton: View {
             .frame(width: Layout.expandedWidth)
             .background {
                 expandedShape
+                    .fill(.clear)
                     .glassEffect(.regular, in: expandedShape)
                     .matchedGeometryEffect(id: "GLASS", in: namespace)
             }

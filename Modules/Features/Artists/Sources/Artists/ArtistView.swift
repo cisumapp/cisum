@@ -376,7 +376,7 @@ private struct ArtistTitleRow: View {
             .frame(height: 32)
             .background(.black.opacity(0.32), in: .capsule)
             .overlay {
-                Capsule().strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
+                Capsule().strokeBorder(Color.onMedia.opacity(0.1), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
