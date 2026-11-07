@@ -236,7 +236,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     let landingIndex = Int((dragOffset / width).rounded())
                     if visibleTabs.indices.contains(landingIndex) {
                         dragOffset = CGFloat(landingIndex) * width
-                        activeTab = visibleTabs[landingIndex].value
+                        // A tap ends this zero-distance drag too; only a scrub onto another
+                        // tab writes here, so a tap reaches the selection once (reselect pops).
+                        let landing = visibleTabs[landingIndex].value
+                        if landing != activeTab {
+                            activeTab = landing
+                        }
                     }
                 }
         )
@@ -277,6 +282,12 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                     .foregroundStyle(isSearchExpanded ? Color.textTertiary : Color.textPrimary)
                     .frame(width: isSearchExpanded ? nil : height, height: height)
                     .onTapGesture {
+                        // Already in Search: the icon is Search's tab button, so tapping it
+                        // again reselects Search (which pops its stack to the root).
+                        guard !isSearchExpanded else {
+                            onSearchTriggered()
+                            return
+                        }
                         withAnimation(bouncyAnimation) {
                             isSearchExpanded = true
                             let visible = visibleTabs
@@ -286,7 +297,6 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
                             onSearchTriggered()
                         }
                     }
-                    .allowsHitTesting(!isSearchExpanded)
 
                 if isSearchExpanded {
                     TextField("Search...", text: $searchText)

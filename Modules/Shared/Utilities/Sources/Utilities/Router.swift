@@ -17,6 +17,10 @@ public enum AppRoute: Hashable {
     case libraryAlbums
     case libraryArtists
     case libraryPlaylists
+    /// An album or artist built from the user's own songs, not the catalog's.
+    case libraryAlbum(id: String)
+    case libraryArtist(id: String)
+    case equalizer
     case login
     case spotifyLogin
     case youtubeLogin
@@ -26,6 +30,8 @@ public enum AppRoute: Hashable {
 public protocol Router: AnyObject {
     func navigate(to route: AppRoute)
     func pop()
+    /// Clears the selected tab's stack back to its root.
+    func popToRoot()
 }
 
 @MainActor
@@ -33,6 +39,7 @@ public final class EmptyRouter: Router {
     public init() {}
     public func navigate(to _: AppRoute) {}
     public func pop() {}
+    public func popToRoot() {}
 }
 
 private struct RouterKey: @preconcurrency EnvironmentKey {

@@ -453,6 +453,11 @@ public final class cisumModule {
             }
         }
 
+        appRouter.onPopToRoot = { [weak navigationState] in
+            guard let state = navigationState else { return }
+            state.tabPaths[state.selectedTab] = NavigationPath()
+        }
+
         self.navigationState = navigationState
         self.appRouter = appRouter
 

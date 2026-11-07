@@ -8,6 +8,7 @@ public final class AppRouter: Router {
     public var onTabSwitch: ((TabItem) -> Void)?
     public var onPush: ((AppRoute) -> Void)?
     public var onPop: (() -> Void)?
+    public var onPopToRoot: (() -> Void)?
 
     public init() {}
 
@@ -20,12 +21,17 @@ public final class AppRouter: Router {
         case .search:
             onTabSwitch?(.search)
         case .profile, .settings, .plugins, .playlist, .artist, .album, .login, .spotifyLogin, .youtubeLogin,
-             .librarySongs, .libraryAlbums, .libraryArtists, .libraryPlaylists:
+             .librarySongs, .libraryAlbums, .libraryArtists, .libraryPlaylists, .libraryAlbum, .libraryArtist,
+             .equalizer:
             onPush?(route)
         }
     }
 
     public func pop() {
         onPop?()
+    }
+
+    public func popToRoot() {
+        onPopToRoot?()
     }
 }
