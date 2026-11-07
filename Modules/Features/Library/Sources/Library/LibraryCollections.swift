@@ -41,7 +41,7 @@ public struct LibraryPage: View {
         case .albums:
             LibraryAlbumsView(albums: LibraryIndex(items: items).albums)
         case .artists:
-            LibraryArtistsView(artists: LibraryIndex(items: items).artists)
+            LibraryArtistsView()
         case .playlists:
             LibraryPlaylistsView(
                 playlists: allPlaylists.filter { $0.playlistID != PlaylistLibraryStore.savedPlaylistID },
@@ -292,22 +292,33 @@ struct LibraryAlbumView: View {
 
 // MARK: - Artists
 
+/// The artists the user follows, each opening their whole page. The songs saved by an artist are
+/// one row on that page ("Saved Songs"), not what makes them a Library artist.
 struct LibraryArtistsView: View {
-    let artists: [LibraryIndex.Artist]
+    @Query(filter: #Predicate<Artist> { $0.followedAt != nil }, sort: \Artist.displayName)
+    private var artists: [Artist]
 
     @Environment(\.router) private var router
 
     var body: some View {
         ScrollView {
+            if artists.isEmpty {
+                ContentUnavailableView(
+                    "No artists yet",
+                    systemImage: "music.mic",
+                    description: Text("Follow an artist from their page and they'll be here.")
+                )
+                .padding(.top, 80)
+            }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 26, alignment: .top)], spacing: 30) {
                 ForEach(artists) { artist in
                     MediaTile(
-                        url: artist.artworkURL,
-                        title: artist.name,
-                        subtitle: artist.songs.count == 1 ? "1 song" : "\(artist.songs.count) songs",
+                        url: (artist.bannerURLString ?? artist.artworkURLString).flatMap(URL.init(string:)),
+                        title: artist.displayName,
+                        subtitle: "Artist",
                         shape: .round
                     ) {
-                        router.navigate(to: .libraryArtist(id: artist.id))
+                        router.navigate(to: .artist(id: artist.artistID))
                     }
                 }
             }

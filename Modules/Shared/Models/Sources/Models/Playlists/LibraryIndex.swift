@@ -99,6 +99,12 @@ public struct LibraryIndex {
         return lead.trimmingCharacters(in: .whitespaces)
     }
 
+    /// The id this index gives the artist called `name`, so an artist page can find the user's
+    /// saved songs by them.
+    public static func artistID(forName name: String) -> String {
+        key(leadArtist(name))
+    }
+
     static func songKey(_ item: PlaylistItem) -> String {
         key(item.title) + "|" + key(leadArtist(item.artistName ?? ""))
     }
