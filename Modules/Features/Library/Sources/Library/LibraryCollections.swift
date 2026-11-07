@@ -184,8 +184,8 @@ struct LibraryPlaylistsView: View {
                 .font(.subheadline.weight(.medium))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .foregroundStyle(selected ? Color.cisumBg : .primary)
-                .background(selected ? Color.primary : Color.cisumSurface, in: Capsule())
+                .foregroundStyle(selected ? Color.surfaceBackground : Color.textPrimary)
+                .background(selected ? Color.textPrimary : Color.surfaceRaised, in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -278,7 +278,7 @@ struct LibraryAlbumView: View {
                     .multilineTextAlignment(.center)
                 Text(album.artist)
                     .font(.title3)
-                    .foregroundStyle(Color.cisumYellow)
+                    .foregroundStyle(.textLink)
             }
             .frame(maxWidth: .infinity)
         }
@@ -416,7 +416,7 @@ struct LibraryArtwork: View {
     var cornerRadius: CGFloat = 8
 
     var body: some View {
-        Color.cisumSurface
+        Color.surfaceRaised
             .overlay {
                 if let url {
                     KFImage(url)
@@ -475,7 +475,7 @@ private extension View {
     func libraryPage(title: String) -> some View {
         listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .background(Color.cisumBg)
+            .background(Color.surfaceBackground)
             .navigationTitle(title)
             #if os(iOS)
             // Clears the floating mini player.

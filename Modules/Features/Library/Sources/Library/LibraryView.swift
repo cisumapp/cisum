@@ -78,7 +78,11 @@ public struct LibraryView: View {
             Button("Cancel", role: .cancel) { newPlaylistName = "" }
             Button("Create") { createLocalPlaylist() }
         }
-        .alert("Library Action Failed", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+        .alert("Library Action Failed", isPresented: Binding(get: { errorMessage != nil }, set: {
+            if !$0 {
+                errorMessage = nil
+            }
+        })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
@@ -178,11 +182,10 @@ public struct LibraryView: View {
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
                 Button("Import Playlist") { isPresentingImport = true }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.cisumProminent)
                 Button("New Playlist") { isPresentingNewPlaylist = true }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.cisumSecondary)
             }
-            .tint(.primary)
             if canImportLikedSongs {
                 Button(isSyncingLikedSongs ? "Importing Liked Songs…" : "Import Spotify Liked Songs") {
                     Task { await openLikedSongs() }
@@ -239,7 +242,7 @@ private struct LibraryCategoryRow: View {
         HStack(spacing: 14) {
             Image(systemName: systemImage)
                 .font(.title3)
-                .foregroundStyle(Color.cisumYellow)
+                .foregroundStyle(.textLink)
                 .frame(width: 28)
             Text(title)
                 .font(.title3)
@@ -256,7 +259,7 @@ private struct LibraryCategoryRow: View {
             // A Rectangle, not a Divider: inside an overlay a Divider takes the row's HStack axis
             // and draws vertically.
             Rectangle()
-                .fill(.primary.opacity(0.1))
+                .fill(.separatorLine)
                 .frame(height: 0.5)
                 .padding(.leading, 42)
         }

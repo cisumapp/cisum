@@ -136,7 +136,7 @@ public struct ImportServiceSheet: View {
                             Text("\(n)").font(.caption).foregroundStyle(.secondary)
                         }
                         Image(systemName: selected.contains(ref.id) ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(selected.contains(ref.id) ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(selected.contains(ref.id) ? Color.textLink : Color.textTertiary)
                     }
                 }
             }

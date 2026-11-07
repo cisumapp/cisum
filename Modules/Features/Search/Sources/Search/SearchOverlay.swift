@@ -103,12 +103,12 @@ public struct SearchOverlayBar: View {
                             .lineLimit(1)
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                    .foregroundStyle(isSelected ? Color.textPrimary : Color.textSecondary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background {
                         Capsule(style: .continuous)
-                            .fill(isSelected ? Color.primary.opacity(0.22) : Color.secondary.opacity(0.08))
+                            .fill(isSelected ? Color.fillStrong : Color.fillSubtle)
                     }
                 }
                 .buttonStyle(.plain)
@@ -125,7 +125,7 @@ public struct SearchOverlayBar: View {
                         .padding(.vertical, 6)
                         .background {
                             Capsule(style: .continuous)
-                                .fill(Color.secondary.opacity(0.08))
+                                .fill(.fillSubtle)
                         }
                 }
                 .buttonStyle(.plain)

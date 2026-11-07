@@ -99,10 +99,10 @@ private struct PlaylistTrackRow: View {
             if item.importStatus == .uncertain {
                 Text("Review")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.textWarning)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 4)
-                    .background(.orange.opacity(0.12), in: Capsule())
+                    .background(Color.textWarning.opacity(0.12), in: Capsule())
             }
         }
         .padding(.vertical, 2)

@@ -274,7 +274,7 @@ struct iOS26TabBar<SelectionValue: Hashable>: View {
             HStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(isSearchExpanded ? .body : .title2)
-                    .foregroundStyle(isSearchExpanded ? .gray : .primary)
+                    .foregroundStyle(isSearchExpanded ? Color.textTertiary : Color.textPrimary)
                     .frame(width: isSearchExpanded ? nil : height, height: height)
                     .onTapGesture {
                         withAnimation(bouncyAnimation) {

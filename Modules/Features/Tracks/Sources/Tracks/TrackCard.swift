@@ -51,7 +51,7 @@ public struct TrackCard: View {
                             .lineLimit(1)
 
                         Text(artistName)
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(.textSecondary)
                             .font(.system(size: 10 * scale))
                             .fontWeight(.semibold)
                             .lineLimit(1)
@@ -61,7 +61,7 @@ public struct TrackCard: View {
 
                     if !duration.isEmpty {
                         Text(duration)
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(.textSecondary)
                             .font(.system(size: 10 * scale))
                             .fontWeight(.semibold)
                             .padding(.trailing, 25 * scale)
