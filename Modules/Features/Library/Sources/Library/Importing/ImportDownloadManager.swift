@@ -144,7 +144,10 @@ public actor ImportDownloadManager {
         // ponytail: time throttle, full re-import each run (~1 request per 100 likes). Diff on count +
         // newest addedAt if large libraries make this heavy.
         guard now - defaults.double(forKey: lastKey) >= minimumInterval else { return }
-        guard let service = services[.spotify], await service.isAuthorized() else { return }
+        guard let service = services[.spotify], await service.isAuthorized() else {
+            PerfLog.info("ImportDownloadManager: Liked Songs sync skipped, no Spotify session")
+            return
+        }
         defaults.set(now, forKey: lastKey)
         PerfLog.info("ImportDownloadManager: syncing Spotify Liked Songs")
         await enqueue(provider: .spotify, playlistRef: .init(id: "spotify:collection:tracks", title: "Liked Songs"))

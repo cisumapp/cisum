@@ -441,6 +441,9 @@ enum AppBootstrap {
             services: importServices,
             progress: importProgressFacade
         )
+        StreamingProviderSettings.shared.onSyncLikedSongsEnabled = {
+            Task { await importDownloadManager.syncSpotifyLikedSongs() }
+        }
         Task {
             guard startBackgroundWork else { return }
             await importDownloadManager.resumePendingJobs()
