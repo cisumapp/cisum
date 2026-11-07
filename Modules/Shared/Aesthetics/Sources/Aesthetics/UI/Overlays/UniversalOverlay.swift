@@ -89,8 +89,7 @@ public struct RootView<Content: View>: View {
     }
 
     private func setupOverlayWindowIfNeeded() {
-        guard properties.window == nil else { return }
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        guard properties.window == nil, let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
         else { return }
 
         let window = PassThroughWindow(windowScene: windowScene)
@@ -114,12 +113,14 @@ public struct RootView<Content: View>: View {
         rootViewController.view.frame = window.bounds
         rootViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         window.rootViewController = rootViewController
+        window.watchAppPresentations()
 
         properties.window = window
     }
 
     private func teardownOverlayWindow() {
         properties.views.removeAll(keepingCapacity: false)
+        (properties.window as? PassThroughWindow)?.stopWatching()
         properties.window?.isHidden = true
         properties.window = nil
     }
@@ -176,8 +177,7 @@ private struct UniversalOverlayModifier<ViewContent: View>: ViewModifier {
     }
 
     private func addViewIfNeeded() {
-        guard properties.window != nil else { return }
-        guard !properties.views.contains(where: { $0.id == viewID }) else { return }
+        guard properties.window != nil, !properties.views.contains(where: { $0.id == viewID }) else { return }
 
         let view = UniversalOverlayProperties.OverlayView(
             id: viewID,
@@ -248,6 +248,34 @@ public final class PlayerExpansionState {
 }
 
 private class PassThroughWindow: UIWindow {
+    private var presentationWatch: CADisplayLink?
+
+    /// Sheets, share sheets and alerts the app presents live in its own window, below this one, so
+    /// the player sat on top of them. It fades out while any other window is presenting.
+    // ponytail: checked ten times a second (one property read per window); a presentation hook
+    // would need swizzling.
+    func watchAppPresentations() {
+        let link = CADisplayLink(target: self, selector: #selector(checkPresentation))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 4, maximum: 10, preferred: 10)
+        link.add(to: .main, forMode: .common)
+        presentationWatch = link
+    }
+
+    /// The display link holds this window strongly until it is invalidated.
+    func stopWatching() {
+        presentationWatch?.invalidate()
+        presentationWatch = nil
+    }
+
+    @objc private func checkPresentation() {
+        let presenting = windowScene?.windows.contains {
+            $0 !== self && !$0.isHidden && $0.rootViewController?.presentedViewController != nil
+        } ?? false
+        let target: CGFloat = presenting ? 0 : 1
+        guard alpha != target else { return }
+        UIView.animate(withDuration: 0.2) { self.alpha = target }
+    }
+
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // If the player is expanded, capture all touches to enable gestures.
         if PlayerExpansionState.shared.isExpanded {
