@@ -41,8 +41,14 @@ public final class StreamingProviderSettings {
     public var spotifySyncLikedSongs: Bool {
         didSet {
             defaults.set(spotifySyncLikedSongs, forKey: Self.spotifySyncLikedSongsKey)
+            if spotifySyncLikedSongs, !oldValue {
+                onSyncLikedSongsEnabled?()
+            }
         }
     }
+
+    /// Set by the app at launch so turning sync on runs it right away, not at the next foreground.
+    @ObservationIgnored public var onSyncLikedSongsEnabled: (@MainActor () -> Void)?
 
     /// Lets cisum change the Spotify account (like, follow, edit playlists). Off by default.
     public var spotifyAllowWrites: Bool {

@@ -35,7 +35,9 @@ public enum ImportServicesFactory {
         #if canImport(SpotifySDK)
         services[.spotify] = SpotifyImportService(
             sdkProvider: { spotifyCoordinator.sdk ?? spotifyCoordinator.session.map { SpotifySDK(session: $0) } },
-            isAuthorized: { await MainActor.run { spotifyCoordinator.isAuthenticated } }
+            // hasSession, not isAuthenticated: an expired access token is normal after idle and the
+            // SDK refreshes it on the next request; isAuthenticated would read that as signed out.
+            isAuthorized: { await MainActor.run { spotifyCoordinator.hasSession } }
         )
         #endif
 
