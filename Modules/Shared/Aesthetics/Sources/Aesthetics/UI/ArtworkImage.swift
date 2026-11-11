@@ -29,6 +29,10 @@ public struct ArtworkImage: View {
                 KFImage(ArtworkURL.best(from: url))
                     .cacheOriginalImage()
                     .downsampling(size: CGSize(width: px, height: px))
+                    // KFImage reads the disk cache synchronously by default, so every cell scrolled in
+                    // read and decoded its file on the main thread. Memory-cache hits stay instant;
+                    // a disk hit now lands a frame later instead of stalling the scroll.
+                    .loadDiskFileSynchronously(false)
                     .resizable()
                     .scaledToFill()
                     // YouTube video thumbnails are 4:3 with the 16:9 picture letterboxed inside;
