@@ -64,7 +64,7 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
                 // ZStack, so the two static side discs, both side labels, the shade and the
                 // positioning all re-evaluated at 60-120fps for no reason — nothing outside the
                 // hero disc changes between frames.
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(minimumInterval: nil, paused: !spin.isTurning)) { timeline in
                     heroVinyl(timeline: timeline, size: sizes.heroDiskSize)
                 }
                 .overlay {
@@ -82,6 +82,9 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
         }
         .onChange(of: isPlaying) { _, _ in
             syncPlaybackState(at: .now)
+        }
+        .task(id: isPlaying) {
+            await spin.settle(isPlaying: isPlaying)
         }
     }
 

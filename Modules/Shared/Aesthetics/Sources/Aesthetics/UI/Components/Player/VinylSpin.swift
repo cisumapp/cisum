@@ -12,8 +12,13 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class VinylSpin {
+    /// Whether the record is still turning. Feeds `TimelineView(.animation(paused:))`: a parked
+    /// record needs no clock. Left running, the paused full player re-rendered the disc every
+    /// frame — ~1.3 s of main-thread work per 20 s with nothing moving (Time Profiler, device).
+    private(set) var isTurning = false
     private(set) var phaseStartAngle: Double = 0
     private var phaseStartDate: Date?
     private var phaseStartSpeed: Double = 0
@@ -66,5 +71,16 @@ final class VinylSpin {
         phaseStartSpeed = currentSpeed
         phaseTargetSpeed = nextTargetSpeed
         phaseTau = nextTau
+    }
+
+    /// Run from `.task(id: isPlaying)`. Playing starts the clock at once; pausing stops it after the
+    /// coast-down, ~6τ, when the platter is under 0.1°/s and the last bit of travel is invisible.
+    func settle(isPlaying: Bool) async {
+        if isPlaying {
+            isTurning = true
+            return
+        }
+        try? await Task.sleep(for: .seconds(tauStop * 6))
+        if !Task.isCancelled { isTurning = false }
     }
 }

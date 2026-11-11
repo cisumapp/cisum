@@ -39,7 +39,7 @@ public struct VinylBackdrop: View {
 
                 // Only the disc is inside the TimelineView. The wash and the frame around it
                 // are static, so re-evaluating them 60-120×/s would be pure waste.
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(minimumInterval: nil, paused: !spin.isTurning)) { timeline in
                     disc(rotation: spin.rotation(at: timeline.date), side: side)
                 }
                 // Park the spindle well below the band. Centring the disc inside the strip
@@ -55,6 +55,9 @@ public struct VinylBackdrop: View {
         .onAppear { spin.syncPlaybackState(at: .now, isPlaying: isPlaying) }
         .onChange(of: isPlaying) { _, playing in
             spin.syncPlaybackState(at: .now, isPlaying: playing)
+        }
+        .task(id: isPlaying) {
+            await spin.settle(isPlaying: isPlaying)
         }
     }
 
