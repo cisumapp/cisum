@@ -31,6 +31,10 @@ struct SearchResultsList: View {
     @Environment(\.importDownloadManager) private var importDownloadManager
     @State private var filter = SearchFilter.all
     @State private var topInset: CGFloat = 0
+    /// Built when the library changes, not per keystroke. Building it inside `libraryMatches` ran
+    /// the whole-library grouping and text normalisation on every body pass: ~0.94 s of main
+    /// thread over 20 s of typing a query (Time Profiler, Release, device).
+    @State private var libraryIndex = LibraryIndex(items: [])
 
     var body: some View {
         // Chips above the results rather than in a safe-area inset: either scroll view touching
@@ -45,6 +49,10 @@ struct SearchResultsList: View {
         .onAppear { topInset = AppConstants.safeAreaInsets.top }
         .onChange(of: searchViewModel.searchText) { _, _ in
             filter = .all
+        }
+        // ponytail: same key as LibraryView — a metadata edit shows on the next add or delete.
+        .task(id: libraryItems.count) {
+            libraryIndex = LibraryIndex(items: libraryItems)
         }
         .alert(nonPlayableMessage, isPresented: $showNonPlayableAlert) {
             Button("OK", role: .cancel) {}
@@ -139,7 +147,7 @@ struct SearchResultsList: View {
     private var libraryMatches: [LibraryIndex.Song] {
         let query = searchViewModel.searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return [] }
-        return LibraryIndex(items: libraryItems).songs.filter {
+        return libraryIndex.songs.filter {
             $0.title.localizedCaseInsensitiveContains(query)
                 || $0.artist.localizedCaseInsensitiveContains(query)
                 || ($0.album?.localizedCaseInsensitiveContains(query) ?? false)
