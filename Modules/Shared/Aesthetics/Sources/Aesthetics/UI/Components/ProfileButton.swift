@@ -54,12 +54,15 @@ public struct ProfileButton: View {
         static let hoverScale: CGFloat = 1.01
     }
 
-    private var expandedShape: UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 40,
-            bottomLeadingRadius: 35,
-            bottomTrailingRadius: 35,
-            topTrailingRadius: 40,
+    /// One shape for both states, so the glass animates its radii instead of swapping shape types.
+    /// Collapsed, every radius is half the side: a circle.
+    private var surfaceShape: UnevenRoundedRectangle {
+        let collapsed = Layout.collapsedSize / 2
+        return UnevenRoundedRectangle(
+            topLeadingRadius: isExpanded ? 40 : collapsed,
+            bottomLeadingRadius: isExpanded ? 35 : collapsed,
+            bottomTrailingRadius: isExpanded ? 35 : collapsed,
+            topTrailingRadius: isExpanded ? 40 : collapsed,
             style: .continuous
         )
     }
@@ -77,51 +80,72 @@ public struct ProfileButton: View {
     }
 
     public var body: some View {
-        ZStack(alignment: .topTrailing) {
+        menuSurface
+            .onTapGesture {
+                toggleMenu()
+            }
             #if os(iOS)
-            if isClicked {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .ignoresSafeArea()
-                    .onTapGesture {
-                        closeMenu()
-                    }
+            // Behind the surface and far larger than it, so a tap anywhere else on screen closes the
+            // menu. It used to be a sibling in this view's own ZStack, which is only as big as the
+            // button — taps outside it fell through to whatever was underneath.
+            // ponytail: oversized catcher rather than hoisting it to the screen root.
+            .background {
+                if isClicked {
+                    Color.clear
+                        .frame(width: 4000, height: 4000)
+                        .contentShape(Rectangle())
+                        .onTapGesture { closeMenu() }
+                }
             }
             #endif
-            menuSurface
-                .onTapGesture {
-                    toggleMenu()
+            #if os(macOS)
+            .onHover { isHovering in
+                withAnimation(hoverAnimation) {
+                    self.isHovering = isHovering
                 }
-        }
-        #if os(macOS)
-        .onHover { isHovering in
-            withAnimation(hoverAnimation) {
-                self.isHovering = isHovering
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            #endif
+            .onDisappear {
+                isClicked = false
+                isHovering = false
+            }
+    }
+
+    /// One surface in both states. The glass stays put and only its frame and radii animate; the
+    /// contents cross-fade inside it, and the avatar is the one element that travels.
+    private var menuSurface: some View {
+        ZStack(alignment: .top) {
+            if isExpanded {
+                expandedOverlayContent
+                    .transition(.opacity)
+            } else {
+                collapsedOverlayContent
+                    .transition(.opacity)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        #else
-        #endif
-        .onDisappear {
-            isClicked = false
-            isHovering = false
-        }
+        .frame(
+            width: isExpanded ? Layout.expandedWidth : Layout.collapsedSize,
+            height: isExpanded ? nil : Layout.collapsedSize,
+            alignment: .top
+        )
+        // The rows are laid out full-size from the first frame; clipped to the growing glass they
+        // are revealed by it instead of hanging outside it while it is still small.
+        .clipShape(surfaceShape)
+        .background { glass }
     }
 
     @ViewBuilder
-    private var menuSurface: some View {
+    private var glass: some View {
         if #available(macOS 26.0, iOS 26.0, *) {
-            if isExpanded {
-                expandedGlass
-            } else {
-                collapsedGlass
-            }
+            // Clear first: an unfilled shape is painted in the inherited text colour.
+            surfaceShape
+                .fill(.clear)
+                .glassEffect(.regular, in: surfaceShape)
         } else {
-            if isExpanded {
-                fallbackExpandedGlass
-            } else {
-                fallbackCollapsedGlass
-            }
+            surfaceShape
+                .fill(.ultraThinMaterial)
+                .overlay { surfaceShape.stroke(Color.cisumChromeBorder, lineWidth: isExpanded ? 3 : 2) }
         }
     }
 
@@ -146,18 +170,24 @@ public struct ProfileButton: View {
         }
     }
 
-    private var collapsedOverlayContent: some View {
-        ZStack {
-            Color.clear
-                .matchedGeometryEffect(id: "USERNAME", in: namespace)
-                .frame(width: 1, height: 1)
-                .offset(x: -10)
+    /// Every menu row closes the menu; only the custom actions used to.
+    private func choose(_ action: ProfileMenuAction) {
+        closeMenu()
+        onAction(action)
+    }
 
-            Color.clear
-                .matchedGeometryEffect(id: "PROFILE_BUTTONS", in: namespace)
-                .frame(width: 1, height: 1)
-                .offset(y: 80)
+    private func openSupport() {
+        closeMenu()
+        openURL(URL(string: "https://discord.com/invite/Mb4F9Gmuex")!)
+    }
 
+    /// The avatar, the one view matched between the two states.
+    ///
+    /// `matchedGeometryEffect` comes last: it matches the geometry of the view it is applied to, so
+    /// placed before `.frame` it matched the unframed image and the two ends disagreed. No
+    /// `.animation` of its own either — it rides the toggle's animation, so it lands with the glass.
+    private func avatar(size: CGFloat) -> some View {
+        Group {
             if let url = profileImageURL {
                 KFImage(url)
                     .placeholder {
@@ -165,26 +195,31 @@ public struct ProfileButton: View {
                             .fill(Color.cisumChromeSubtle)
                     }
                     .resizable()
-                    .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                    .clipShape(.circle)
-                    .frame(width: Layout.collapsedSize - 10, height: Layout.collapsedSize - 10)
-                    .animation(.easeInOut(duration: 0.25), value: isExpanded)
+                    .scaledToFill()
             } else {
                 Circle()
                     .fill(Color.cisumChromeSubtle)
-                    .padding(5)
-                    .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                    .animation(.easeInOut(duration: 0.25), value: isExpanded)
             }
         }
+        .frame(width: size, height: size)
+        .clipShape(.circle)
+        .matchedGeometryEffect(id: "PROFILE", in: namespace)
     }
 
+    private var collapsedOverlayContent: some View {
+        avatar(size: Layout.collapsedSize - 10)
+            .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
+    }
+
+    // The rows are not matched to anything. Matching the whole stack to the collapsed circle laid it
+    // out 60 pt wide mid-animation, so every label wrapped a letter at a time; they now fade in
+    // place while the glass grows around them.
     private var expandedOverlayContent: some View {
         VStack {
             HStack {
                 #if os(iOS)
                 Button {
-                    onAction(.profile)
+                    choose(.profile)
                 } label: {
                     if #available(iOS 26.0, *) {
                         RoundedRectangle(cornerRadius: 50)
@@ -195,7 +230,6 @@ public struct ProfileButton: View {
                                     .fixedSize(horizontal: true, vertical: true)
                             }
                     } else {
-                        // Fallback on earlier versions
                         RoundedRectangle(cornerRadius: Layout.menuCornerRadius)
                             .stroke(Color.cisumChromeSubtle, lineWidth: 1.5)
                             .foregroundStyle(.ultraThinMaterial)
@@ -206,52 +240,13 @@ public struct ProfileButton: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .matchedGeometryEffect(id: "USERNAME", in: namespace, anchor: .topTrailing)
                 .frame(maxWidth: .infinity)
                 .frame(height: Layout.expandedProfileSize)
 
-                if let url = profileImageURL {
-                    KFImage(url)
-                        .placeholder {
-                            Circle()
-                                .fill(Color.cisumChromeSubtle)
-                        }
-                        .resizable()
-                        .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                        .clipShape(.circle)
-                        .frame(
-                            width: Layout.expandedProfileSize,
-                            height: Layout.expandedProfileSize
-                        )
-                        .animation(.easeInOut(duration: 0.25), value: isExpanded)
-                } else {
-                    Circle()
-                        .fill(Color.cisumChromeSubtle)
-                        .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                        .frame(
-                            width: Layout.expandedProfileSize,
-                            height: Layout.expandedProfileSize
-                        )
-                        .animation(.easeInOut(duration: 0.25), value: isExpanded)
-                }
+                avatar(size: Layout.expandedProfileSize)
 
                 #elseif os(macOS)
-                if let url = profileImageURL {
-                    KFImage(url)
-                        .placeholder {
-                            Circle()
-                                .fill(Color.cisumChromeSubtle)
-                        }
-                        .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                        .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
-                        .animation(.easeInOut(duration: 0.25), value: isExpanded)
-                } else {
-                    Circle()
-                        .fill(Color.cisumChromeSubtle)
-                        .matchedGeometryEffect(id: "PROFILE", in: namespace)
-                        .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
-                        .animation(.easeInOut(duration: 0.25), value: isExpanded)
-                }
+                avatar(size: Layout.collapsedSize)
 
                 Spacer()
                 #endif
@@ -259,198 +254,79 @@ public struct ProfileButton: View {
             .padding([.top, .horizontal], 10)
 
             VStack {
-                if #available(macOS 26.0, iOS 26.0, *) {
-                    #if os(macOS)
+                #if os(macOS)
+                if #available(macOS 26.0, *) {
                     Button {
-                        onAction(.profile)
+                        choose(.profile)
                     } label: {
-                        RoundedRectangle(cornerRadius: 50)
-                            .fill(.clear)
-                            .glassEffect(.regular, in: .rect(cornerRadius: Layout.menuCornerRadius))
-                            .contentShape(.rect(cornerRadius: Layout.menuCornerRadius))
-                            .padding(.horizontal, 10)
-                            .frame(height: Layout.menuHeight)
-                            .overlay {
-                                Text("Profile")
-                                    .fixedSize(horizontal: true, vertical: true)
-                            }
+                        menuRow("Profile")
                     }
                     .buttonStyle(.plain)
-                    .matchedGeometryEffect(id: "USERNAME", in: namespace, anchor: .topTrailing)
-                    #endif
+                }
+                #endif
 
-                    Button {
-                        onAction(.settings)
-                    } label: {
-                        menuRowGlassModern
-                            .overlay {
-                                Text("Settings")
-                            }
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    choose(.settings)
+                } label: {
+                    menuRow("Settings")
+                }
+                .buttonStyle(.plain)
 
-                    Button {
-                        onAction(.plugins)
-                    } label: {
-                        menuRowGlassModern
-                            .overlay {
-                                Text("Plugins")
-                            }
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    choose(.plugins)
+                } label: {
+                    menuRow("Plugins")
+                }
+                .buttonStyle(.plain)
 
-                    Button {
-                        openURL(URL(string: "https://discord.com/invite/Mb4F9Gmuex")!)
-                    } label: {
-                        menuRowGlassModern
-                            .overlay {
-                                Text("Support")
-                            }
-                    }
-                    .buttonStyle(.plain)
+                Button {
+                    openSupport()
+                } label: {
+                    menuRow("Support")
+                }
+                .buttonStyle(.plain)
 
-                    if !customActions.isEmpty {
-                        Rectangle()
-                            .fill(Color.cisumChromeStrong)
-                            .frame(height: 1)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 5)
+                if !customActions.isEmpty {
+                    Rectangle()
+                        .fill(Color.cisumChromeStrong)
+                        .frame(height: 1)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 5)
 
-                        ForEach(customActions) { customAction in
-                            Button {
-                                customAction.action()
-                                closeMenu()
-                            } label: {
-                                menuRowGlassModern
-                                    .overlay {
-                                        Text(customAction.title)
-                                    }
-                            }
-                            .buttonStyle(.plain)
+                    ForEach(customActions) { customAction in
+                        Button {
+                            customAction.action()
+                            closeMenu()
+                        } label: {
+                            menuRow(customAction.title)
                         }
-                    }
-                } else {
-                    Button {
-                        onAction(.settings)
-                    } label: {
-                        menuRowGlassFallback
-                            .overlay {
-                                Text("Settings")
-                            }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        onAction(.plugins)
-                    } label: {
-                        menuRowGlassFallback
-                            .overlay {
-                                Text("Plugins")
-                            }
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        openURL(URL(string: "https://discord.com/invite/Mb4F9Gmuex")!)
-                    } label: {
-                        menuRowGlassFallback
-                            .overlay {
-                                Text("Support")
-                            }
-                    }
-                    .buttonStyle(.plain)
-
-                    if !customActions.isEmpty {
-                        Rectangle()
-                            .fill(Color.cisumChromeStrong)
-                            .frame(height: 1)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 5)
-
-                        ForEach(customActions) { customAction in
-                            Button {
-                                customAction.action()
-                                closeMenu()
-                            } label: {
-                                menuRowGlassFallback
-                                    .overlay {
-                                        Text(customAction.title)
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
-            .matchedGeometryEffect(id: "PROFILE_BUTTONS", in: namespace)
         }
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    @available(macOS 26.0, iOS 26.0, *)
-    private var collapsedGlass: some View {
-        collapsedOverlayContent
-            .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
-            .background {
-                // Clear first: an unfilled shape is painted in the inherited text colour.
-                Circle()
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .circle)
-                    .matchedGeometryEffect(id: "GLASS", in: namespace)
-            }
-    }
-
-    @available(macOS 26.0, iOS 26.0, *)
-    private var expandedGlass: some View {
-        expandedOverlayContent
-            .frame(width: Layout.expandedWidth)
-            .background {
-                expandedShape
-                    .fill(.clear)
-                    .glassEffect(.regular, in: expandedShape)
-                    .matchedGeometryEffect(id: "GLASS", in: namespace)
-            }
-    }
-
-    private var fallbackCollapsedGlass: some View {
-        collapsedOverlayContent
-            .frame(width: Layout.collapsedSize, height: Layout.collapsedSize)
-            .background {
-                Circle()
-                    .stroke(Color.cisumChromeBorder, lineWidth: 2)
-                    .fill(.ultraThinMaterial)
-                    .matchedGeometryEffect(id: "GLASS", in: namespace)
-            }
-    }
-
-    private var fallbackExpandedGlass: some View {
-        expandedOverlayContent
-            .frame(width: Layout.expandedWidth)
-            .background {
-                expandedShape
-                    .stroke(Color.cisumChromeBorder, lineWidth: 3)
-                    .fill(.ultraThinMaterial)
-                    .matchedGeometryEffect(id: "GLASS", in: namespace)
-            }
-    }
-
-    @available(macOS 26.0, iOS 26.0, *)
-    private var menuRowGlassModern: some View {
-        RoundedRectangle(cornerRadius: Layout.menuCornerRadius)
-            .fill(.clear)
-            .glassEffect(.regular, in: .rect(cornerRadius: Layout.menuCornerRadius))
-            .contentShape(.rect(cornerRadius: Layout.menuCornerRadius))
-            .padding(.horizontal, 10)
-            .frame(height: Layout.menuHeight)
-    }
-
-    private var menuRowGlassFallback: some View {
-        RoundedRectangle(cornerRadius: Layout.menuCornerRadius)
-            .stroke(Color.cisumChromeSubtle, lineWidth: 1.5)
-            .foregroundStyle(.ultraThinMaterial)
-            .padding(.horizontal, 10)
-            .frame(height: Layout.menuHeight)
+    @ViewBuilder
+    private func menuRow(_ title: String) -> some View {
+        if #available(macOS 26.0, iOS 26.0, *) {
+            RoundedRectangle(cornerRadius: Layout.menuCornerRadius)
+                .fill(.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: Layout.menuCornerRadius))
+                .contentShape(.rect(cornerRadius: Layout.menuCornerRadius))
+                .padding(.horizontal, 10)
+                .frame(height: Layout.menuHeight)
+                .overlay { Text(title) }
+        } else {
+            RoundedRectangle(cornerRadius: Layout.menuCornerRadius)
+                .stroke(Color.cisumChromeSubtle, lineWidth: 1.5)
+                .foregroundStyle(.ultraThinMaterial)
+                .padding(.horizontal, 10)
+                .frame(height: Layout.menuHeight)
+                .overlay { Text(title) }
+        }
     }
 }
 
