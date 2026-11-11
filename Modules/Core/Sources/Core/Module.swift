@@ -345,51 +345,15 @@ public final class cisumModule {
 
     // MARK: - Root View
 
+    /// Every root (each tab, each player presentation) gets the same app environment.
+    ///
+    /// The chain lives in one `ViewModifier` so each call site adds a single generic layer. Applied
+    /// inline it was ~37 nested `ModifiedContent` levels per call site, ~11 call sites in
+    /// `RootView`, and the Swift runtime had to build and conformance-check every one of those
+    /// metadata towers on the first frame: ~430 ms of a ~500 ms Initial Frame Rendering in a
+    /// Release build on an A15 iPhone (App Launch trace). With the modifier the tower is built once.
     public func applyEnvironment(to view: some View) -> some View {
-        view
-            .environment(\.importDownloadManager, container.libraryServices.importDownloadManager)
-            .environment(\.importProgressFacade, container.libraryServices.importProgressFacade)
-            .environment(container)
-            .environment(container.coreServices)
-            .environment(container.playbackServices)
-            .environment(container.searchServices)
-            .environment(container.libraryServices)
-            .environment(\.playlistLibraryStore, container.libraryServices.playlistLibraryStore)
-            .environment(\.savedLibrary, container.libraryServices.savedLibrary)
-            .environment(\.centralMediaStore, container.libraryServices.centralMediaStore)
-            .environment(\.catalog, catalog)
-            .environment(\.artistPageStore, artistPageStore)
-            .environment(\.motionArtwork, motionArtworkStore.source)
-            .environment(container.userServices)
-            .environment(container.providerServices)
-            .environment(container.appServices)
-            .environment(container.appServices.playerPresentationController)
-            .environment(container.appServices.searchOverlayController)
-            // The four state objects go in individually rather than as one player, so a view
-            // takes only what it reads. That is the entire payoff of the frequency-based split in
-            // PlayerState.swift — injecting a single object would put the 30 Hz fan-out straight
-            // back.
-            .environment(container.playbackServices.player)
-            .environment(container.playbackServices.nowPlayingState)
-            .environment(container.playbackServices.transportState)
-            .environment(container.playbackServices.progressState)
-            .environment(container.playbackServices.lyricsPresentation)
-            .environment(\.playbackCommands, container.playbackServices.playbackCommands)
-            .environment(\.preferredSourceIDs, container.providerServices.preferredSourceIDs)
-            .environment(\.searchViewModel, container.searchServices.searchViewModel)
-            .environment(container.userServices.authService)
-            .environment(container.userServices.spotifySessionCoordinator)
-            .environment(container.userServices.supabaseService)
-            .environment(container.userServices.analyticsService)
-            .environment(container.playbackServices.lastFMSettings)
-            .environment(\.lastFMScrobbler, container.playbackServices.lastFMScrobbler)
-            .environment(container.playbackServices.streamingProviderSettings)
-            .environment(container.providerServices.pluginStore)
-            #if os(iOS)
-            .environment(PlayerThemeSettings.shared)
-            #endif
-            .modelContainer(modelContainer)
-            .cisumTextStyles()
+        view.modifier(CisumEnvironment(module: self))
     }
 
     @ViewBuilder
@@ -502,5 +466,57 @@ public final class cisumModule {
                 viewModel: container.searchServices.searchViewModel
             )
         )
+    }
+}
+
+/// The app-wide environment, as one concrete modifier type. See `cisumModule.applyEnvironment(to:)`.
+private struct CisumEnvironment: ViewModifier {
+    let module: cisumModule
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.importDownloadManager, module.container.libraryServices.importDownloadManager)
+            .environment(\.importProgressFacade, module.container.libraryServices.importProgressFacade)
+            .environment(module.container)
+            .environment(module.container.coreServices)
+            .environment(module.container.playbackServices)
+            .environment(module.container.searchServices)
+            .environment(module.container.libraryServices)
+            .environment(\.playlistLibraryStore, module.container.libraryServices.playlistLibraryStore)
+            .environment(\.savedLibrary, module.container.libraryServices.savedLibrary)
+            .environment(\.centralMediaStore, module.container.libraryServices.centralMediaStore)
+            .environment(\.catalog, module.catalog)
+            .environment(\.artistPageStore, module.artistPageStore)
+            .environment(\.motionArtwork, module.motionArtworkStore.source)
+            .environment(module.container.userServices)
+            .environment(module.container.providerServices)
+            .environment(module.container.appServices)
+            .environment(module.container.appServices.playerPresentationController)
+            .environment(module.container.appServices.searchOverlayController)
+            // The four state objects go in individually rather than as one player, so a view
+            // takes only what it reads. That is the entire payoff of the frequency-based split in
+            // PlayerState.swift — injecting a single object would put the 30 Hz fan-out straight
+            // back.
+            .environment(module.container.playbackServices.player)
+            .environment(module.container.playbackServices.nowPlayingState)
+            .environment(module.container.playbackServices.transportState)
+            .environment(module.container.playbackServices.progressState)
+            .environment(module.container.playbackServices.lyricsPresentation)
+            .environment(\.playbackCommands, module.container.playbackServices.playbackCommands)
+            .environment(\.preferredSourceIDs, module.container.providerServices.preferredSourceIDs)
+            .environment(\.searchViewModel, module.container.searchServices.searchViewModel)
+            .environment(module.container.userServices.authService)
+            .environment(module.container.userServices.spotifySessionCoordinator)
+            .environment(module.container.userServices.supabaseService)
+            .environment(module.container.userServices.analyticsService)
+            .environment(module.container.playbackServices.lastFMSettings)
+            .environment(\.lastFMScrobbler, module.container.playbackServices.lastFMScrobbler)
+            .environment(module.container.playbackServices.streamingProviderSettings)
+            .environment(module.container.providerServices.pluginStore)
+            #if os(iOS)
+            .environment(PlayerThemeSettings.shared)
+            #endif
+            .modelContainer(module.modelContainer)
+            .cisumTextStyles()
     }
 }
