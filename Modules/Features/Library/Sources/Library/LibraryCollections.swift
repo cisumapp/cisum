@@ -273,7 +273,7 @@ struct LibraryAlbumView: View {
     var body: some View {
         LibrarySongList(songs: album.songs, showsArtwork: false) {
             VStack(spacing: 6) {
-                LibraryArtwork(url: album.artworkURL, symbol: "square.stack", cornerRadius: 12)
+                LibraryArtwork(url: album.artworkURL, symbol: "square.stack", cornerRadius: 12, size: 220)
                     .frame(width: 220, height: 220)
                     .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
                     .padding(.bottom, 8)
@@ -419,12 +419,18 @@ struct LibraryArtwork: View {
     let url: URL?
     var symbol = "music.note"
     var cornerRadius: CGFloat = 8
+    /// Points the artwork is drawn at; it is decoded at this size, not the source's.
+    var size: CGFloat = 52
 
     var body: some View {
         Color.surfaceRaised
             .overlay {
                 if let url {
                     KFImage(url)
+                        // Full-size artwork decoded on the main thread for every row scrolled in
+                        // was the bulk of the Library's scroll hitches (Animation Hitches, device).
+                        .downsampling(size: CGSize(width: size * 3, height: size * 3))
+                        .loadDiskFileSynchronously(false)
                         .placeholder { placeholder }
                         .resizable()
                         .scaledToFill()
