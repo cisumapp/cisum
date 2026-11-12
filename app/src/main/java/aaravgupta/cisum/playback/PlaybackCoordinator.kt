@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +31,24 @@ class PlaybackCoordinator @Inject constructor(
     private val expand = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val expandRequests: SharedFlow<Unit> = expand.asSharedFlow()
 
+    /** What the player was last given. It moves through this on its own. */
+    @Volatile private var queue: List<Track> = emptyList()
+
+    init {
+        // A track ending, next / previous, and the notification's buttons all change the track
+        // without going through play(). Follow the player, or the screen keeps showing the track
+        // that was tapped.
+        scope.launch {
+            controller.playbackState.map { it.currentTrackId }.distinctUntilChanged().collect { id ->
+                val track = queue.firstOrNull { it.id == id } ?: return@collect
+                if (repository.nowPlaying.value?.id != id) {
+                    repository.setNowPlaying(track)
+                    history.record(track)
+                }
+            }
+        }
+    }
+
     /**
      * Plays [track], with [queue] around it for next / previous. Nothing is resolved up front: the
      * resolve starts now, in parallel with the player connecting, and the player picks it up when it
@@ -38,6 +58,7 @@ class PlaybackCoordinator @Inject constructor(
         aaravgupta.cisum.perf.Perf.playRequestedAt = android.os.SystemClock.elapsedRealtime()
         if (openPlayer) expand.tryEmit(Unit)
         streams.prefetch(track.id)
+        this.queue = queue.ifEmpty { listOf(track) }
         repository.setNowPlaying(track)
         history.record(track)
         scope.launch(Dispatchers.Main) { // MediaController is main-thread only
