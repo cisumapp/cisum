@@ -67,9 +67,10 @@ android {
 }
 
 dependencies {
-    // Swift SDKs ship as src/main/jniLibs/arm64-v8a/libCisumBridge.so (static Swift stdlib), built
-    // from cisum's Packages/StreamingKit/AndroidBridge. The old libs/YouTubeSDK-release.aar
-    // (dynamic stdlib) also carries libc++_shared.so and would clash, so it is not linked.
+    // cisum's Swift SDKs: libCisumBridge.so (static Swift stdlib) and libc++_shared.so, packaged by
+    //   swift android aar CisumBridge -c release --static-swift-stdlib
+    // in cisum's Packages/StreamingKit/AndroidBridge, then copied to app/libs.
+    implementation(files("libs/CisumBridge.aar"))
 
     implementation(libs.androidx.core.ktx)
     // Installs the baseline profile on devices that do not get it from the Play Store.
