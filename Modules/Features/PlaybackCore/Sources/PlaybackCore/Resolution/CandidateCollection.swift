@@ -40,7 +40,7 @@ public struct ResolutionBudget: Sendable, Equatable {
     public var firstCandidateTimeout: Duration
 
     public init(
-        improvementWindow: Duration = .milliseconds(800),
+        improvementWindow: Duration = .milliseconds(250),
         firstCandidateTimeout: Duration = .seconds(15)
     ) {
         self.improvementWindow = improvementWindow
@@ -48,7 +48,9 @@ public struct ResolutionBudget: Sendable, Equatable {
     }
 
     /// The default. The improvement window is deliberately short: it is added to the *other*
-    /// providers' response time, not to the selected provider's.
+    /// providers' response time, not to the selected provider's. It was 800 ms; on device that was
+    /// the bulk of a first play by search ("Barsaat": YouTube Music usable at 0.60 s, selected at
+    /// 1.43 s, and still the winner), so a later, better provider now has 250 ms to show up.
     public static let `default` = ResolutionBudget()
 }
 

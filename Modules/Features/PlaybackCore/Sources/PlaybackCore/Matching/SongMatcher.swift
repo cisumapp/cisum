@@ -200,6 +200,20 @@ public struct SongMatcher: Sendable {
             )
         )
 
+        // Title gate, mirroring the artist gate. The right artist and the right length reach the
+        // threshold on their own, so another song from the same artist ("Ik Kudi Acoustic" playing
+        // "Dooron Dooron") was accepted.
+        // ponytail: only when both titles are ASCII. A title in its original script shares nothing
+        // with its romanisation, and that pair must still match on artist and duration.
+        // Checked against the whole candidate title too: "Artist - Song (Official Video)" loses
+        // the song when version suffixes are stripped.
+        if titleScore < 0.3,
+           TextNormalizer.tokenOverlap(expected: target.title, candidate: candidate.title) == 0,
+           target.title.allSatisfy(\.isASCII), candidate.title.allSatisfy(\.isASCII)
+        {
+            return 0
+        }
+
         var total = titleScore * 0.45 + artistScore * 0.35
 
         // Duration is strong corroboration when both sides report it — two recordings of the same
