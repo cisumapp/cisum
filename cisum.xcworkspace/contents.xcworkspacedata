@@ -10,10 +10,4 @@
    <FileRef
       location = "group:macOS/macOS.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:Modules">
-   </FileRef>
-   <FileRef
-      location = "group:Packages">
-   </FileRef>
 </Workspace>
