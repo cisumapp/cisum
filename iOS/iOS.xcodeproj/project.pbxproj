@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		770826772FDF2255009046DC /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 770826762FDF2255009046DC /* Core */; };
-		777B92D32FA4AA1B00ECAF15 /* Core in Frameworks */ = {isa = PBXBuildFile; productRef = 777B92D22FA4AA1B00ECAF15 /* Core */; };
 		77C8BF5A2F6E36D200E7354F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF592F6E36D200E7354F /* WidgetKit.framework */; };
 		77C8BF5C2F6E36D200E7354F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 77C8BF5B2F6E36D200E7354F /* SwiftUI.framework */; };
 		77C8BF6D2F6E36D200E7354F /* LyricsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 77C8BF572F6E36D200E7354F /* LyricsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -112,7 +111,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				777B92D32FA4AA1B00ECAF15 /* Core in Frameworks */,
 				770826772FDF2255009046DC /* Core in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -194,7 +192,6 @@
 			);
 			name = cisum;
 			packageProductDependencies = (
-				777B92D22FA4AA1B00ECAF15 /* Core */,
 				770826762FDF2255009046DC /* Core */,
 			);
 			productName = iOS;
@@ -255,7 +252,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 2720;
 				TargetAttributes = {
 					772039512F6AAAA700E85D4A = {
 						CreatedOnToolsVersion = 26.3;
@@ -348,7 +345,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  exit 0\nfi\n\nREPO_ROOT=\"$SRCROOT/..\"\n\nif command -v swiftformat >/dev/null 2>&1; then\n  if ! swiftformat --lint --config \"$REPO_ROOT/.swiftformat\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftFormat reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftFormat not installed, skipping\"\nfi\n\nif command -v swiftlint >/dev/null 2>&1; then\n  if ! swiftlint lint --config \"$REPO_ROOT/.swiftlint.yml\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftLint reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftLint not installed, skipping\"\nfi\n";
+			shellScript = "export PATH=\"$PATH:/opt/homebrew/bin\"\nif [ \"$CONFIGURATION\" != \"Debug\" ]; then\n  exit 0\nfi\n\nREPO_ROOT=\"$SRCROOT/..\"\n\nif command -v swiftformat >/dev/null 2>&1; then\n  if ! swiftformat --lint --lenient --config \"$REPO_ROOT/.swiftformat\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftFormat reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftFormat not installed, skipping\"\nfi\n\nif command -v swiftlint >/dev/null 2>&1; then\n  if ! swiftlint lint --config \"$REPO_ROOT/.swiftlint.yml\" \\\n    \"$REPO_ROOT/Modules\" \\\n    \"$REPO_ROOT/iOS\" \\\n    \"$REPO_ROOT/macOS\"; then\n    echo \"warning: SwiftLint reported style issues\"\n  fi\nelse\n  echo \"warning: SwiftLint not installed, skipping\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -516,7 +513,6 @@
 		779EEEA42FA8B00200C04320 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -561,7 +557,6 @@
 		779EEEA52FA8B00200C04320 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
@@ -718,14 +713,12 @@
 /* Begin XCSwiftPackageProductDependency section */
 		770826762FDF2255009046DC /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = Core;
-		};
-		777B92D22FA4AA1B00ECAF15 /* Core */ = {
-			isa = XCSwiftPackageProductDependency;
+			package = 770826752FDF2255009046DC /* XCLocalSwiftPackageReference "../Modules/Core" */;
 			productName = Core;
 		};
 		A1B2C3E12F6F000100E7354F /* Core */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 770826752FDF2255009046DC /* XCLocalSwiftPackageReference "../Modules/Core" */;
 			productName = Core;
 		};
 /* End XCSwiftPackageProductDependency section */
