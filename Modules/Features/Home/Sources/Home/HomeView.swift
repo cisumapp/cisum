@@ -15,7 +15,16 @@ public struct HomeView: View {
     @Environment(\.searchViewModel) private var searchViewModel
     @Environment(PlayerPresentationController.self) private var playerPresentationController
 
-    @Query(sort: \ListeningHistoryEntry.startedAt, order: .reverse) private var recentHistory: [ListeningHistoryEntry]
+    /// Capped: only the newest 15 distinct tracks are shown, and an unbounded query re-read every
+    /// play ever recorded each time one was saved.
+    // ponytail: 200 rows; a listener looping under 15 tracks for 200 plays sees a shorter shelf.
+    @Query(HomeView.recentHistoryDescriptor) private var recentHistory: [ListeningHistoryEntry]
+
+    private static var recentHistoryDescriptor: FetchDescriptor<ListeningHistoryEntry> {
+        var descriptor = FetchDescriptor<ListeningHistoryEntry>(sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+        descriptor.fetchLimit = 200
+        return descriptor
+    }
 
     @State private var scrollOffset: CGFloat = 0
 
@@ -109,7 +118,8 @@ public struct HomeView: View {
                                     artistName: wrapped.display.subtitle,
                                     duration: wrapped.display.duration ?? "",
                                     artworkURL: wrapped.display.artworkURL,
-                                    artworkColor: .cisumAccent
+                                    artworkColor: .cisumAccent,
+                                    isExplicit: wrapped.display.isExplicit
                                 )
                             }
                             .buttonStyle(.plain)
@@ -147,7 +157,8 @@ public struct HomeView: View {
             updateUniqueHistoryItems()
             await viewModel.loadIfNeeded()
         }
-        .onChange(of: recentHistory.count) { _, _ in
+        // The newest entry, not the count: the count stops changing once the query is at its cap.
+        .onChange(of: recentHistory.first?.persistentModelID) { _, _ in
             updateUniqueHistoryItems()
         }
         .pullToRefresh(scrollOffset: scrollOffset) {
@@ -234,7 +245,8 @@ private struct HorizontalTrackSection: View {
                                 artistName: wrapped.display.subtitle,
                                 duration: wrapped.display.duration ?? "",
                                 artworkURL: wrapped.display.artworkURL,
-                                artworkColor: .cisumAccent
+                                artworkColor: .cisumAccent,
+                                isExplicit: wrapped.display.isExplicit
                             )
                         }
                         .buttonStyle(.plain)

@@ -513,10 +513,10 @@ struct PlaylistTrackListView: View {
             payload = providerPayload("appleMusic", appleID)
         } else if let ytMusicID = validID(track.youtubeMusicID) {
             mediaID = ytMusicID
-            payload = .youtube(YouTubeMediaRef(videoID: ytMusicID, title: track.title, artist: artistName, album: track.albumName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: true))
+            payload = .youtube(YouTubeMediaRef(videoID: ytMusicID, title: track.title, artist: artistName, album: track.albumName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: track.isExplicit ?? false, isMusic: true))
         } else if let ytID = validID(track.youtubeID) {
             mediaID = ytID
-            payload = .youtube(YouTubeMediaRef(videoID: ytID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: false))
+            payload = .youtube(YouTubeMediaRef(videoID: ytID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: track.isExplicit ?? false, isMusic: false))
         } else if let spotifyID = validID(track.spotifyID) {
             mediaID = spotifyID
             let spotifyTrack = SpotifySearchTrack(id: spotifyID, title: track.title, artistName: artistName, albumName: track.albumName, artworkURL: artworkURL, durationSeconds: duration ?? 0, previewURL: nil, isrc: track.isrc)
@@ -529,7 +529,7 @@ struct PlaylistTrackListView: View {
         } else {
             let youtubeID = track.sourceTrackID ?? track.itemKey
             mediaID = youtubeID
-            payload = .youtube(YouTubeMediaRef(videoID: youtubeID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: false, isMusic: false))
+            payload = .youtube(YouTubeMediaRef(videoID: youtubeID, title: track.title, artist: artistName, artworkURL: artworkURL, durationSeconds: duration, isExplicit: track.isExplicit ?? false, isMusic: false))
         }
 
         return FederatedSearchItem(
@@ -539,7 +539,7 @@ struct PlaylistTrackListView: View {
             artworkURL: artworkURL,
             durationSeconds: duration,
             isPlayable: true,
-            isExplicit: false,
+            isExplicit: track.isExplicit ?? false,
             audioQualityLabel: nil,
             audioCodecLabel: nil,
             payload: payload

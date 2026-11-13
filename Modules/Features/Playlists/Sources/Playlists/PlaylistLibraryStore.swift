@@ -73,6 +73,7 @@ public actor PlaylistLibraryStore {
         public let soundcloudID: String?
         public let deezerID: String?
         public let appleMusicID: String?
+        public let isExplicit: Bool?
         public let resolutionConfidence: Double?
         public let canonicalSongID: String?
         public let importStatus: PlaylistItemImportStatus
@@ -97,6 +98,7 @@ public actor PlaylistLibraryStore {
             soundcloudID: String? = nil,
             deezerID: String? = nil,
             appleMusicID: String? = nil,
+            isExplicit: Bool? = nil,
             resolutionConfidence: Double? = nil,
             canonicalSongID: String? = nil,
             importStatus: PlaylistItemImportStatus = .pending,
@@ -120,6 +122,7 @@ public actor PlaylistLibraryStore {
             self.soundcloudID = soundcloudID
             self.deezerID = deezerID
             self.appleMusicID = appleMusicID
+            self.isExplicit = isExplicit
             self.resolutionConfidence = resolutionConfidence
             self.canonicalSongID = canonicalSongID
             self.importStatus = importStatus
@@ -267,6 +270,7 @@ public actor PlaylistLibraryStore {
                     soundcloudID: snapshot.soundcloudID,
                     deezerID: snapshot.deezerID,
                     appleMusicID: snapshot.appleMusicID,
+                    isExplicit: snapshot.isExplicit,
                     resolutionConfidence: snapshot.resolutionConfidence,
                     canonicalSongID: snapshot.canonicalSongID,
                     importStatus: snapshot.importStatus,
@@ -447,6 +451,7 @@ public actor PlaylistLibraryStore {
             soundcloudID: snapshot.soundcloudID,
             deezerID: snapshot.deezerID,
             appleMusicID: snapshot.appleMusicID,
+            isExplicit: snapshot.isExplicit,
             resolutionConfidence: snapshot.resolutionConfidence,
             canonicalSongID: snapshot.canonicalSongID,
             importStatus: snapshot.importStatus,

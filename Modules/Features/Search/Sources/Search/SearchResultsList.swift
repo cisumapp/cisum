@@ -133,11 +133,6 @@ struct SearchResultsList: View {
         searchViewModel.youtubePlaylistResults.isEmpty ? searchViewModel.spotifyPlaylistResults : searchViewModel.youtubePlaylistResults
     }
 
-    /// The artist the query names, if one does — it heads the results with their songs.
-    private var topArtist: FederatedSearchItem? {
-        artists.first.flatMap { isNamed($0, in: tokenSet(from: searchViewModel.searchText)) ? $0 : nil }
-    }
-
     private func songs(by artist: FederatedSearchItem) -> [FederatedSearchItem] {
         let name = normalizedRankingText(artist.title)
         return songs.filter { normalizedRankingText($0.displayArtist).contains(name) }
@@ -170,7 +165,11 @@ struct SearchResultsList: View {
 
     @ViewBuilder
     private var allResults: some View {
-        let artist = topArtist
+        // Bound once: each is a whole-library scan or an artist ranking, not a stored value.
+        let artists = self.artists
+        let libraryMatches = self.libraryMatches
+        // The artist the query names, if one does — it heads the results with their songs.
+        let artist = artists.first.flatMap { isNamed($0, in: tokenSet(from: searchViewModel.searchText)) ? $0 : nil }
         let cardSongs = Array((artist.map(songs(by:)) ?? songs).prefix(4))
 
         if let artist {
@@ -402,6 +401,7 @@ enum SearchSong: Identifiable {
                 album: song.album,
                 artworkURL: song.artworkURL,
                 durationSeconds: song.item.durationSeconds,
+                isExplicit: song.isExplicit,
                 youtubeID: song.item.youtubeID,
                 youtubeMusicID: song.item.youtubeMusicID,
                 spotifyID: song.item.spotifyID

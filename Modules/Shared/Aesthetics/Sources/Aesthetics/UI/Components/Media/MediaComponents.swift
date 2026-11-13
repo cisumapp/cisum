@@ -54,6 +54,7 @@ public struct MediaSongRow<Menu: View>: View {
     let subtitle: String
     let duration: String?
     let artworkURL: URL?
+    let isExplicit: Bool
     let isSaved: Bool?
     let onPlay: () -> Void
     let onToggleSave: (() -> Void)?
@@ -69,6 +70,7 @@ public struct MediaSongRow<Menu: View>: View {
         subtitle: String,
         duration: String? = nil,
         artworkURL: URL?,
+        isExplicit: Bool = false,
         isSaved: Bool? = nil,
         onPlay: @escaping () -> Void,
         onToggleSave: (() -> Void)? = nil,
@@ -78,6 +80,7 @@ public struct MediaSongRow<Menu: View>: View {
         self.subtitle = subtitle
         self.duration = duration
         self.artworkURL = artworkURL
+        self.isExplicit = isExplicit
         self.isSaved = isSaved
         self.onPlay = onPlay
         self.onToggleSave = onToggleSave
@@ -94,10 +97,13 @@ public struct MediaSongRow<Menu: View>: View {
                         Text(title)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.primary.opacity(0.8))
-                        if !subtitle.isEmpty {
-                            Text(subtitle)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.secondary)
+                        if isExplicit || !subtitle.isEmpty {
+                            HStack(spacing: 4) {
+                                if isExplicit { ExplicitBadge() }
+                                Text(subtitle)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .lineLimit(1)
@@ -158,14 +164,28 @@ public extension MediaSongRow where Menu == EmptyView {
         subtitle: String,
         duration: String? = nil,
         artworkURL: URL?,
+        isExplicit: Bool = false,
         isSaved: Bool? = nil,
         onPlay: @escaping () -> Void,
         onToggleSave: (() -> Void)? = nil
     ) {
         self.init(
             title: title, subtitle: subtitle, duration: duration, artworkURL: artworkURL,
-            isSaved: isSaved, onPlay: onPlay, onToggleSave: onToggleSave
+            isExplicit: isExplicit, isSaved: isSaved, onPlay: onPlay, onToggleSave: onToggleSave
         ) { EmptyView() }
+    }
+}
+
+/// The "E" shown beside a song the source marked explicit. One view so every list says it the same
+/// way — and says it to VoiceOver, which the bare symbol did not.
+public struct ExplicitBadge: View {
+    public init() {}
+
+    public var body: some View {
+        Image(systemName: "e.square.fill")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("Explicit")
     }
 }
 
