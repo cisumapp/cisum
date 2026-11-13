@@ -127,13 +127,14 @@ public final class PlayerModule {
 
     /// The rotating record behind everything on macOS. Owned by the player module so the
     /// backdrop can spin with the transport rather than needing its own copy of that state.
-    public func vinylBackdrop() -> some View {
+    public func vinylBackdrop(leadingInset: CGFloat = 0) -> some View {
         #if os(iOS)
         EmptyView()
         #elseif os(macOS)
         VinylBackdrop(
             isPlaying: viewModel.isPlaying,
-            accentColor: viewModel.nowPlaying.accentColor
+            accentColor: viewModel.nowPlaying.accentColor,
+            leadingInset: leadingInset
         )
         .environment(viewModel)
         #endif
