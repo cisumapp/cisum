@@ -328,8 +328,8 @@ public final class cisumModule {
     }
 
     /// The rotating record behind the macOS content.
-    public func vinylBackdrop() -> some View {
-        player.vinylBackdrop()
+    public func vinylBackdrop(leadingInset: CGFloat = 0) -> some View {
+        player.vinylBackdrop(leadingInset: leadingInset)
     }
 
     /// The current track's artwork behind the macOS record band.
@@ -517,6 +517,9 @@ private struct CisumEnvironment: ViewModifier {
             .environment(PlayerThemeSettings.shared)
             #endif
             .modelContainer(module.modelContainer)
+            // The iOS 17/18 player sits in its own window and inherits nothing from RootView, so
+            // without this it saw the no-op default router and could not open an artist page.
+            .usingRouter(module.router)
             .cisumTextStyles()
     }
 }

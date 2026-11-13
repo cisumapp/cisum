@@ -16,40 +16,54 @@ public struct VinylBackdrop: View {
     /// rather than being a flat grey.
     let accentColor: Color
 
-    /// Diameter of the disc. The backdrop is usually oversized on purpose — it should read
-    /// as a record filling the frame, cropped by its edges, not as an object floating in it.
-    let diameter: CGFloat
+    /// Width of whatever covers the leading edge (the sidebar). The disc centres on the rest, so
+    /// it sits behind the content and moves over when the sidebar folds away.
+    let leadingInset: CGFloat
 
     public init(
         isPlaying: Bool,
         accentColor: Color = .cisumAccent,
-        diameter: CGFloat = 1400
+        leadingInset: CGFloat = 0
     ) {
         self.isPlaying = isPlaying
         self.accentColor = accentColor
-        self.diameter = diameter
+        self.leadingInset = leadingInset
     }
+
+    /// The design's record (Figma 86:6263): 1810pt across in a 1280pt window, its rim 12pt below
+    /// the top edge, so it fills the window and only its upper arc and grooves show behind the
+    /// chrome. It used to be parked below the frame as a band, leaving an arc at the bottom.
+    private static let widthRatio: CGFloat = 1810 / 1280
+    private static let topInset: CGFloat = 12
+    private static let centreBelowBottom: CGFloat = 133
 
     public var body: some View {
         GeometryReader { geo in
-            let side = min(diameter, max(geo.size.width, geo.size.height) * 1.4)
+            // The design's proportion, but never so small that the centre comes into view: in the
+            // 1280×784 frame it sits 133pt below the bottom edge, and a taller window would
+            // otherwise pull the label up into the content.
+            let side = max(geo.size.width * Self.widthRatio, (geo.size.height - Self.topInset + Self.centreBelowBottom) * 2)
+            let center = CGPoint(
+                x: leadingInset + (geo.size.width - leadingInset) / 2,
+                y: Self.topInset + side / 2
+            )
 
             ZStack {
                 wash
+                    .position(center)
 
                 // Only the disc is inside the TimelineView. The wash and the frame around it
                 // are static, so re-evaluating them 60-120×/s would be pure waste.
                 TimelineView(.animation(minimumInterval: nil, paused: !spin.isTurning)) { timeline in
                     disc(rotation: spin.rotation(at: timeline.date), side: side)
                 }
-                // Park the spindle well below the band. Centring the disc inside the strip
-                // would show its bullseye; pushing its centre down leaves only the wide
-                // upper arc sweeping through, which is how a record reads from above.
-                .position(
-                    x: geo.size.width / 2,
-                    y: geo.size.height + side * 0.32
-                )
+                .position(center)
             }
+            #if os(macOS)
+            .animation(MacSplitView.sidebarAnimation, value: leadingInset)
+            #else
+            .animation(.smooth(duration: 0.25), value: leadingInset)
+            #endif
         }
         .allowsHitTesting(false)
         .onAppear { spin.syncPlaybackState(at: .now, isPlaying: isPlaying) }

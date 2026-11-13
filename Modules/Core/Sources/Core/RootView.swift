@@ -30,9 +30,6 @@ public struct RootView: View {
     @Namespace private var tabPillNamespace
 
     #if os(iOS)
-    @State private var isScrollingDown = false
-    @State private var storedOffset: CGFloat = 0
-    @State var scrollPhase: ScrollPhases = .idle
     @State var tabBarVisibility: Visibility = .visible
     @State private var showProfile = false
     @State private var showSettings = false
@@ -171,6 +168,14 @@ public struct RootView: View {
                 }
             }
         }
+        // Song taps anywhere call `presentation.expand()`; the bridge turns that into the cover. It is
+        // its own view so RootView.body never reads `isExpanded` (see `isPlayerCoverPresented`).
+        .background {
+            ZoomCoverBridge(
+                presentation: container.appServices.playerPresentationController,
+                isCoverPresented: $isPlayerCoverPresented
+            )
+        }
         .fullScreenCover(isPresented: $isPlayerCoverPresented) {
             Group {
                 if #available(iOS 18.0, *) {
@@ -184,6 +189,13 @@ public struct RootView: View {
         }
         .tabbarVisibility(tabBarVisibility)
         .animation(.smooth(duration: 0.3), value: tabBarVisibility)
+        // Any vertical scroll view in the window, not only each tab's first page.
+        .onWindowScrollDirectionChange { scrollingDown in
+            let visibility: Visibility = scrollingDown ? .hidden : .visible
+            if tabBarVisibility != visibility {
+                tabBarVisibility = visibility
+            }
+        }
         .systemVolumeController(cisum.systemVolumeController, showsSystemVolumeHUD: false)
         .appOrientation(appOrientation)
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
@@ -253,11 +265,25 @@ public struct RootView: View {
         //
         // The window itself stays titled. That is what keeps keyboard focus, the system
         // corner radius and the native resize edges, none of which a borderless window has.
+        ZStack {
+        windowBackdrop
         MacSplitView(
             sidebar: sidebarColumn,
-            detail: detailColumn,
-            detailKey: navigationState.selectedTab.index
+            detail: detailColumn
+                // With the sidebar folded away its traffic lights go with it, so they and the
+                // way back to the sidebar move to the content's top-left corner.
+                .overlay(alignment: .topLeading) {
+                    CollapsedSidebarControls(navigationState: navigationState)
+                },
+            detailKey: navigationState.selectedTab.index,
+            isSidebarCollapsed: navigationState.isSidebarCollapsed,
+            onSidebarCollapsedChange: { [navigationState] collapsed in
+                if navigationState.isSidebarCollapsed != collapsed {
+                    navigationState.isSidebarCollapsed = collapsed
+                }
+            }
         )
+        }
         // The window is created with `fullSizeContentView`, so its content view spans the
         // full window — but AppKit still lays views out against the window's *content layout
         // rect*, which excludes the title bar. That inset is what draws a strip above the
@@ -312,7 +338,40 @@ public struct RootView: View {
                 .padding(.leading, 14)
                 .padding(.top, 14)
         }
+        // The design's header row: the account and the sidebar toggle at the trailing edge.
+        .overlay(alignment: .topTrailing) {
+            HStack(spacing: 13) {
+                Button {
+                    cisum.router.navigate(to: .profile)
+                } label: {
+                    Group {
+                        if let profileImageURL {
+                            ArtworkImage(url: profileImageURL, size: 18)
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .foregroundStyle(Color.cisumSecondaryText)
+                        }
+                    }
+                    .frame(width: 18, height: 18)
+                    .clipShape(.circle)
+                    .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .help("Profile")
+
+                SidebarToggle(navigationState: navigationState)
+            }
+            .padding(.trailing, 12)
+            .padding(.top, 11)
+        }
         .background { sidebarMaterial }
+        // Fixed width, pinned to the column's trailing edge: as the column folds the panel slides
+        // out to the left whole, instead of squeezing its rows into truncated text.
+        .frame(width: MacSplitView.sidebarWidth)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        // The overflow is clipped to the column, so the panel exits through the window's edge.
+        .clipped()
         // Applied last so it moves the surface and everything inside it away from the
         // window edge together, leaving the canvas showing around it.
         //
@@ -328,9 +387,8 @@ public struct RootView: View {
             bottom: MacSplitView.sidebarMargin,
             trailing: 0
         ))
-        // The canvas behind the margin. Without it the bare window background shows through the
-        // gutter, and on a light appearance that is a pale frame around a dark sidebar.
-        .background(Color.cisumBg)
+        // No fill behind the margin: the window-level backdrop is the canvas there, so the record
+        // shows around the floating sidebar as it does in the design.
     }
 
     /// The navigation column's surface.
@@ -356,21 +414,21 @@ public struct RootView: View {
             topTrailingRadius: Self.sidebarCornerRadius,
             style: .continuous
         )
-        Group {
-            if #available(macOS 26.0, *) {
-                shape.glassEffect(.regular, in: shape)
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
+        // Dark material, not Liquid Glass: `glassEffect` (plain or tinted) resolved to a light grey
+        // here, which washed out the white text on it.
+        shape.fill(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
+        .overlay {
+            shape.fill(Color.black.opacity(Self.sidebarScrimOpacity))
         }
         .overlay {
-            shape.fill(Color.cisumBg.opacity(Self.sidebarScrimOpacity))
+            shape.fill(LinearGradient(colors: [.white.opacity(0.06), .clear], startPoint: .top, endPoint: .bottom))
         }
         // `glassEffect` draws its own highlight, but the scrim above sits on top of it, so the
         // leading edge would otherwise lose the one cue that separates the panel from the
         // canvas it floats over.
         .overlay {
-            shape.strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
+            shape.strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
         }
     }
 
@@ -379,11 +437,13 @@ public struct RootView: View {
     /// Tuned against measured luminance rather than by eye: the material alone sits near 20%
     /// and this brings the surface to roughly 10%, which is where the reference's sidebar
     /// sits relative to its canvas.
-    private static let sidebarScrimOpacity: Double = 0.55
+    // 0.75, not 0.55: over a light desktop the glass let enough through that the panel read as
+    // grey against the design's near-black sidebar.
+    private static let sidebarScrimOpacity: Double = 0.15
 
     /// Corner radius of the floating surfaces. Wide enough to read as a detached panel rather
     /// than a slightly-softened rectangle, but not so wide that it looks like a sheet.
-    private static let sidebarCornerRadius: CGFloat = 14
+    private static let sidebarCornerRadius: CGFloat = 26 - MacSplitView.sidebarMargin
 
     /// Trailing edge of the traffic lights, measured from the sidebar's leading edge: the
     /// 14pt inset plus three 12pt buttons and two 8pt gaps. `WindowDragRegion` starts here so
@@ -401,21 +461,8 @@ public struct RootView: View {
     /// at a band below it.
     private var detailColumn: some View {
         ZStack(alignment: .top) {
-            // The record, tinted by the current track's artwork. Sized from the geometry
-            // because both layers are scaled-to-fill images with no size of their own.
-            GeometryReader { proxy in
-                ZStack {
-                    backgroundFill
-                    cisum.artworkBackdrop()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .opacity(0.55)
-                    cisum.vinylBackdrop()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
-                .clipped()
-            }
-            .ignoresSafeArea()
-
+            // No backdrop of its own: the record is a window-level layer under both columns
+            // (`windowBackdrop`), as in the design's layer order.
             tabSurface
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onPreferenceChange(SearchOverlayContextPreferenceKey.self) { newContext in
@@ -428,42 +475,114 @@ public struct RootView: View {
                 // would push each horizontal shelf down by the same amount.
                 .safeAreaInset(edge: .top, spacing: 0) {
                     VStack(spacing: 8) {
-                        Color.clear.frame(height: Self.chromeHeight)
+                        Color.clear.frame(height: Self.chromeHeight + Self.discReveal)
                         // The search field sits on the Search surface only.
                         if navigationState.selectedTab == .search {
                             SearchOverlayBar()
                         }
                     }
                 }
+                // Content fades out as it scrolls up toward the chrome (after the inset, so this
+                // measures from the window top), so it never covers the
+                // record behind the bar and pills.
+                .mask {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: Self.contentFadeTop)
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            .frame(height: Self.chromeHeight + Self.discReveal - Self.contentFadeTop)
+                        Color.black
+                    }
+                }
 
-            // Keeps the chrome legible over whatever scrolls beneath it.
-            LinearGradient(
-                stops: [
-                    .init(color: Color.cisumBg.opacity(0.85), location: 0),
-                    .init(color: Color.cisumBg.opacity(0.6), location: 0.6),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: Self.chromeHeight + 40)
-            .allowsHitTesting(false)
 
             VStack(spacing: 14) {
                 cisum.playerBar()
                 navigationRow
             }
-            .padding(.top, 12)
+            // The design's bar sits low enough that the record's rim shows above it.
+            .padding(.top, Self.chromeTop)
             .padding(.horizontal, 36)
 
             spotifyBackgroundRefresh
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The whole column, chrome included: it is its own hosting controller and inherits none of
+        // RootView's environment, so the player bar's "…" had the no-op router and Equalizer did
+        // nothing.
+        .usingRouter(cisum.router)
     }
+
+    /// The bottom layer of the window, under both columns (the design's layer order: the record
+    /// first, then the content, the chrome and the sidebar's glass over it). The canvas colour,
+    /// the playing track's artwork washed out, then the record — centred on the content area so
+    /// it slides over when the sidebar folds away.
+    private var windowBackdrop: some View {
+        GeometryReader { proxy in
+            ZStack {
+                backgroundFill
+                cisum.artworkBackdrop()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .opacity(0.55)
+                // Only the disc follows the sidebar, centring on the content; the wash and frost
+                // around it are window-wide and stay put.
+                cisum.vinylBackdrop(
+                    leadingInset: navigationState.isSidebarCollapsed ? 0 : MacSplitView.sidebarColumnWidth
+                )
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                contentCover
+            }
+            .clipped()
+        }
+        .ignoresSafeArea()
+    }
+
+    /// Frosts the record under the content, so only its top arc shows clear, behind the player
+    /// bar, and every tab reads on a dark, still surface instead of moving grooves.
+    private var contentCover: some View {
+        ZStack {
+            Rectangle().fill(.ultraThickMaterial)
+            Color.cisumBg.opacity(0.25)
+        }
+        // Never fully opaque, so the record still reads faintly under the content.
+        .opacity(0.75)
+        .mask {
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .black, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: Self.discBandFade)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.top, Self.discBandHeight)
+            .background(alignment: .bottom) {
+                Color.black.padding(.top, Self.discBandHeight + Self.discBandFade)
+            }
+        }
+        // One band across the whole window: the sidebar floats on the same canvas as the content,
+        // so nothing here depends on whether it is shown.
+        .allowsHitTesting(false)
+    }
+
+    /// The clear strip of record behind the player bar, then the fade into the frost.
+    /// The same band the scrolled content fades over, so the frost and the content start together.
+    private static let discBandHeight: CGFloat = contentFadeTop
+    private static let discBandFade: CGFloat = chromeHeight + discReveal - contentFadeTop
 
     /// Height of the floating chrome — the transport, the navigation row and the gaps around
     /// them — which content starts below.
-    private static let chromeHeight: CGFloat = 128
+    private static let chromeHeight: CGFloat = chromeTop + 116
+
+    /// Where the player bar starts (the design's 118pt in a 784pt window).
+    private static let chromeTop: CGFloat = 116
+
+    /// Above this, scrolled content is fully hidden (just under the tab pill).
+    private static let contentFadeTop: CGFloat = chromeHeight - 20
+
+    /// Clear record between the chrome and where content starts, so the disc reads as the hero.
+    private static let discReveal: CGFloat = 44
 
     /// Back and forward at the leading edge, the tabs in the middle.
     private var navigationRow: some View {
@@ -493,6 +612,7 @@ public struct RootView: View {
                     .frame(width: 20, height: 32)
                     .contentShape(.rect)
             }
+            .foregroundStyle(Color.white.opacity(navigationPillShowsBack ? 0.85 : 0.45))
             .disabled(!navigationPillShowsBack)
             .help("Back")
 
@@ -502,11 +622,11 @@ public struct RootView: View {
 
             Image(systemName: "chevron.right")
                 .frame(width: 20, height: 32)
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(Color.white.opacity(0.45))
         }
         .buttonStyle(.plain)
-        .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Color.cisumPrimaryText)
         .padding(.horizontal, 10)
         .background { navigationPillSurface }
     }
@@ -522,13 +642,13 @@ public struct RootView: View {
                     }
                 } label: {
                     Image(systemName: Self.pillIcon(for: tab))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isActive ? Color.cisumPrimaryText : Color.cisumSecondaryText)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(isActive ? Color.cisumPrimaryText : Color.cisumPrimaryText.opacity(0.7))
                         .frame(width: 60, height: 37)
                         .background {
                             if isActive {
                                 Capsule(style: .continuous)
-                                    .fill(Color.cisumChromeSubtle)
+                                    .fill(Color.white.opacity(0.1))
                                     .matchedGeometryEffect(id: "tab-highlight", in: tabPillNamespace)
                             }
                         }
@@ -547,7 +667,7 @@ public struct RootView: View {
         switch tab {
         case .home: "house"
         case .discover: "flame"
-        case .library: "music.note.square.stack"
+        case .library: "rectangle.stack"
         case .search: "magnifyingglass"
         }
     }
@@ -559,20 +679,24 @@ public struct RootView: View {
 
     private var navigationPillSurface: some View {
         let shape = Capsule(style: .continuous)
-        return Group {
-            if #available(macOS 26.0, *) {
-                shape.glassEffect(.regular, in: shape)
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
-        }
+        return // Dark material, not Liquid Glass: `glassEffect` (plain or tinted) resolved to a light grey
+        // here, which washed out the white text on it.
+        shape.fill(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
         // Same scrim as the sidebar and the transport, so all three floating surfaces sit at
         // one key instead of the pill reading lighter than the bar directly above it.
         .overlay {
-            shape.fill(Color.cisumBg.opacity(0.4))
+            shape.fill(Color.black.opacity(0.2))
         }
         .overlay {
-            shape.strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
+            shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+        }
+        // Glass catches light along its top edge.
+        .overlay {
+            shape.strokeBorder(
+                LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center),
+                lineWidth: 1
+            )
         }
     }
 
@@ -722,35 +846,6 @@ public struct RootView: View {
                         cisum.applyEnvironment(to: EqualizerView())
                     }
                 }
-                .onScrollOffsetChange { oldValue, newValue in
-                    let scrollingDown = oldValue < newValue
-
-                    if isScrollingDown != scrollingDown {
-                        let adjustedOffset = newValue - (tabBarVisibility == .hidden ? 20 : 0)
-                        if storedOffset != adjustedOffset {
-                            storedOffset = adjustedOffset
-                        }
-                        isScrollingDown = scrollingDown
-                    }
-
-                    let diff = newValue - storedOffset
-                    if scrollPhase == .interacting {
-                        if diff > AppConstants.hideThresholds {
-                            if tabBarVisibility != .hidden {
-                                tabBarVisibility = .hidden
-                            }
-                        } else if diff < AppConstants.showThresholds {
-                            if tabBarVisibility != .visible {
-                                tabBarVisibility = .visible
-                            }
-                        }
-                    }
-                }
-                .onScrollPhaseUpdate { _, newPhase in
-                    if scrollPhase != newPhase {
-                        scrollPhase = newPhase
-                    }
-                }
                 // Cards open over the tab's content but under the tab bar and its accessory.
                 .universalOverlayHost(id: "\(tab)")
         }
@@ -852,3 +947,84 @@ public struct RootView: View {
     }
     #endif
 }
+
+#if os(iOS)
+/// Opens the iOS 26 zoom cover when a song is tapped anywhere, and collapses the shared state when
+/// the cover is dismissed.
+///
+/// A separate view on purpose: only this body observes `isExpanded`, so a song tap re-evaluates
+/// this empty view and not RootView — re-evaluating RootView destroys the zoom's
+/// `matchedTransitionSource` identity. On iOS 17/18 it does nothing; the overlay window owns the
+/// player there.
+private struct ZoomCoverBridge: View {
+    let presentation: PlayerPresentationController
+    @Binding var isCoverPresented: Bool
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .onChange(of: presentation.isExpanded) { _, expanded in
+                    if expanded, !isCoverPresented { isCoverPresented = true }
+                }
+                .onChange(of: isCoverPresented) { _, presented in
+                    if !presented { presentation.collapse() }
+                }
+        }
+    }
+}
+#endif
+
+#if os(macOS)
+/// Folds the sidebar away or brings it back.
+private struct SidebarToggle: View {
+    let navigationState: NavigationState
+
+    var body: some View {
+        Button {
+            navigationState.isSidebarCollapsed.toggle()
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color.cisumSecondaryText)
+                .frame(width: 20, height: 18)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help(navigationState.isSidebarCollapsed ? "Show Sidebar" : "Hide Sidebar")
+    }
+}
+
+/// With the sidebar folded away its traffic lights go with it, so they and the way back to the
+/// sidebar sit at the content's top-left corner instead.
+///
+/// Its own view so it reads `isSidebarCollapsed` itself: the content column is a separate hosting
+/// controller, and a check made in RootView's body was frozen at its first value.
+private struct CollapsedSidebarControls: View {
+    let navigationState: NavigationState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if navigationState.isSidebarCollapsed {
+                HStack(spacing: 16) {
+                    WindowControls()
+                    SidebarToggle(navigationState: navigationState)
+                }
+                .padding(.leading, 14)
+                .padding(.top, 14)
+                // Arrive from where the sidebar went, a beat after it has gone. Leave at once: the
+                // returning sidebar brings its own controls, and a fade showed two sets at once.
+                .transition(
+                    .asymmetric(
+                        insertion: (reduceMotion ? AnyTransition.opacity : .opacity.combined(with: .offset(x: -12)))
+                            .animation(MacSplitView.sidebarAnimation.delay(reduceMotion ? 0 : 0.1)),
+                        removal: .identity
+                    )
+                )
+            }
+        }
+        .animation(MacSplitView.sidebarAnimation, value: navigationState.isSidebarCollapsed)
+    }
+}
+#endif
+

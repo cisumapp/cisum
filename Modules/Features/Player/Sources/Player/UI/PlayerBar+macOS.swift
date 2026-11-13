@@ -13,10 +13,12 @@ import AVKit
 import Models
 import PlaybackCore
 import SwiftUI
+import Utilities
 
 public struct PlayerBar: View {
     @Environment(PlayerViewModel.self) private var playerViewModel
     @Environment(\.savedLibrary) private var savedLibrary
+    @Environment(\.router) private var router
     @State private var isSaved = false
 
     public init() {}
@@ -24,7 +26,7 @@ public struct PlayerBar: View {
     public var body: some View {
         HStack(spacing: 16) {
             nowPlaying
-                .frame(width: 258, alignment: .leading)
+                .frame(width: 300, alignment: .leading)
             Spacer(minLength: 0)
             transport
             Spacer(minLength: 0)
@@ -35,7 +37,7 @@ public struct PlayerBar: View {
         .padding(.vertical, 10)
         .frame(maxWidth: Self.maxWidth)
         .background { surface }
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         .task(id: playerViewModel.currentVideoId) {
             isSaved = await savedLibrary?.isSaved(fingerprint: savableTrack.fingerprint) ?? false
         }
@@ -54,18 +56,22 @@ public struct PlayerBar: View {
     /// it once the scrim has flattened the glass's own highlight.
     private var surface: some View {
         let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-        return Group {
-            if #available(macOS 26.0, *) {
-                shape.glassEffect(.regular, in: shape)
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
+        return // Dark material, not Liquid Glass: `glassEffect` (plain or tinted) resolved to a light grey
+        // here, which washed out the white text on it.
+        shape.fill(.ultraThinMaterial)
+            .environment(\.colorScheme, .dark)
+        .overlay {
+            shape.fill(Color.black.opacity(0.2))
         }
         .overlay {
-            shape.fill(Color.cisumBg.opacity(0.4))
+            shape.strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
         }
+        // Glass catches light along its top edge.
         .overlay {
-            shape.strokeBorder(Color.cisumChromeSubtle, lineWidth: 1)
+            shape.strokeBorder(
+                LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center),
+                lineWidth: 1
+            )
         }
     }
 
@@ -86,10 +92,12 @@ public struct PlayerBar: View {
             artwork
 
             VStack(alignment: .leading, spacing: 4) {
+                // The design's "TITLE - ARTIST" in caps, artist dimmed.
                 (Text(playerViewModel.currentTitle)
                     + Text(playerViewModel.currentArtist.isEmpty ? "" : " - \(playerViewModel.currentArtist)")
                     .foregroundStyle(.secondary))
                     .font(.system(size: 12, weight: .semibold))
+                    .textCase(.uppercase)
                     .lineLimit(1)
                     // Which source is serving this, and what is known about the stream, on hover;
                     // the same rows are in Settings → Diagnostics.
@@ -176,11 +184,14 @@ public struct PlayerBar: View {
 
     private var secondary: some View {
         HStack(spacing: 28) {
-            transportButton(isSaved ? "star.fill" : "star", help: isSaved ? "Remove from Saved" : "Save", size: 13, isActive: isSaved) {
-                let track = savableTrack
-                Task { isSaved = await savedLibrary?.toggleSaved(track) ?? isSaved }
+            HStack(spacing: 16) {
+                moreMenu
+                transportButton(isSaved ? "star.fill" : "star", help: isSaved ? "Remove from Saved" : "Save", size: 13, isActive: isSaved) {
+                    let track = savableTrack
+                    Task { isSaved = await savedLibrary?.toggleSaved(track) ?? isSaved }
+                }
+                .disabled(playerViewModel.currentTitle.isEmpty)
             }
-            .disabled(playerViewModel.currentTitle.isEmpty)
 
             HStack(spacing: 16) {
                 RoutePicker()
@@ -194,6 +205,35 @@ public struct PlayerBar: View {
                 transportButton("list.bullet", help: "Queue", size: 13) {}
             }
         }
+    }
+
+    /// The design's "…": what the iPhone player's menu offers, less what this bar already shows
+    /// (shuffle and repeat) and Add to Playlist, whose sheet is iOS-only for now.
+    private var moreMenu: some View {
+        Menu {
+            if let sharedSong = SharedSong(savable: savableTrack), let shareURL = CisumLink.song(sharedSong).webURL() {
+                ShareLink(item: shareURL) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+            Button {
+                router.navigate(to: .equalizer)
+            } label: {
+                Label("Equalizer", systemImage: "slider.vertical.3")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+                .contentShape(.rect)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(playerViewModel.currentTitle.isEmpty)
+        .help("More")
     }
 
     // MARK: - Playback mode
@@ -290,8 +330,9 @@ private struct MacBarProgress: View {
             GeometryReader { geo in
                 let fraction = dragFraction ?? (playerViewModel.duration > 0 ? progress.currentTime / playerViewModel.duration : 0)
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.black.opacity(0.1))
-                    Capsule().fill(Color.primary.opacity(0.5))
+                    // Visible on the dark bar: black 0.1 vanished into it.
+                    Capsule().fill(Color.white.opacity(0.25))
+                    Capsule().fill(Color.white.opacity(0.85))
                         .frame(width: geo.size.width * min(max(fraction, 0), 1))
                 }
                 // Thin at rest, thicker under the pointer so it reads as something to grab.
