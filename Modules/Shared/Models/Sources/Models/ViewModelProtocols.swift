@@ -29,7 +29,6 @@ public protocol SearchViewModelInterface: AnyObject, Observable {
     var youtubePlaylistResults: [FederatedSearchItem] { get }
     var unifiedTopResults: [FederatedSearchItem] { get }
     var youMightLikeResults: [FederatedSearchItem] { get }
-    var hiddenFallbackMap: [String: FederatedSearchItem] { get }
 
     func applySuggestion(_ suggestion: String)
     func recordSuccessfulPlayFromCurrentQuery()

@@ -33,11 +33,6 @@ public class SearchViewModel: SearchViewModelInterface {
         nonisolated static let services: [FederatedService] = [.spotify, .providerSDK, .youtubeMusic, .youtube]
     }
 
-    /// Fallback resolution order for Spotify items: YouTube Music → YouTube
-    private enum SpotifyFallbackResolutionPolicy {
-        nonisolated static let order: [FederatedService] = [.youtubeMusic, .youtube]
-    }
-
     private let youtube: YouTube
     private let settings: PrefetchSettings
     private let networkMonitor: NetworkPathMonitor
@@ -95,10 +90,6 @@ public class SearchViewModel: SearchViewModelInterface {
     /// YouTube Music's artists and playlists, so those sections fill without a Spotify sign-in.
     public var youtubeArtistResults: [FederatedSearchItem] = []
     public var youtubePlaylistResults: [FederatedSearchItem] = []
-
-    /// Maps spotify item ID → best matching hidden-provider item
-    /// Populated asynchronously after hidden providers complete.
-    public private(set) var hiddenFallbackMap: [String: FederatedSearchItem] = [:]
 
     // Internal
     @ObservationIgnored private var searchTask: Task<Void, Never>?
@@ -188,8 +179,6 @@ public class SearchViewModel: SearchViewModelInterface {
         clearSpotifySections()
         unifiedTopResults = []
         youMightLikeResults = []
-        hiddenFallbackMap = [:]
-        await historyStore.recordSearch(query: query)
 
         let effectiveVideoQuery = effectiveSearchQuery(for: query, scope: Models.SearchScope.video)
 
@@ -200,6 +189,8 @@ public class SearchViewModel: SearchViewModelInterface {
         async let ytVideoFetch = fetchYouTubeSectionItems(query: effectiveVideoQuery, updateUI: true)
         async let appleFetch = fetchAppleMusicSectionItems(query: query)
         async let ytCollectionsFetch = fetchYouTubeMusicCollections(query: query)
+        // After the requests are in flight: the history write is a disk save they need not wait on.
+        await historyStore.recordSearch(query: query)
 
         let (spotifyResult, ytMusicResult, ytVideoResult, appleResult, ytCollections) =
             await (spotifyFetch, ytMusicFetch, ytVideoFetch, appleFetch, ytCollectionsFetch)
@@ -231,6 +222,17 @@ public class SearchViewModel: SearchViewModelInterface {
         applyFederatedSearchResult(appleResult, for: .providerSDK)
         youtubeArtistResults = ytCollections.artists
         youtubePlaylistResults = ytCollections.playlists
+
+        // Every source failing (offline, mostly) is an error, not an empty result. Without this
+        // the results list showed its "Connect Spotify" hint. `lastCompletedQuery` stays unset, so
+        // searching the same text again retries.
+        if let message = firstSectionErrorMessage(),
+           federatedSections.allSatisfy({ if case .error = $0.state { true } else { false } })
+        {
+            state = .error(message)
+            return
+        }
+
         refreshUnifiedResults(for: query)
 
         state = .success
@@ -245,8 +247,6 @@ public class SearchViewModel: SearchViewModelInterface {
     }
 
     private func refreshUnifiedResults(for query: String) {
-        buildHiddenFallbackMap(for: query)
-
         let sections = federatedSections
         let currentSpotifyTrackResults = spotifyTrackResults
         let currentSpotifyArtistResults = spotifyArtistResults
@@ -292,7 +292,6 @@ public class SearchViewModel: SearchViewModelInterface {
         unifiedTopResults = []
         youMightLikeResults = []
         clearSpotifySections()
-        hiddenFallbackMap = [:]
         lastHintPrefetchedKey = nil
         inlinePrefetchedVideoIDs.removeAll(keepingCapacity: true)
         resetVideoPagination()
@@ -371,51 +370,8 @@ public class SearchViewModel: SearchViewModelInterface {
         }
     }
 
-    /// Builds a map of spotifyItemID → best hidden-provider match by title+artist similarity.
-    private func buildHiddenFallbackMap(for query: String) {
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        let hiddenItems = SpotifyFallbackResolutionPolicy.order.flatMap { items(for: $0) }
-        guard !hiddenItems.isEmpty else { return }
-
-        for spotifyItem in spotifyTrackResults {
-            let spotifyTitle = normalizedRankingText(spotifyItem.title)
-            let spotifyArtist = normalizedRankingText(primaryArtistName(from: spotifyItem.subtitle))
-
-            let bestMatch = hiddenItems
-                .filter(\.isPlayable)
-                .compactMap { hiddenItem -> (item: FederatedSearchItem, score: Double)? in
-                    let hiddenTitle = normalizedRankingText(hiddenItem.title)
-                    let hiddenArtist = normalizedRankingText(primaryArtistName(from: hiddenItem.subtitle))
-                    let hiddenText = normalizedRankingText("\(hiddenItem.title) \(hiddenItem.subtitle)")
-                    let titleSim = tokenOverlapScore(spotifyTitle, hiddenTitle)
-                    let artistSim = max(
-                        tokenOverlapScore(spotifyArtist, hiddenArtist),
-                        tokenOverlapScore(spotifyArtist, hiddenText)
-                    )
-                    // Artist gate: reject a same-title candidate that shares no artist token at all.
-                    if !spotifyArtist.isEmpty, artistSim == 0 {
-                        return nil
-                    }
-                    let priority = providerPriority(for: hiddenItem.service)
-                    let serviceBonus = Double(3 - priority) * 0.02
-                    return (hiddenItem, (0.5 * titleSim) + (0.5 * artistSim) + serviceBonus)
-                }
-                .filter { $0.score > 0.4 }
-                .max(by: { $0.score < $1.score })
-                .map(\.item)
-
-            if let match = bestMatch {
-                hiddenFallbackMap[spotifyItem.id] = match
-            }
-        }
-    }
-
     public func items(for service: FederatedService) -> [FederatedSearchItem] {
         federatedSections.first(where: { $0.service == service })?.items ?? []
-    }
-
-    public func sectionState(for service: FederatedService) -> FederatedSectionState {
-        federatedSections.first(where: { $0.service == service })?.state ?? .idle
     }
 
     /// - Warning: Always returns `nil`. Kept only to satisfy `SearchViewModelInterface`.
@@ -429,25 +385,6 @@ public class SearchViewModel: SearchViewModelInterface {
     /// identity. Remove this method from the protocol once no conformance needs it.
     public func resolveExternalStream(for _: FederatedSearchItem) async throws -> ExternalStreamPayload? {
         nil
-    }
-
-    private func fetchFullSpotifyTrack(id: String) async -> SpotifyTrack? {
-        #if canImport(SpotifySDK)
-        do {
-            let spotify = try await makeSpotifyClient()
-            return try await spotify.restClient.fetchTrack(id: id)
-        } catch {
-            PerfLog.info("SearchViewModel: Failed to fetch full Spotify track: \(error.localizedDescription)")
-            return nil
-        }
-        #else
-        return nil
-        #endif
-    }
-
-    private func spotifyTrackID(from item: FederatedSearchItem) -> String? {
-        guard item.id.hasPrefix("spotify-") else { return nil }
-        return String(item.id.dropFirst("spotify-".count))
     }
 
     private func resetFederatedSections(state: FederatedSectionState) {
@@ -472,12 +409,6 @@ public class SearchViewModel: SearchViewModelInterface {
             federatedSections[index].items = []
             federatedSections[index].state = .error(error.localizedDescription)
         }
-    }
-
-    private func setSectionState(_ state: FederatedSectionState, for service: FederatedService) {
-        guard let index = federatedSections.firstIndex(where: { $0.service == service }) else { return }
-        federatedSections[index].state = state
-        federatedSections[index].items = []
     }
 
     public func firstSectionErrorMessage() -> String? {
@@ -1335,29 +1266,6 @@ public class SearchViewModel: SearchViewModelInterface {
         }
     }
 
-    private func inferCodecLabel(from url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        if ext == "flac" {
-            return "FLAC"
-        }
-        if ext == "m3u8" {
-            return "HLS"
-        }
-        if ext == "aac" || ext == "m4a" || ext == "mp4" {
-            return "AAC"
-        }
-        if ext == "mp3" {
-            return "MP3"
-        }
-        return "Unknown"
-    }
-
-    private func inferCodecLabelIfKnown(from url: URL?) -> String? {
-        guard let url else { return nil }
-        let label = inferCodecLabel(from: url)
-        return label == "Unknown" ? nil : label
-    }
-
     #if canImport(SpotifySDK)
     private func makeSpotifyClient() async throws -> SpotifySDK {
         let coordinator = SpotifySessionCoordinator.shared
@@ -1386,12 +1294,11 @@ public class SearchViewModel: SearchViewModelInterface {
     public func applySuggestion(_ suggestion: String) {
         let cleaned = suggestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return }
-        searchTask?.cancel()
+        // Setting the text schedules the debounced search; cancel that one *after* it exists, or
+        // it runs the whole search a second time. `executeSearch` records the history entry.
         searchText = cleaned
-        Task {
-            await historyStore.recordSearch(query: cleaned)
-            await executeSearch()
-        }
+        searchTask?.cancel()
+        searchTask = Task { await executeSearch() }
     }
 
     /// Prefetch metadata and resolved stream urls for top items.
@@ -1414,9 +1321,6 @@ public class SearchViewModel: SearchViewModelInterface {
             // without search speculatively resolving tracks the user may never open.
         }
     }
-
-    /// Public helper to prefetch a single id (used by row onAppear)
-    public func prefetchIfNeeded(id _: String) {}
 
     private func scheduleInlinePrefetchDrainIfNeeded() {
         guard inlinePrefetchDrainTask == nil else { return }

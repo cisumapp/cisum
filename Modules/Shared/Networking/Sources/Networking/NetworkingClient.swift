@@ -59,38 +59,6 @@ public actor NetworkingClient {
 
     // MARK: - Convenience Methods
 
-    /// Downloads raw data from a GET request (useful for images, files).
-    /// - Parameters:
-    ///   - url: The URL to fetch.
-    ///   - headers: Optional HTTP headers.
-    /// - Returns: The raw `Data` returned by the server.
-    public func downloadData(
-        url: URL,
-        headers: [String: String]? = nil
-    ) async throws -> Data {
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-
-        headers?.forEach { key, value in
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-
-        let (data, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NetworkingError.invalidResponse
-        }
-
-        switch httpResponse.statusCode {
-        case 200 ... 299:
-            return data
-        case 401, 403:
-            throw NetworkingError.unauthorized
-        default:
-            throw NetworkingError.httpError(statusCode: httpResponse.statusCode, data: data)
-        }
-    }
-
     /// Performs a standard GET request.
     /// - Parameters:
     ///   - url: The URL to fetch.
@@ -143,28 +111,4 @@ public actor NetworkingClient {
         return try await execute(request: request, responseType: type)
     }
 
-    /// Performs a standard POST request with raw data.
-    /// - Parameters:
-    ///   - url: The target URL.
-    ///   - bodyData: The raw `Data` to send.
-    ///   - headers: Optional HTTP headers.
-    ///   - responseType: The expected `Decodable` type.
-    /// - Returns: The decoded object.
-    public func post<T: Decodable & Sendable>(
-        url: URL,
-        bodyData: Data,
-        headers: [String: String]? = nil,
-        responseType type: T.Type
-    ) async throws -> T {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-
-        headers?.forEach { key, value in
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-
-        request.httpBody = bodyData
-
-        return try await execute(request: request, responseType: type)
-    }
 }

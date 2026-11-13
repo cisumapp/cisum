@@ -36,17 +36,24 @@ public nonisolated func musicVideoSearchQuery(_ query: String) -> String {
     return "\(trimmedQuery) (Official Music Video)"
 }
 
+/// Lowercased, with every run of anything but a-z and 0-9 collapsed to one space.
+///
+/// One pass over the scalars. This was two regular-expression replacements, and it runs per
+/// artist and per candidate pair in search ranking.
 public nonisolated func normalizedRankingText(_ value: String) -> String {
-    let lowercased = value.lowercased()
-    let withoutPunctuation = lowercased.replacingOccurrences(
-        of: "[^a-z0-9\\s]",
-        with: " ",
-        options: .regularExpression
-    )
-
-    return withoutPunctuation
-        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    var result = String.UnicodeScalarView()
+    var pendingSpace = false
+    for scalar in value.lowercased().unicodeScalars {
+        switch scalar {
+        case "a" ... "z", "0" ... "9":
+            if pendingSpace, !result.isEmpty { result.append(" ") }
+            pendingSpace = false
+            result.append(scalar)
+        default:
+            pendingSpace = true
+        }
+    }
+    return String(result)
 }
 
 public nonisolated func tokenSet(from value: String) -> Set<String> {
@@ -179,9 +186,7 @@ private nonisolated func removeTrailingNoise(from value: String, keywords: [Stri
 }
 
 private nonisolated func collapsedMusicWhitespace(_ value: String) -> String {
-    value
-        .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+    value.split(whereSeparator: \.isWhitespace).joined(separator: " ")
 }
 
 private nonisolated func musicDisplaySeparators() -> [String] {
