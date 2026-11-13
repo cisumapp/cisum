@@ -7,6 +7,7 @@
 
 import Observation
 import SwiftUI
+import Utilities
 
 /// Owns the mini/expanded player presentation state.
 ///
@@ -30,15 +31,29 @@ public final class PlayerPresentationController {
 
     public func expand() {
         guard !isExpanded else { return }
-        isExpanded = true
+        set(true)
     }
 
     public func collapse() {
         guard isExpanded else { return }
-        isExpanded = false
+        set(false)
     }
 
     public func toggle() {
-        isExpanded.toggle()
+        set(!isExpanded)
+    }
+
+    /// Animated only on iOS 17/18, where the overlay-window player springs open from this change; the
+    /// ~20 song-tap call sites go through here and the player jumped open without it. On iOS 26 the
+    /// zoom cover is UIKit's transition, and wrapping this in `withAnimation` broke it — it stays a
+    /// plain set, as it always was there.
+    private func set(_ expanded: Bool) {
+        #if os(iOS)
+        if #unavailable(iOS 26.0) {
+            withAnimation(.playerExpandAnimation) { isExpanded = expanded }
+            return
+        }
+        #endif
+        isExpanded = expanded
     }
 }
