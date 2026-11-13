@@ -23,7 +23,9 @@ struct SyncedLyricsView: View {
                         LyricLineView(
                             line: line,
                             isActive: active,
-                            distance: distanceToActiveLine(index)
+                            // Capped where the styling stops changing, so a line change re-renders
+                            // the few lines around it rather than every line of the song.
+                            distance: min(distanceToActiveLine(index), 3)
                         )
                         .id(line.id)
                     }
@@ -102,7 +104,7 @@ struct LyricLineView: View {
     private func sung(_ syllables: [LyricSyllable]?, fallback: String, dimmed: Double) -> some View {
         // Only the active line runs a per-frame clock, so the sweep never redraws the whole ForEach.
         if isActive, let syllables, !syllables.isEmpty {
-            TimelineView(.animation) { _ in
+            TimelineView(.animation(paused: !playerViewModel.isPlaying)) { _ in
                 syllablesText(syllables, currentTime: playerViewModel.playbackTime)
                     .opacity(dimmed)
             }

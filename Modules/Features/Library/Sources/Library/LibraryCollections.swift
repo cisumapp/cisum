@@ -29,17 +29,27 @@ public struct LibraryPage: View {
     @Query(sort: \Playlist.updatedAt, order: .reverse) private var allPlaylists: [Playlist]
     @Environment(\.playlistLibraryStore) private var store
     @Environment(\.importDownloadManager) private var importer
+    /// Built when the library changes, not on every body pass: rebuilding it inline sat inside a
+    /// measured ~290 ms stall pushing a Library page (Animation Hitches, device).
+    @State private var index = LibraryIndex(items: [])
 
     public init(_ kind: Kind) {
         self.kind = kind
     }
 
     public var body: some View {
+        page
+            // ponytail: same key as LibraryView — a metadata edit shows on the next add or delete.
+            .task(id: items.count) { index = LibraryIndex(items: items) }
+    }
+
+    @ViewBuilder
+    private var page: some View {
         switch kind {
         case .songs:
-            LibrarySongsView(songs: LibraryIndex(items: items).songs)
+            LibrarySongsView(songs: index.songs)
         case .albums:
-            LibraryAlbumsView(albums: LibraryIndex(items: items).albums)
+            LibraryAlbumsView(albums: index.albums)
         case .artists:
             LibraryArtistsView()
         case .playlists:
@@ -50,11 +60,11 @@ public struct LibraryPage: View {
                 onReimport: { LibraryActions.reimport($0, importer: importer) }
             )
         case let .album(id):
-            if let album = LibraryIndex(items: items).albums.first(where: { $0.id == id }) {
+            if let album = index.albums.first(where: { $0.id == id }) {
                 LibraryAlbumView(album: album)
             }
         case let .artist(id):
-            if let artist = LibraryIndex(items: items).artists.first(where: { $0.id == id }) {
+            if let artist = index.artists.first(where: { $0.id == id }) {
                 LibraryArtistView(artist: artist)
             }
         }
@@ -385,6 +395,7 @@ struct LibrarySongList<Header: View>: View {
                         .joined(separator: " • "),
                     duration: song.item.durationSeconds.map(Self.duration),
                     artworkURL: song.artworkURL,
+                    isExplicit: song.isExplicit,
                     onPlay: { play(from: offset, shuffled: false) }
                 )
                 .libraryRow()

@@ -165,29 +165,29 @@ private struct TransitionFullScreenCover<Hero: View, Content: View>: View {
         .scaleEffect(buttonScale)
         .ignoresSafeArea()
         #if os(iOS)
-            .gesture(
-                CardGesture { gesture in
-                    handleGesture(gesture)
-                }
-            )
+        .gesture(
+            CardGesture { gesture in
+                handleGesture(gesture)
+            }
+        )
         #endif
-            .onGeometryChange(for: EdgeInsets.self) { geo in
-                geo.safeAreaInsets
-            } action: { newValue in
-                safeArea = newValue
-            }
-            .task {
-                guard !animateContents else { return }
+        .onGeometryChange(for: EdgeInsets.self) { geo in
+            geo.safeAreaInsets
+        } action: { newValue in
+            safeArea = newValue
+        }
+        .task {
+            guard !animateContents else { return }
 
-                withAnimation(config.animation) {
-                    animateContents = true
-                }
+            withAnimation(config.animation) {
+                animateContents = true
             }
-            .presentationBackground {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(animateContents ? 1 : 0)
-            }
+        }
+        .presentationBackground {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .opacity(animateContents ? 1 : 0)
+        }
     }
 
     private func dismissButton() -> some View {
