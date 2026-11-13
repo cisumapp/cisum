@@ -178,7 +178,7 @@ public struct Vinyl<Content: View, Previous: View, UpNext: View>: View {
 ///
 /// The disc is deliberately dumb about time. The caller owns the angle, so a static disc costs
 /// nothing — no `TimelineView`, no per-frame re-evaluation — and only the spinning one pays.
-struct VinylDisk<Content: View>: View {
+public struct VinylDisk<Content: View>: View {
     let size: CGFloat
 
     /// Current angle in degrees. Defaults to 0 so a static disc reads as `VinylDisk(size:) { ... }`.
@@ -191,7 +191,19 @@ struct VinylDisk<Content: View>: View {
     /// Declared last so the trailing closure binds here rather than to `rotation`.
     let content: () -> Content
 
-    var body: some View {
+    public init(
+        size: CGFloat,
+        rotation: Double = 0,
+        grooveOpacity: Double = 0.5,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.size = size
+        self.rotation = rotation
+        self.grooveOpacity = grooveOpacity
+        self.content = content
+    }
+
+    public var body: some View {
         ZStack {
             Group {
                 Circle()
