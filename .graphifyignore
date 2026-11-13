@@ -1,0 +1,3 @@
+# Vendored Discord SDK (C/C++ headers) - drowns out cisum code in the graph
+macOS/cisum/Discord RPC/
+macOS/discord_partner_sdk.framework/
