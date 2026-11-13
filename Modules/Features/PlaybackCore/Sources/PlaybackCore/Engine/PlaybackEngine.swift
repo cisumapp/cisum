@@ -154,9 +154,11 @@ public final class PlaybackEngine {
             : AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
 
         let item = AVPlayerItem(asset: asset)
-        // Both of these existed on the old engine and were lost. The buffer duration is what makes
-        // playback start promptly instead of after a full prefetch.
-        item.preferredForwardBufferDuration = 2.0
+        // A small target gets audio out sooner: on device a fresh item sat 1.4 s in
+        // `WaitingWhileEvaluatingBufferingRate` before playing (Logging trace). Once the clock moves the
+        // target goes back to the system default, so the rest of the track buffers deeply instead of
+        // living 2 s ahead of a stall. Same split SmartTube's iOS player uses.
+        item.preferredForwardBufferDuration = 0.5
         // End where the service says the file ends. AVFoundation estimates a fragmented MP4's length
         // (measured at up to twice the real one), so the item never reached its *own* end: the clock
         // ran on past the last byte, no did-play-to-end arrived, and the queue never advanced.
@@ -317,8 +319,9 @@ public final class PlaybackEngine {
                     guard let self, deck === self.player else { return }
                     self.progress.currentTime = time.seconds
                     self.onTick?(time.seconds)
-                    if time.seconds > 0, self.player.timeControlStatus == .playing {
+                    if !self.hasAdvanced, time.seconds > 0, self.player.timeControlStatus == .playing {
                         self.hasAdvanced = true
+                        self.player.currentItem?.preferredForwardBufferDuration = 0
                     }
                     self.clearBufferingIfRecovered()
                     self.startFadeIfDue(at: time.seconds)

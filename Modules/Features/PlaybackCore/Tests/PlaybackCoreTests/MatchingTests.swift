@@ -104,6 +104,15 @@ struct MatchRejectionTests {
         #expect(matcher.best(from: candidates, for: ivy) == nil)
     }
 
+    /// The right artist, the right length, the wrong song. Artist and duration alone reach the
+    /// threshold, so the title has to be able to veto.
+    @Test("another song by the same artist is not a match")
+    func sameArtistDifferentSong() {
+        let target = MatchTarget(title: "Ik Kudi Acoustic", artist: "Paresh Pahuja", durationSeconds: 200)
+        let candidates = [track("d", "Dooron Dooron", "Paresh Pahuja", duration: 200)]
+        #expect(matcher.best(from: candidates, for: target) == nil)
+    }
+
     @Test("an empty candidate list returns nil")
     func emptyCandidates() {
         #expect(matcher.best(from: [], for: ivy) == nil)
