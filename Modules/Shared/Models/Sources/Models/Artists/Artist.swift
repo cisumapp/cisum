@@ -95,4 +95,20 @@ public extension Artist {
         context.insert(artist)
         return artist
     }
+
+    /// The saved artist for the lead artist in `name` ("A, B" and "A feat. B" are A), adding a
+    /// name-only one the first time. For the player, which knows a name and nothing else: the
+    /// artist page finds the catalogue entry by name itself (`ArtistPageStore`).
+    @MainActor
+    static func findOrInsert(named name: String, in context: ModelContext) -> Artist {
+        let lead = LibraryIndex.leadArtist(name)
+        let key = lead.lowercased()
+        let descriptor = FetchDescriptor<Artist>(predicate: #Predicate<Artist> { $0.normalizedName == key })
+        if let artist = (try? context.fetch(descriptor))?.first {
+            return artist
+        }
+        let artist = Artist(displayName: lead, normalizedName: key)
+        context.insert(artist)
+        return artist
+    }
 }

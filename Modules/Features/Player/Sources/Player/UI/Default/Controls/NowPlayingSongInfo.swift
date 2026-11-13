@@ -9,6 +9,8 @@
 #if os(iOS)
 import Aesthetics
 import Models
+import SwiftData
+import Utilities
 import SwiftUI
 
 struct NowPlayingSongInfo: View, Equatable {
@@ -21,6 +23,9 @@ struct NowPlayingSongInfo: View, Equatable {
     @State private var isEqualizerPresented = false
     @Environment(PlayerViewModel.self) private var playerViewModel
     @Environment(\.savedLibrary) private var savedLibrary
+    @Environment(\.router) private var router
+    @Environment(\.modelContext) private var modelContext
+    @Environment(PlayerPresentationController.self) private var presentation
     @State private var isSaved = false
 
     private var savableTrack: SavableTrack {
@@ -59,6 +64,13 @@ struct NowPlayingSongInfo: View, Equatable {
             lhs.videoId == rhs.videoId
     }
 
+    /// The player goes down and the artist's page opens in the current tab.
+    private func openArtist() {
+        let page = Artist.findOrInsert(named: artist, in: modelContext)
+        presentation.collapse()
+        router.navigate(to: .artist(id: page.artistID))
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -77,10 +89,15 @@ struct NowPlayingSongInfo: View, Equatable {
                     }
                 }
 
-                Text(artist)
-                    .font(.headline)
-                    .foregroundColor(Color.white.opacity(0.8))
-                    .fontWeight(.semibold)
+                Button(action: openArtist) {
+                    Text(artist)
+                        .font(.headline)
+                        .foregroundColor(Color.white.opacity(0.8))
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.plain)
+                .disabled(artist.isEmpty)
+                .accessibilityHint("Opens the artist's page")
 
                 // The stream actually playing, as opposed to the track that was asked for.
                 // Reads the environment directly, so a fallback updating mid-track does not need
