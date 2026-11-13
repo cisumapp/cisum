@@ -336,6 +336,7 @@ public actor ImportDownloadManager {
             youtubeMusicID: t.provider == .youtubeMusic ? t.providerTrackID : nil,
             spotifyID: t.provider == .spotify ? t.providerTrackID : nil,
             appleMusicID: t.provider == .appleMusic ? t.providerTrackID : nil,
+            isExplicit: t.isExplicit,
             resolutionConfidence: 1,
             canonicalSongID: canonicalSongID,
             importStatus: .matched

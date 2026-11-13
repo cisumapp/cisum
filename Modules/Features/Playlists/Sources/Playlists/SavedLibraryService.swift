@@ -55,6 +55,7 @@ extension SavableTrack {
             youtubeID: youtubeID,
             youtubeMusicID: youtubeMusicID,
             spotifyID: spotifyID,
+            isExplicit: isExplicit,
             importStatus: .matched
         )
     }

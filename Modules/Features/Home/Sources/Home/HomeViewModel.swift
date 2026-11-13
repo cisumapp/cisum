@@ -355,21 +355,20 @@ final class HomeViewModel {
 
     @discardableResult
     private func mergeItems(_ incomingItems: [HomeFeedItem], replacing: Bool) -> Bool {
+        // Built locally and assigned once: `items.didSet` re-maps the whole feed, so appending
+        // one at a time re-normalised every title once per new item.
+        var merged = replacing ? [] : items
         if replacing {
-            items.removeAll(keepingCapacity: true)
             seenItemKeys.removeAll(keepingCapacity: true)
         }
 
-        var appended = false
-        for item in incomingItems {
-            let key = item.stableKey
-            if seenItemKeys.insert(key).inserted {
-                items.append(item)
-                appended = true
-            }
+        let countBefore = merged.count
+        for item in incomingItems where seenItemKeys.insert(item.stableKey).inserted {
+            merged.append(item)
         }
 
-        return appended
+        items = merged
+        return merged.count > countBefore
     }
 }
 
@@ -464,6 +463,7 @@ struct HomeFeedDisplayItem: Identifiable, Equatable {
     let symbolName: String
     let artworkURL: URL?
     let duration: String?
+    var isExplicit = false
 
     static func == (lhs: HomeFeedDisplayItem, rhs: HomeFeedDisplayItem) -> Bool {
         lhs.id == rhs.id && lhs.title == rhs.title && lhs.subtitle == rhs.subtitle
@@ -580,8 +580,16 @@ extension HomeFeedItem {
             subtitle: subtitle,
             symbolName: symbolName,
             artworkURL: artworkURL,
-            duration: formattedDuration
+            duration: formattedDuration,
+            isExplicit: isExplicitSong
         )
+    }
+
+    /// The flag the song carries; albums, artists and playlists are not labelled.
+    private var isExplicitSong: Bool {
+        if case let .musicSong(song) = self { return song.isExplicit }
+        if case let .main(.song(song)) = self { return song.isExplicit }
+        return false
     }
 
     private static func formatDuration(_ seconds: TimeInterval) -> String {

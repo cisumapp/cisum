@@ -34,6 +34,9 @@ public final class PlaylistItem {
     public var soundcloudID: String?
     public var deezerID: String?
     public var appleMusicID: String?
+    /// Whether the source marked the track explicit. `nil` for items saved before this was kept;
+    /// optional so the store migrates lightly (see `CisumMigrationPlan`).
+    public var isExplicit: Bool?
 
     public var resolutionConfidence: Double?
 
@@ -69,6 +72,7 @@ public final class PlaylistItem {
         soundcloudID: String? = nil,
         deezerID: String? = nil,
         appleMusicID: String? = nil,
+        isExplicit: Bool? = nil,
         resolutionConfidence: Double? = nil,
         canonicalSongID: String? = nil,
         importStatus: PlaylistItemImportStatus = .pending,
@@ -96,6 +100,7 @@ public final class PlaylistItem {
         self.soundcloudID = soundcloudID
         self.deezerID = deezerID
         self.appleMusicID = appleMusicID
+        self.isExplicit = isExplicit
         self.resolutionConfidence = resolutionConfidence
         self.canonicalSongID = canonicalSongID
         self.importStatusRawValue = importStatus.rawValue
@@ -134,7 +139,8 @@ public extension PlaylistItem {
             youtubeID: track.provider == .youtube ? track.providerTrackID : nil,
             youtubeMusicID: track.provider == .youtubeMusic ? track.providerTrackID : nil,
             spotifyID: track.provider == .spotify ? track.providerTrackID : nil,
-            appleMusicID: track.provider == .appleMusic ? track.providerTrackID : nil
+            appleMusicID: track.provider == .appleMusic ? track.providerTrackID : nil,
+            isExplicit: track.isExplicit
         )
     }
 }

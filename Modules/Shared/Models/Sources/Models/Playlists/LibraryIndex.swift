@@ -24,6 +24,7 @@ public struct LibraryIndex {
         public var title: String { item.title }
         public var artist: String { item.artistName ?? "" }
         public var album: String? { item.albumName.flatMap { $0.isEmpty ? nil : $0 } }
+        public var isExplicit: Bool { item.isExplicit ?? false }
         public var artworkURL: URL? { item.artworkURLString.flatMap(URL.init(string:)) }
     }
 
