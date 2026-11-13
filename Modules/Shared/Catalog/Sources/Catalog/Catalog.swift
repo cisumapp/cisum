@@ -101,6 +101,8 @@ public actor Catalog {
     ///
     /// - Parameter youtubeBrowseID: skips the name search when the artist came from YouTube.
     public func artist(named name: String, youtubeBrowseID: String? = nil) async -> CatalogArtist {
+        // Started first: it needs only the name, so it runs alongside the YouTube name search.
+        async let itunesPage = itunesArtist(named: name)
         var browseID = youtubeBrowseID
         if browseID == nil {
             let key = normalizedRankingText(name)
@@ -112,7 +114,6 @@ public actor Catalog {
             guard let resolvedID else { return nil }
             return try? await youtube.getArtist(browseId: resolvedID)
         }()
-        async let itunesPage = itunesArtist(named: name)
         let (detail, apple) = await (page, itunesPage)
 
         func items(_ prefix: String) -> [YouTubeMusicItem] {
