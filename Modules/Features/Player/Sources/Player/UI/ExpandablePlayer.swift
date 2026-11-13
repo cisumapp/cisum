@@ -155,6 +155,10 @@ private struct ExpandablePlayerInner: View {
                         isPlayerExpanded ? 0 : collapsedBottomPadding
                     )
                     .padding(.horizontal, isPlayerExpanded ? 0 : collapsedHorizontalPadding)
+                    // The bar below springs in and out (`iOSTabView`); the offsets that place this
+                    // pill above it are republished without an animation, so it jumped. Same spring,
+                    // keyed only to the collapsed position, so expanding is untouched.
+                    .animation(.spring(response: 0.4, dampingFraction: 0.82), value: collapsedBottomPadding)
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
