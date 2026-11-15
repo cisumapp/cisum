@@ -736,7 +736,7 @@ private fun VinylDisk(
                         // The hero record is ~1.3x screen height; decoding the cover at that size
                         // is a ~36 MB bitmap rotated every frame. 1024 px is sharp at this scale.
                         model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(artworkUrl).size(1024).build(),
+                            .data(artworkUrl.atArtworkSize(1024)).size(1024).build(),
                         contentDescription = stringResource(id = R.string.player_artwork),
                         placeholder = painterResource(id = R.drawable.not_playing),
                         error = painterResource(id = R.drawable.not_playing),
@@ -807,3 +807,8 @@ private fun formatTime(milliseconds: Long): String {
     val seconds = totalSeconds % 60L
     return String.format("%d:%02d", minutes, seconds)
 }
+
+// YouTube Music hands out covers at 180 px (`=w180-h180`), which the hero record stretched to
+// 1024 px and pixelated. The size suffix asks the image server for a larger copy of the same
+// cover, as the iOS app does.
+private fun String.atArtworkSize(px: Int): String = replace(Regex("=w\\d+-h\\d+"), "=w$px-h$px")
