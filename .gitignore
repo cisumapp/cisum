@@ -47,5 +47,6 @@ digest.txt
 providersdk.txt
 
 # local planning and baseline notes — not part of the product
-docs/
+docs/*
+!docs/screenshots/
 /graphify-out

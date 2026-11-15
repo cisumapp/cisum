@@ -10,20 +10,16 @@
   <a href="https://discord.gg/Mb4F9Gmuex">Discord</a>
 </p>
 
-<!-- Screenshots: add docs/screenshots/{ios,macos,android}.png, then remove this comment wrapper.
 <table>
   <tr>
     <th>iOS</th>
     <th>macOS</th>
-    <th>Android</th>
   </tr>
   <tr>
     <td><img src="docs/screenshots/ios.png" width="220"></td>
     <td><img src="docs/screenshots/macos.png" width="420"></td>
-    <td><img src="docs/screenshots/android.png" width="220"></td>
   </tr>
 </table>
--->
 
 ## Why cisum
 
